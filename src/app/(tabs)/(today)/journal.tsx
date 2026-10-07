@@ -187,6 +187,7 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   const updateQuestionResponse = useUnfoldStore((s) => s.updateQuestionResponse);
   const setDeeperQuestions = useUnfoldStore((s) => s.setDeeperQuestions);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
+  const activeDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const premiumPolicy = usePremiumAccessPolicy();
   const isPremium = premiumPolicy === 'granted';
@@ -342,7 +343,10 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   }, [focusQuestionIndex, currentDay?.reflectionQuestions]);
 
   useEffect(() => {
-    if (!devotionalId || Number.isNaN(dayNumber)) return;
+    // Today's resume card opens the series this pointer names, so only the
+    // current series may leave one. A reflection on a paused series from the
+    // library must not switch the active series (reading.tsx has the same rule).
+    if (!devotionalId || Number.isNaN(dayNumber) || devotionalId !== activeDevotionalId) return;
 
     setResumeContext({
       route: 'journal',
@@ -355,7 +359,7 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       // causes the home screen to auto-push to reading while the user is in
       // the journal, stealing focus when the Journal tab closes.
     });
-  }, [devotionalId, dayNumber, currentDevotional?.title, currentDay?.title, setResumeContext]);
+  }, [devotionalId, dayNumber, activeDevotionalId, currentDevotional?.title, currentDay?.title, setResumeContext]);
 
   useEffect(() => {
     if (focusQuestionIndex == null && activeMode === 'freewrite') {

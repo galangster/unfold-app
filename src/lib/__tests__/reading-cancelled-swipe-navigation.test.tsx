@@ -1296,7 +1296,13 @@ describe('reader swipe cancellation', () => {
     expect(after.days.find((day) => day.dayNumber === 1)).toEqual(before.days[0]);
     if (archived) expect(after.archivedAt).toBeNull();
     expect(requestOrder).toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
-    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual(beforeActive);
+    // The dialog said the active series "will be paused": it is archived on
+    // the resume clock with its progress kept, so the server stops treating
+    // it as a live candidate.
+    const resumeClock = mockAcceptedResume!.archivedStateAt;
+    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual({
+      ...beforeActive, archivedAt: resumeClock, archivedStateAt: resumeClock, updatedAt: resumeClock,
+    });
     expect(mockWebViewProps.current?.day?.bodyText).toBe('Resumed Day 2 content.');
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
     act(() => tree!.unmount());
@@ -1615,8 +1621,13 @@ describe('reader swipe cancellation', () => {
       expect(after.title).toBe('Updated while waiting');
       expect(after.days).toEqual(before.find((series) => series.id === DEVOTIONAL_ID)!.days);
       expect(after.seriesStartDate).toBe(before.find((series) => series.id === DEVOTIONAL_ID)!.seriesStartDate);
+      // Only a verified activation pauses the previous series, on the resume clock.
+      const activeBefore = before.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)!;
+      const resumeClock = changes[0].data.archivedStateAt as string;
       expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID))
-        .toEqual(before.find((series) => series.id === ACTIVE_DEVOTIONAL_ID));
+        .toEqual(outcome === 'accepted'
+          ? { ...activeBefore, archivedAt: resumeClock, archivedStateAt: resumeClock, updatedAt: resumeClock }
+          : activeBefore);
       if (outcome === 'accepted') {
         expect(after.archivedStateAt).toBe(changes[0].data.archivedStateAt);
         expect(after.archivedAt).toBeNull();

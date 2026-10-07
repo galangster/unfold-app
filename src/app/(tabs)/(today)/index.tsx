@@ -318,7 +318,6 @@ export default function HomeScreen() {
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -869,10 +868,13 @@ export default function HomeScreen() {
     retry: 1,
   });
 
+  // Only the current series resumes from Today. A saved pointer to any other
+  // series (written before this rule, or before a series change) is ignored:
+  // following it would switch the series the server generates.
   const resumeDevotional = useMemo(() => {
-    if (!resumeContext?.devotionalId) return null;
+    if (!resumeContext?.devotionalId || resumeContext.devotionalId !== currentDevotionalId) return null;
     return devotionals.find((d) => d.id === resumeContext.devotionalId) ?? null;
-  }, [resumeContext?.devotionalId, devotionals]);
+  }, [resumeContext?.devotionalId, currentDevotionalId, devotionals]);
 
   const shouldShowResumeCard = useMemo(() => {
     if (!resumeContext || !resumeDevotional) return false;
@@ -909,7 +911,6 @@ export default function HomeScreen() {
     if (!resumeContext || !resumeDevotional) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCurrentDevotional(resumeContext.devotionalId);
 
     if (resumeContext.route === 'journal') {
       router.push({
@@ -928,7 +929,7 @@ export default function HomeScreen() {
         dayNumber: String(resumeContext.dayNumber),
       },
     });
-  }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
+  }, [resumeContext, resumeDevotional, router]);
 
   const openNewSeriesDiscovery = () => {
     abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
@@ -1379,17 +1380,19 @@ export default function HomeScreen() {
       });
       return;
     }
+    // A saved line opens as history, like the Saved tab: it never changes
+    // which series Today and the server's generation follow.
     const h = rememberedPick.highlight;
-    setCurrentDevotional(h.devotionalId);
     router.push({
       pathname: '/(tabs)/(today)/reading',
       params: {
         devotionalId: h.devotionalId,
         dayNumber: h.dayNumber.toString(),
         highlightId: h.id,
+        ...(h.devotionalId !== currentDevotionalId ? { readOnly: '1' } : {}),
       },
     });
-  }, [rememberedPick, router, setCurrentDevotional]);
+  }, [currentDevotionalId, rememberedPick, router]);
 
   const handleDismissRememberThisCard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
