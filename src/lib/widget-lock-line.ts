@@ -10,8 +10,10 @@
 const OPEN_QUOTE = '“';
 const CLOSE_QUOTE = '”';
 const OPEN_SINGLE = '‘';
-/** Also the apostrophe, so it pairs with an open ‘ but is never dropped. */
+/** Also the apostrophe, so a lone ’ is never dropped. */
 const CLOSE_SINGLE = '’';
+/** Letters either side of a ’ make it an apostrophe (Don’t). The BSB text is English. */
+const LETTER = /[A-Za-z]/;
 const ELLIPSIS = '…';
 
 /** Inclusive length band of a sentence that fits the Lock Screen whole. */
@@ -31,10 +33,14 @@ function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function isApostrophe(text: string, i: number): boolean {
+  return LETTER.test(text[i - 1] ?? '') && LETTER.test(text[i + 1] ?? '');
+}
+
 /**
  * Removes every curly double quote that has no partner in `text`, and every
- * opening single quote that never closes. A lone ’ stays: it is usually an
- * apostrophe.
+ * opening single quote that never closes. A ’ between two letters (Don’t) is
+ * an apostrophe and closes nothing; a lone ’ stays.
  */
 function dropUnpairedQuotes(text: string): string {
   const unpaired = new Set<number>();
@@ -47,7 +53,7 @@ function dropUnpairedQuotes(text: string): string {
       unpaired.add(i);
     } else if (text[i] === OPEN_SINGLE) {
       openSingle.push(i);
-    } else if (text[i] === CLOSE_SINGLE) {
+    } else if (text[i] === CLOSE_SINGLE && !isApostrophe(text, i)) {
       openSingle.pop();
     }
   }

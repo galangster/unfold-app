@@ -35,6 +35,7 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 // getWeeklyProgress is re-implemented minimally so fingerprint detects
 // devotional readAt changes without depending on the real module.
 jest.mock('@/lib/widget-timeline', () => ({
+  getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
   buildWidgetTimelineEntries: jest.fn(() => [{ date: new Date(), props: {} }]),
   getWeeklyProgress: (
     devotionals: { days?: { readAt?: string }[] }[],
@@ -228,6 +229,42 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
     });
     syncWidgets();
     expect(totalUpdateTimelineCalls()).toBe(12);
+  });
+
+  it('finishing the last day after reading another series that day → fires again (UnfoldVerse ring)', () => {
+    jest.useFakeTimers({ now: new Date(2026, 5, 10, 14, 0) });
+    try {
+      // Series b was read this morning, so the streak and the week already show today.
+      const readThisMorning = new Date(2026, 5, 10, 9, 0).toISOString();
+      const other = { id: 'b', currentDay: 2, totalDays: 7, days: [{ dayNumber: 1, isRead: true, readAt: readThisMorning }] };
+      const series = (lastDayRead: boolean) => ({
+        id: 'a',
+        currentDay: 7,
+        totalDays: 7,
+        days: Array.from({ length: 7 }, (_, i) => ({
+          dayNumber: i + 1,
+          title: `Day ${i + 1}`,
+          scriptureReference: 'Psalm 23:1',
+          scriptureText: 'The LORD is my shepherd; I shall not want.',
+          isRead: i < 6 || lastDayRead,
+          readAt: i < 6 ? new Date(2026, 5, 3 + i, 9, 0).toISOString() : lastDayRead ? new Date(2026, 5, 10, 13, 0).toISOString() : undefined,
+        })),
+      });
+      mockStoreState.streakLastReadDate = readThisMorning;
+      mockStoreState.devotionals = [other, series(false)];
+      mockStoreState.getCurrentDevotional = () => series(false);
+      syncWidgets();
+      expect(totalUpdateTimelineCalls()).toBe(4);
+
+      // Day 7 read: currentDay cannot advance past the last day, and the
+      // streak (already read today) and the week do not change.
+      mockStoreState.devotionals = [other, series(true)];
+      mockStoreState.getCurrentDevotional = () => series(true);
+      syncWidgets();
+      expect(totalUpdateTimelineCalls()).toBe(8);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('state change (weeklyProgress via devotionals readAt) → second sync fires updateTimeline again', () => {

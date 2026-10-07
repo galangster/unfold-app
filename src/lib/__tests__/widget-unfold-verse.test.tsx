@@ -18,6 +18,7 @@ type Props = {
   lockReference: string;
   lockDayNumber: number;
   lockDaysRead: number;
+  lockReadToday: boolean;
   totalDays: number;
   hasReadToday: boolean;
 };
@@ -59,6 +60,7 @@ const render = (family: Family, over: Partial<Props> = {}): Node =>
       lockReference: 'Matthew 11:28–30',
       lockDayNumber: 4,
       lockDaysRead: 3,
+      lockReadToday: false,
       totalDays: 7,
       hasReadToday: false,
       ...over,
@@ -84,6 +86,21 @@ describe('UnfoldVerse accessoryCircular', () => {
     expect(ring({ lockDayNumber: 3, lockDaysRead: 3, hasReadToday: true })).toBeCloseTo(3 / 7);
     // The morning after the last day: the series is finished, not 6 of 7.
     expect(ring({ lockDayNumber: 7, lockDaysRead: 7 })).toBe(1);
+  });
+
+  it('says whether this series was read today, not whether any series was', () => {
+    const spoken = (over: Partial<Props>) =>
+      render('accessoryCircular', over).props.modifiers?.find(
+        (m) => (m as { modifier: string }).modifier === 'accessibilityLabel'
+      );
+    expect(spoken({ hasReadToday: true, lockReadToday: false })).toEqual({
+      modifier: 'accessibilityLabel',
+      args: ['Series day 4 of 7. Not yet read today.'],
+    });
+    expect(spoken({ hasReadToday: true, lockReadToday: true })).toEqual({
+      modifier: 'accessibilityLabel',
+      args: ['Series day 4 of 7. Read today.'],
+    });
   });
 
   it('shows the day and the series length inside the ring', () => {

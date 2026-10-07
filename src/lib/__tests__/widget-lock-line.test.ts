@@ -90,6 +90,12 @@ describe('deriveLockLine (UnfoldVerse lock-screen line)', () => {
     ).toBe('Jesus answered, It is written: Man shall not live on bread alone.');
   });
 
+  it('reads an apostrophe inside a word as an apostrophe, not a closing quote', () => {
+    expect(
+      deriveLockLine('‘Don’t be afraid, for I am with you. I will strengthen you.’')
+    ).toBe('Don’t be afraid, for I am with you.');
+  });
+
   it('measures each sentence after its unpaired quotes are dropped', () => {
     // 28 characters with its opening quote, 27 without it: too short to use.
     const first = `“${'a'.repeat(26)}.`;

@@ -40,8 +40,8 @@ type VerseWidgetProps = {
   lockReference: string;
   lockDayNumber: number;
   lockDaysRead: number;
+  lockReadToday: boolean;
   totalDays: number;
-  hasReadToday: boolean;
 };
 
 const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) => {
@@ -63,7 +63,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
   const day = props.lockDayNumber ?? 0;
   const daysRead = props.lockDaysRead ?? 0;
   const total = props.totalDays ?? 0;
-  const hasRead = props.hasReadToday ?? false;
+  const hasRead = props.lockReadToday ?? false;
   const hasVerse = verse !== '';
   const hasReference = reference !== '';
   const hasSeries = day > 0;

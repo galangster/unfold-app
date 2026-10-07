@@ -15,7 +15,7 @@ import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
 import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
+import { buildWidgetTimelineEntries, getLockScreenProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
 // Track active reading session
@@ -41,8 +41,9 @@ let activeReadingSession: LiveActivity<{
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
 //   3. current day id/title — which day the "Today" widget labels
 //   4. weeklyProgress — the M-Su "read" indicator dots
-//   5. current day scripture reference/text — the verse that the Dashboard
-//      and UnfoldVerse (Lock Screen) widgets render
+//   5. current day scripture reference/text — the verse the Dashboard renders
+//   6. the Lock Screen fields (getLockScreenProps), built exactly as the
+//      timeline builds them: the day read today, its verse, and the ring
 //
 // The fingerprint is a JSON-stringified plain object of these values. It is
 // intentionally NOT a hash — the string compare is cheap and human-readable
@@ -85,6 +86,7 @@ function buildSyncFingerprint(now: Date): string {
     // omitted from the fingerprint, so changing reading duration in settings never
     // triggered a widget sync.
     readingMinutes: state.user?.readingDuration ?? 5,
+    lock: getLockScreenProps(devotional, now),
   });
 }
 
