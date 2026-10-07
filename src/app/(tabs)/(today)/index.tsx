@@ -26,6 +26,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
+import { getNextMidnight, getTodayReadingProps } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -767,14 +768,18 @@ export default function HomeScreen() {
     getCurrentDevotional(devotionals, currentDevotionalId)
   ), [currentDevotionalId, devotionals]);
 
-  // The focus sync above runs before the focus pull lands a day, and the day
-  // watch below lands one while Today stays open. Sync the widgets again when
-  // the series gains a day, so they show it once it is on the device. Keyed
-  // on the day count, not the days, so writing on a day does not re-sync.
-  const currentDevotionalDayCount = currentDevotional?.days?.length ?? 0;
+  // The focus sync above runs before the focus pull lands or replaces a day,
+  // and the day watch below lands one while Today stays open. Sync the
+  // widgets again when the reading they show changes. A replaced day keeps
+  // the day count, so the key is the reading fields of both timeline entries,
+  // built as the sync fingerprint builds them. Writing on a day does not
+  // change them, so it does not re-sync.
+  const widgetReadingKey = useMemo(() => JSON.stringify(
+    [clockNow, getNextMidnight(clockNow)].map((forDate) => getTodayReadingProps(currentDevotional, forDate)),
+  ), [currentDevotional, clockNow]);
   useEffect(() => {
     syncWidgets();
-  }, [currentDevotionalId, currentDevotionalDayCount]);
+  }, [currentDevotionalId, widgetReadingKey]);
 
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).

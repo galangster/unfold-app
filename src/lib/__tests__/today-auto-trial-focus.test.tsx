@@ -1035,4 +1035,33 @@ describe('Today widget sync', () => {
     expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
     act(() => tree!.unmount());
   });
+
+  it('syncs the widgets again when the focus pull replaces the shown day under the same number', async () => {
+    const { syncWidgets } = jest.requireMock('@/lib/widget-bridge') as { syncWidgets: jest.Mock };
+    const [series] = mockTodayStoreState.devotionals as { days: unknown[] }[];
+    mockTodayStoreState.devotionals = [{
+      ...series,
+      days: [...series.days, { id: 'local-day-2', devotionalId: 'today-series', dayNumber: 2, title: 'Local Day 2', scriptureReference: 'Psalm 1:1', isRead: false }],
+    }];
+    let tree: { update: (element: React.ReactElement) => void; unmount: () => void };
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    const syncsOnOpen = syncWidgets.mock.calls.length;
+    expect(syncsOnOpen).toBeGreaterThan(0);
+
+    // The focus pull resolves after the focus sync and replaces the local-only
+    // Day 2 with the server's copy. The series still has two days.
+    mockTodayStoreState.devotionals = [{
+      ...series,
+      days: [...series.days, { id: 'today-series-day-2', devotionalId: 'today-series', dayNumber: 2, title: 'Day 2', scriptureReference: 'John 1:1', isRead: false }],
+    }];
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
+    act(() => tree!.unmount());
+  });
 });
