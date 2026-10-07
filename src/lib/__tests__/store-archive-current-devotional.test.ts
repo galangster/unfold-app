@@ -127,13 +127,13 @@ describe('store archive and resume lifecycle', () => {
     jest.useRealTimers();
   });
 
-  it('archives only the current series, keeps history and read progress, and enqueues lifecycle fields', () => {
+  it('ends only the replaced series, keeps history and read progress, and enqueues lifecycle fields', () => {
     useUnfoldStore.setState({
       devotionals: [series(CURRENT_ID), series(OTHER_ID)],
       currentDevotionalId: CURRENT_ID,
     });
 
-    useUnfoldStore.getState().archiveCurrentDevotional();
+    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID);
 
     const state = useUnfoldStore.getState();
     const archived = state.devotionals.find((item) => item.id === CURRENT_ID);

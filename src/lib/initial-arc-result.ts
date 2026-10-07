@@ -12,6 +12,7 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import { clearReplacedSeries, readReplacedSeries } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -65,6 +66,15 @@ export function applyInitialArcResult(
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
   const day1 = result.devotionalDay;
+
+  // The series "Start a new series" replaces ends now that this one exists.
+  // First, so Today is off the old series before the new one is selected.
+  const replacedId = readReplacedSeries();
+  if (replacedId) {
+    clearReplacedSeries();
+    if (replacedId !== devotionalId) useUnfoldStore.getState().archiveReplacedDevotional(replacedId);
+  }
+
   const store = useUnfoldStore.getState();
 
   const existingDevotional = store.devotionals.find((d) => d.id === devotionalId);

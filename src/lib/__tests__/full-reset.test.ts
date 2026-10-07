@@ -275,6 +275,10 @@ describe('performFullLocalReset', () => {
     expect(FULL_RESET_MMKV_KEYS).not.toContain('unfold-trial-notification');
   });
 
+  it('forgets the series a new series would replace', () => {
+    expect(FULL_RESET_MMKV_KEYS).toContain('replaced-series-v1');
+  });
+
   it('D13 includes the auto-trial intent key and the completion marker', () => {
     expect(FULL_RESET_MMKV_KEYS).toContain('auto-trial-series-intent-v1');
     expect(FULL_RESET_MMKV_KEYS).toContain('onboarding-completed-reported-v1');
