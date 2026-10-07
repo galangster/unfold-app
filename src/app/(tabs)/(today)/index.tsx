@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, type ScrollView } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
@@ -18,7 +18,13 @@ import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
-import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import {
+  HomeOnboardingTooltips,
+  sameTargetRect,
+  type ContentTargetKey,
+  type OnboardingLayoutRects,
+  type TargetRect,
+} from '@/components/HomeOnboardingTooltips';
 import { RippleLoader } from '@/components/RippleLoader';
 import { useUIState } from '@/lib/ui-state';
 import { StreakCelebration } from '@/components/StreakCelebration';
@@ -113,6 +119,18 @@ const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
 const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
+// React Native's ScrollView has getInnerViewRef at runtime, but its TypeScript
+// declaration lists only getInnerViewNode, a node handle that measureLayout rejects.
+type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
+
+const EMPTY_TOOLTIP_RECTS: OnboardingLayoutRects = { reading: null, context: null, rhythm: null };
+// Long enough for a scroll to finish, animated or not, before positions are read.
+const TOOLTIP_REVEAL_SETTLE_MS = 450;
+
+function sameTooltipRects(a: OnboardingLayoutRects, b: OnboardingLayoutRects): boolean {
+  return sameTargetRect(a.reading, b.reading) && sameTargetRect(a.context, b.context) && sameTargetRect(a.rhythm, b.rhythm);
+}
+
 const TODAY_RELATIONSHIP_SPACING = {
   heroToOptionalStack: Spacing['5'],
   heroToRhythm: Spacing['5'],
@@ -314,7 +332,7 @@ export default function HomeScreen() {
     : todayUsesSplit
       ? (adaptiveLayout.splitMaxWidth - adaptiveLayout.columnGap) / 2
       : adaptiveLayout.clusterMaxWidth;
-  const { entering } = useAccessibleAnimation();
+  const { entering, reducedMotion } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -383,24 +401,65 @@ export default function HomeScreen() {
   // Safe area insets for tooltip y-offset calculation
   const insets = useSafeAreaInsets();
 
-  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<{
-    reading: { x: number; y: number; width: number; height: number } | null;
-    context: { x: number; y: number; width: number; height: number } | null;
-    rhythm: { x: number; y: number; width: number; height: number } | null;
-  }>({ reading: null, context: null, rhythm: null });
+  // Scroll tracking for the hero DevotionalCard parallax
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const isTodayFocused = useIsFocused();
+  // The tour is a Modal above every screen, so it runs only while Today is in
+  // front. A reader who leaves mid-tour sees it again from the start.
+  const tourActive = !hasSeenHomeTooltips && isTodayFocused;
+  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<OnboardingLayoutRects>(EMPTY_TOOLTIP_RECTS);
   const readingTargetRef = useRef<View>(null);
   const contextTargetRef = useRef<View>(null);
   const rhythmTargetRef = useRef<View>(null);
 
+  // The first-run tour measures each target inside the scroll content, which
+  // does not move when Today scrolls. Screen position = scroll view origin +
+  // content position - live offset. A window measure taken mid-scroll can
+  // report the pre-scroll position on the new architecture. Nothing is measured
+  // while the tour is not running.
+  const scrollViewRef = useRef<ScrollViewWithInnerRef>(null);
+  const scrollFrameRef = useRef<{ x: number; y: number } | null>(null);
+  const tooltipContentRectsRef = useRef<Partial<Record<ContentTargetKey, TargetRect>>>({});
+
+  const emitTooltipRects = useCallback(() => {
+    const frame = scrollFrameRef.current;
+    if (!frame) return;
+    const offset = scrollY.value;
+    const toScreen = (key: ContentTargetKey): TargetRect | null => {
+      const content = tooltipContentRectsRef.current[key];
+      return content ? { x: frame.x + content.x, y: frame.y + content.y - offset, width: content.width, height: content.height } : null;
+    };
+    const next = { reading: toScreen('reading'), context: toScreen('context'), rhythm: toScreen('rhythm') };
+    setTooltipLayoutRects((prev) => (sameTooltipRects(prev, next) ? prev : next));
+  }, [scrollY]);
+
+  const measureScrollFrame = useCallback(() => {
+    if (!tourActive) return;
+    // Optional calls: a missing handle must cost the tour, never Today itself.
+    scrollViewRef.current?.getNativeScrollRef?.()?.measureInWindow((x, y) => {
+      scrollFrameRef.current = { x, y };
+      emitTooltipRects();
+    });
+  }, [emitTooltipRects, tourActive]);
+
   const publishTooltipRect = useCallback((
-    key: 'reading' | 'context' | 'rhythm',
+    key: ContentTargetKey,
     node: View | null,
   ) => {
-    if (!node) {
-      setTooltipLayoutRects((prev) => (prev[key] === null ? prev : { ...prev, [key]: null }));
+    if (!tourActive) return;
+    const content = scrollViewRef.current?.getInnerViewRef?.();
+    if (!node || !content) {
+      delete tooltipContentRectsRef.current[key];
+      emitTooltipRects();
       return;
     }
-    node.measureInWindow((x, y, width, height) => {
+    node.measureLayout(content, (x, y, width, height) => {
       if (width <= 0 || height <= 0) return;
       const horizontalInset = Spacing['6'];
       const topInset = key === 'reading' ? Spacing['5'] : 0;
@@ -411,21 +470,34 @@ export default function HomeScreen() {
         height: Math.max(height - topInset, 0),
       };
       if (rect.width <= 0 || rect.height <= 0) return;
-      setTooltipLayoutRects((prev) => {
-        const previous = prev[key];
-        if (
-          previous &&
-          previous.x === rect.x &&
-          previous.y === rect.y &&
-          previous.width === rect.width &&
-          previous.height === rect.height
-        ) {
-          return prev;
-        }
-        return { ...prev, [key]: rect };
-      });
-    });
-  }, []);
+      tooltipContentRectsRef.current[key] = rect;
+      emitTooltipRects();
+    }, () => {});
+  }, [emitTooltipRects, tourActive]);
+
+  const scrollToday = useCallback((y: number) => {
+    scrollViewRef.current?.scrollTo?.({ y: Math.max(0, y), animated: !reducedMotion });
+  }, [reducedMotion]);
+
+  // Scroll a tour target into view, then re-publish once the scroll settles.
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(revealTimerRef.current), []);
+  const revealTooltipTarget = useCallback((distance: number) => {
+    scrollToday(scrollY.value + distance);
+    clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = setTimeout(emitTooltipRects, TOOLTIP_REVEAL_SETTLE_MS);
+  }, [emitTooltipRects, scrollToday, scrollY]);
+
+  const finishTooltips = useCallback(() => scrollToday(0), [scrollToday]);
+
+  // When the tour stops, drop its positions and any pending re-publish, so a
+  // later tour starts from fresh measurements.
+  useEffect(() => {
+    if (tourActive) return;
+    clearTimeout(revealTimerRef.current);
+    tooltipContentRectsRef.current = {};
+    setTooltipLayoutRects(EMPTY_TOOLTIP_RECTS);
+  }, [tourActive]);
 
   const handleReadingLayout = useCallback(() => {
     publishTooltipRect('reading', readingTargetRef.current);
@@ -441,6 +513,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
+      measureScrollFrame();
       publishTooltipRect('reading', readingTargetRef.current);
       publishTooltipRect('context', contextTargetRef.current);
       publishTooltipRect('rhythm', rhythmTargetRef.current);
@@ -453,17 +526,10 @@ export default function HomeScreen() {
     insets.left,
     insets.right,
     insets.top,
+    measureScrollFrame,
     publishTooltipRect,
   ]);
 
-  // Scroll tracking for the hero DevotionalCard parallax
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
-  });
-  const isTodayFocused = useIsFocused();
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -1796,6 +1862,8 @@ export default function HomeScreen() {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <Animated.ScrollView
+          ref={scrollViewRef}
+          onLayout={measureScrollFrame}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
@@ -1839,23 +1907,24 @@ export default function HomeScreen() {
 
           <View style={todayTrailColumnStyle}>
           {hasOptionalTodayStack && (
-            <View ref={contextTargetRef} collapsable={false} onLayout={handleContextLayout}>
+            <View ref={contextTargetRef} collapsable={false} onLayout={handleContextLayout} style={styles.todayStackWrapper}>
               <TodayCardStack
                 cards={todayStackCards}
                 colors={colors}
-                style={styles.todayStackWrapper}
               />
             </View>
           )}
 
           {/* Zone 6: Daily Rhythm */}
-          <View ref={rhythmTargetRef} collapsable={false} onLayout={handleRhythmLayout}>
+          <View
+            ref={rhythmTargetRef}
+            collapsable={false}
+            onLayout={handleRhythmLayout}
+            style={hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero}
+          >
             <Animated.View
               entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
-              style={[
-                styles.streakWrapper,
-                hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero,
-              ]}
+              style={styles.streakWrapper}
             >
               <StreakBox
                 streakCount={streakCurrent}
@@ -1930,13 +1999,15 @@ export default function HomeScreen() {
       )}
 
       {/* First-time onboarding tooltips — shown once, persisted in store.
-          Keyed by hasSeenHomeTooltips so the debug "Replay Home Tooltips"
-          button (which flips the flag back to false) forces a full remount
-          and clean re-measurement of the target rects. */}
-      <HomeOnboardingTooltips
-        key={String(hasSeenHomeTooltips)}
-        layoutRects={tooltipLayoutRects}
-      />
+          The debug "Replay Home Tooltips" button flips the flag back to false,
+          which mounts a fresh tour and re-measures the target rects. */}
+      {tourActive && (
+        <HomeOnboardingTooltips
+          layoutRects={tooltipLayoutRects}
+          onRevealTarget={revealTooltipTarget}
+          onFinish={finishTooltips}
+        />
+      )}
     </View>
   );
 }
