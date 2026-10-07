@@ -74,6 +74,10 @@ jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), error: jest.fn() },
 }));
 
+jest.mock('@/lib/user-profile-sync', () => ({
+  syncUserProfileToBackend: jest.fn(async () => undefined),
+}));
+
 jest.mock('@/lib/notifications', () => ({
   NOTIFICATION_IDS: { DAILY_REMINDER: 'unfold-daily-reminder' },
   scheduleDailyReminderMornings: (...args: unknown[]) => mockScheduleDailyReminderMornings(...args),

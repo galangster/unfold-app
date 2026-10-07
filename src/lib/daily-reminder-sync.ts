@@ -28,6 +28,7 @@ import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import { parseReminderClock } from '@/lib/push-notification-helpers';
 import { captureSyncSession } from '@/lib/sync-session-fence';
 import { getDeviceTimezone } from '@/lib/device-timezone';
+import { syncUserProfileToBackend } from '@/lib/user-profile-sync';
 import { logger } from '@/lib/logger';
 
 /**
@@ -54,12 +55,14 @@ export function withDeviceTimezone(fingerprint: string): string {
  * profile. The backend reads it at send time and skips its ready push only
  * then, so the reader never gets two banners that morning. A server-owned
  * slot still has local mornings after it; those do not count. Only writes
- * on change: the profile sync hook ships every user write to the server.
+ * on change, and says whether it did: the profile sync hook ships every user
+ * write to the server, but a background wake has no hook to do it.
  */
-export function mirrorLocalReminderScheduled(scheduled: boolean): void {
+export function mirrorLocalReminderScheduled(scheduled: boolean): boolean {
   const state = useUnfoldStore.getState();
-  if (!state.user || state.user.localDailyReminderScheduled === scheduled) return;
+  if (!state.user || state.user.localDailyReminderScheduled === scheduled) return false;
   state.updateUser({ localDailyReminderScheduled: scheduled });
+  return true;
 }
 
 function getLatestReadAt(devotional: Devotional | null | undefined): Date | null {
@@ -90,6 +93,13 @@ export interface DailyReminderHorizonWrite {
  * Decide who owns the next morning and write the local horizon. When the
  * server owns it, that morning is not in the horizon, so the local queue
  * never holds it.
+ *
+ * The mornings are instants in the zone they were built in. A landing
+ * often brings the network, a background wake and the new zone together,
+ * so the zone can change while the native writes are pending. Rebuild once
+ * in the new zone when it does, complete or not: the hook returns on a
+ * partial write before its own zone check, and the background latch would
+ * keep the old zone's mornings until the next wake.
  */
 export async function scheduleDailyReminderHorizon(
   reminderTime: string,
@@ -97,6 +107,26 @@ export async function scheduleDailyReminderHorizon(
   originatingSession: number,
   originatingOperation: number,
   now = new Date(),
+): Promise<DailyReminderHorizonWrite> {
+  const zone = getDeviceTimezone();
+  const write = await writeDailyReminderHorizon(
+    reminderTime,
+    premiumPolicy,
+    originatingSession,
+    originatingOperation,
+    now,
+  );
+  if (getDeviceTimezone() === zone) return write;
+  logger.log('[daily-reminder] Device timezone changed during the write; rebuilding the horizon');
+  return writeDailyReminderHorizon(reminderTime, premiumPolicy, originatingSession, originatingOperation, now);
+}
+
+async function writeDailyReminderHorizon(
+  reminderTime: string,
+  premiumPolicy: PremiumAccessPolicy,
+  originatingSession: number,
+  originatingOperation: number,
+  now: Date,
 ): Promise<DailyReminderHorizonWrite> {
   const state = useUnfoldStore.getState();
   const currentDevotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
@@ -134,6 +164,22 @@ export function resetDailyReminderBackgroundTopupForTests(): void {
 }
 
 /**
+ * Ship the mirrored flag from a background wake. iOS runs the wake without
+ * mounting React, so useUserProfileSync is not there, and the server would
+ * read the old flag at send time: a stale "held" skips its ready push on a
+ * morning the queue lost. A failed push waits in the sync outbox.
+ */
+async function pushMirroredFlagFromBackground(): Promise<void> {
+  const { user, userUpdatedAt } = useUnfoldStore.getState();
+  if (!user) return;
+  try {
+    await syncUserProfileToBackend(user, userUpdatedAt);
+  } catch (error) {
+    logger.warn('[daily-reminder-topup] Profile push failed; left in the sync outbox', error);
+  }
+}
+
+/**
  * BGAppRefresh refill. The caller has hydrated the store and resolved
  * premium. Fail closed: an unresolved policy, a reminder switched off, or
  * no permission leave the queue as the foreground owner left it.
@@ -158,10 +204,14 @@ export async function runDailyReminderBackgroundTopup(now = new Date()): Promise
     }))}|${now.toDateString()}`;
     if (refill === lastBackgroundRefill) return 'skipped';
 
-    if (!(await areNotificationsEnabled())) return 'deferred';
-
+    // Claim the operation before the first await. A reader who turns the
+    // reminder off (or a reset) meanwhile begins newer work, and this
+    // refill, holding the old reminder time, must then write nothing.
     const originatingSession = captureSyncSession();
     const originatingOperation = beginDailyReminderOperation();
+    if (!(await areNotificationsEnabled())) return 'deferred';
+    if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) return 'skipped';
+
     const { owner, complete, holdsNextMorning } = await scheduleDailyReminderHorizon(
       reminderTime,
       premiumPolicy,
@@ -171,7 +221,7 @@ export async function runDailyReminderBackgroundTopup(now = new Date()): Promise
     );
     if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) return 'skipped';
 
-    mirrorLocalReminderScheduled(holdsNextMorning);
+    if (mirrorLocalReminderScheduled(holdsNextMorning)) await pushMirroredFlagFromBackground();
     // Not latched: the next wake retries the mornings that did not land.
     if (!complete) return 'failed';
     lastBackgroundRefill = refill;

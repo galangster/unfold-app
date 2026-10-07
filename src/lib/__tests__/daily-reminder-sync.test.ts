@@ -34,6 +34,8 @@ type NativeRequest = {
 
 const mockPending = new Map<string, NativeRequest>();
 const mockPermission = { status: 'granted' };
+// Holds the permission read open while a test acts in between.
+const mockPermissionGate = { wait: null as Promise<void> | null };
 // Mornings the native layer refuses, by fire time.
 const mockRejectedMornings = new Set<number>();
 const mockScheduleNotificationAsync = jest.fn(async (request: NativeRequest) => {
@@ -50,12 +52,21 @@ const mockCancelScheduledNotificationAsync = jest.fn(async (identifier: string) 
 jest.mock('expo-notifications', () => ({
   __esModule: true,
   setNotificationHandler: jest.fn(),
-  getPermissionsAsync: jest.fn(async () => mockPermission),
+  getPermissionsAsync: jest.fn(async () => {
+    if (mockPermissionGate.wait) await mockPermissionGate.wait;
+    return mockPermission;
+  }),
   requestPermissionsAsync: jest.fn(async () => mockPermission),
   scheduleNotificationAsync: (request: NativeRequest) => mockScheduleNotificationAsync(request),
   cancelScheduledNotificationAsync: (identifier: string) => mockCancelScheduledNotificationAsync(identifier),
   getAllScheduledNotificationsAsync: jest.fn(async () => [...mockPending.values()]),
   SchedulableTriggerInputTypes: { DAILY: 'daily', DATE: 'date', TIME_INTERVAL: 'timeInterval' },
+}));
+
+const mockSyncUserProfileToBackend = jest.fn(async (_user: unknown, _clientUpdatedAt?: string) => undefined);
+jest.mock('@/lib/user-profile-sync', () => ({
+  syncUserProfileToBackend: (user: unknown, clientUpdatedAt?: string) =>
+    mockSyncUserProfileToBackend(user, clientUpdatedAt),
 }));
 
 const mockPolicy = { value: 'granted' as 'granted' | 'denied' | 'unknown' };
@@ -88,8 +99,10 @@ const mockState = {
     days: MockDay[];
   }[],
   currentDevotionalId: 'dev-1',
+  userUpdatedAt: undefined as string | undefined,
   updateUser: (patch: Record<string, unknown>) => {
     Object.assign(mockState.user, patch);
+    mockState.userUpdatedAt = new Date().toISOString();
   },
 };
 
@@ -101,7 +114,12 @@ jest.mock('@/lib/store', () => ({
 }));
 
 import { logEvent } from '../analytics';
-import { beginDailyReminderOperation, resetDailyReminderOwnershipForTesting } from '../notifications';
+import {
+  beginDailyReminderOperation,
+  commitDailyReminderSetting,
+  resetDailyReminderOwnershipForTesting,
+} from '../notifications';
+import * as reminderContent from '../daily-reminder-content';
 import { captureSyncSession, resetSyncSessionFenceForTesting } from '../sync-session-fence';
 import {
   resetDailyReminderBackgroundTopupForTests,
@@ -167,18 +185,49 @@ function mornings(from: number, to: number): Date[] {
   return Array.from({ length: to - from + 1 }, (_, index) => at(from + index, 8));
 }
 
+let buildSpy: jest.SpyInstance | null = null;
+
+/** The device zone at each horizon build, in order. */
+function recordZonesHorizonsWereBuiltIn(): (string | null)[] {
+  const zones: (string | null)[] = [];
+  const build = reminderContent.buildDailyReminderSchedule;
+  buildSpy = jest.spyOn(reminderContent, 'buildDailyReminderSchedule').mockImplementation((args) => {
+    zones.push(mockDeviceTimezone.value);
+    return build(args);
+  });
+  return zones;
+}
+
+/** The device lands in Los Angeles while the first native write is pending. */
+function landInLosAngelesDuringFirstWrite(): void {
+  const write = mockScheduleNotificationAsync.getMockImplementation();
+  mockScheduleNotificationAsync.mockImplementationOnce(async (request: NativeRequest) => {
+    mockDeviceTimezone.value = 'America/Los_Angeles';
+    return write!(request);
+  });
+}
+
 beforeEach(() => {
   mockPending.clear();
   mockRejectedMornings.clear();
   mockDeviceTimezone.value = 'America/New_York';
   (logEvent as jest.Mock).mockClear();
   mockPermission.status = 'granted';
+  mockPermissionGate.wait = null;
   mockPolicy.value = 'granted';
+  mockState.userUpdatedAt = undefined;
+  mockSyncUserProfileToBackend.mockReset();
+  mockSyncUserProfileToBackend.mockResolvedValue(undefined);
   mockScheduleNotificationAsync.mockClear();
   mockCancelScheduledNotificationAsync.mockClear();
   resetSyncSessionFenceForTesting();
   resetDailyReminderOwnershipForTesting();
   resetDailyReminderBackgroundTopupForTests();
+});
+
+afterEach(() => {
+  buildSpy?.mockRestore();
+  buildSpy = null;
 });
 
 describe('scheduleDailyReminderHorizon', () => {
@@ -267,6 +316,28 @@ describe('scheduleDailyReminderHorizon', () => {
       body: 'Day 6 of Psalm Walk is waiting for you.',
     }));
   });
+
+  it('rebuilds the horizon in the new zone when the zone changes during a partial write', async () => {
+    // The foreground hook returns on a partial write before its own zone
+    // check, so the shared write must not leave the old zone's mornings.
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockRejectedMornings.add(at(12, 8).getTime());
+    const zones = recordZonesHorizonsWereBuiltIn();
+    landInLosAngelesDuringFirstWrite();
+
+    const result = await scheduleDailyReminderHorizon(
+      '8:00 AM',
+      'granted',
+      captureSyncSession(),
+      beginDailyReminderOperation(),
+      at(8, 5),
+    );
+
+    expect(zones).toEqual(['America/New_York', 'America/Los_Angeles']);
+    expect(result.complete).toBe(false);
+    // One request per morning: the rebuild replaced the first write.
+    expect(pendingDates()).toEqual(mornings(8, 21).filter((date) => date.getTime() !== at(12, 8).getTime()));
+  });
 });
 
 describe('runDailyReminderBackgroundTopup', () => {
@@ -341,6 +412,72 @@ describe('runDailyReminderBackgroundTopup', () => {
 
     expect(pendingDates()[0]).toEqual(at(9, 8));
     expect(mockState.user.localDailyReminderScheduled).toBe(false);
+  });
+
+  it('rebuilds the horizon in the new zone when the zone changes while the mornings are written', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    const zones = recordZonesHorizonsWereBuiltIn();
+    landInLosAngelesDuringFirstWrite();
+
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('written');
+
+    expect(zones).toEqual(['America/New_York', 'America/Los_Angeles']);
+    expect(pendingDates()).toEqual(mornings(8, 21));
+  });
+
+  it('writes nothing when the reader turns the reminder off during the permission read', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    let grantPermission!: () => void;
+    mockPermissionGate.wait = new Promise<void>((resolve) => {
+      grantPermission = resolve;
+    });
+
+    const refill = runDailyReminderBackgroundTopup(at(8, 5));
+    await expect(
+      commitDailyReminderSetting(false, '8:00 AM', mockState.updateUser),
+    ).resolves.toBe(true);
+    mockPermissionGate.wait = null;
+    grantPermission();
+
+    await expect(refill).resolves.toBe('skipped');
+    expect(mockState.user.dailyReminderEnabled).toBe(false);
+    expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
+    expect(pendingDates()).toEqual([]);
+  });
+
+  it('pushes the profile when a wake changes the mirrored flag', async () => {
+    // No React in a background wake, so the profile sync hook is not there
+    // to ship the flag. The server reads it at send time.
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockState.user.localDailyReminderScheduled = true;
+    mockRejectedMornings.add(at(8, 8).getTime());
+
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('failed');
+
+    expect(mockSyncUserProfileToBackend).toHaveBeenCalledTimes(1);
+    expect(mockSyncUserProfileToBackend).toHaveBeenCalledWith(
+      expect.objectContaining({ localDailyReminderScheduled: false }),
+      mockState.userUpdatedAt,
+    );
+  });
+
+  it('does not push the profile when the mirrored flag is unchanged', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockState.user.localDailyReminderScheduled = true;
+
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('written');
+
+    expect(mockSyncUserProfileToBackend).not.toHaveBeenCalled();
+  });
+
+  it('keeps the refill outcome when the profile push fails offline', async () => {
+    seed({ lastRead: at(7, 8, 30), pushRegistered: false });
+    mockSyncUserProfileToBackend.mockRejectedValue(new Error('offline'));
+
+    await expect(runDailyReminderBackgroundTopup(at(8, 5))).resolves.toBe('written');
+
+    expect(mockSyncUserProfileToBackend).toHaveBeenCalledTimes(1);
+    expect(mockState.user.localDailyReminderScheduled).toBe(true);
   });
 
   it('leaves the queue alone while premium is unresolved', async () => {
