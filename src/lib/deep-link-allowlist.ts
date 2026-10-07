@@ -51,8 +51,7 @@ type ParamSchema =
   | { kind: 'id' }
   | { kind: 'int'; min: number; max: number }
   | { kind: 'enum'; values: readonly string[] }
-  | { kind: 'text'; maxLength: number }
-  | { kind: 'slug' };
+  | { kind: 'text'; maxLength: number };
 
 export interface RouteSchema {
   /** Param name → schema. Any param not listed here rejects the URL. */
@@ -64,11 +63,9 @@ const id = (): ParamSchema => ({ kind: 'id' });
 const int = (min: number, max: number): ParamSchema => ({ kind: 'int', min, max });
 const oneOf = (values: readonly string[]): ParamSchema => ({ kind: 'enum', values });
 const text = (maxLength: number): ParamSchema => ({ kind: 'text', maxLength });
-const slug = (): ParamSchema => ({ kind: 'slug' });
 
 // Store ids are uuid / cuid / `<prefix>_<ts>_<rand>` / `onboarding-sample-anon_<uuid>`.
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SLUG_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 /** Canonical non-negative decimal only — no sign, exponent, hex, or fraction. */
 const INT_PATTERN = /^(?:0|[1-9]\d{0,5})$/;
 /**
@@ -133,7 +130,6 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // plain paywall only.
   '/paywall': { params: {} },
   '/life-update': { params: {} },
-  '/onboarding': { params: { startAt: slug(), flow: oneOf(['newSeries']) } },
   '/share-card': {
     params: { text: text(1000), reference: text(160), translation: text(24), type: oneOf(['verse']) },
     required: ['text'],
@@ -187,6 +183,11 @@ export const EXTERNAL_ROUTE_BLOCKLIST: ReadonlySet<string> = new Set([
   '/day-menu', // in-reader sheet that needs reader context
   '/qa-method-readings', // QA sample library; in-app only behind the practice gate
   '/qa-ambient-sound', // Future sound QA; explicit in-app entry only
+  // Its gates live in its in-app callers: Today's New Series runs the creation
+  // gate and the "Start a new series?" confirm first, a reader who finished
+  // onboarding skips its paywall step, and ?startAt= could pass that step. `/`
+  // already sends a new reader into onboarding and a finished one to Today.
+  '/onboarding',
 ]);
 
 /** Route groups that may appear as path segments; anything else is rejected. */
@@ -322,8 +323,6 @@ function isValidParam(schema: ParamSchema, value: string): boolean {
   switch (schema.kind) {
     case 'id':
       return ID_PATTERN.test(value);
-    case 'slug':
-      return SLUG_PATTERN.test(value);
     case 'enum':
       return schema.values.includes(value);
     case 'int': {
