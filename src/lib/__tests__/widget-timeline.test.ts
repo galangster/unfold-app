@@ -112,6 +112,7 @@ describe('buildWidgetSharedProps', () => {
     expect(p.dayNumber).toBe(0);
     expect(p.totalDays).toBe(0);
     expect(p.weeklyProgress).toBe('0,0,0,0,0,0,0');
+    expect(p.lockLine).toBe('');
     // Wed Jun 10 2026 → Monday-based index 2
     expect(p.weekTodayIndex).toBe(2);
   });
@@ -143,5 +144,107 @@ describe('buildWidgetTimelineEntries', () => {
     expect(entries[1].props.hasReadToday).toBe(false); // the staleness fix
     expect(entries[0].props.streakCount).toBe(3);
     expect(entries[1].props.streakCount).toBe(3); // streak not zeroed at midnight
+  });
+
+  it('carries the lock-screen verse line in BOTH entries (UnfoldVerse)', () => {
+    const d = devo([
+      day({
+        scriptureReference: 'Matthew 11:28-29',
+        scriptureText:
+          'Come to Me, all you who are weary and burdened, and I will give you rest. Take My yoke upon you and learn from Me.',
+      }),
+    ]);
+    const entries = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d] }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    for (const entry of entries) {
+      expect(entry.props.lockLine).toBe(
+        'Come to Me, all you who are weary and burdened, and I will give you rest.'
+      );
+      expect(entry.props.scriptureReference).toBe('Matthew 11:28-29');
+    }
+  });
+
+  it('keeps the day read today on the Lock Screen until midnight, though advanceDay moved currentDay on', () => {
+    const readAt = new Date(2026, 5, 10, 9, 0).toISOString();
+    const d = devo(
+      [
+        day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() }),
+        day({ dayNumber: 2, isRead: true, readAt: new Date(2026, 5, 9, 9, 0).toISOString() }),
+        day({
+          dayNumber: 3,
+          isRead: true,
+          readAt,
+          scriptureReference: 'Psalm 23:1-2',
+          scriptureText: 'The LORD is my shepherd; I shall not want. He makes me lie down in green pastures.',
+        }),
+        day({
+          dayNumber: 4,
+          scriptureReference: 'Psalm 46:10',
+          scriptureText: 'Be still, and know that I am God. I will be exalted among the nations.',
+        }),
+      ],
+      { totalDays: 7, currentDay: 4 }
+    );
+    const [today, midnight] = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d], streakLastReadDate: readAt }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    expect(today.props).toMatchObject({
+      lockDayNumber: 3,
+      lockDaysRead: 3,
+      lockReadToday: true,
+      lockReference: 'Psalm 23:1-2',
+      lockLine: 'The LORD is my shepherd; I shall not want.',
+      hasReadToday: true,
+    });
+    expect(midnight.props).toMatchObject({
+      lockDayNumber: 4,
+      lockDaysRead: 3,
+      lockReadToday: false,
+      lockReference: 'Psalm 46:10',
+      lockLine: 'Be still, and know that I am God.',
+      hasReadToday: false,
+    });
+  });
+
+  it('marks the Lock Screen read today only for a reading in this series', () => {
+    // Read another series this morning: the streak says read, this series has not been.
+    const d = devo(
+      [day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() }), day({ dayNumber: 2 })],
+      { totalDays: 7, currentDay: 2 }
+    );
+    const p = buildWidgetSharedProps(
+      slice({ currentDevotional: d, streakLastReadDate: new Date(2026, 5, 10, 8, 0).toISOString() }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    expect(p).toMatchObject({ hasReadToday: true, lockReadToday: false });
+  });
+
+  it('fills the Lock Screen ring only with days inside the series boundary', () => {
+    // A repaired three-day plan can keep a stored day 4; Today does not count it.
+    const d = devo(
+      [
+        day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() }),
+        day({ dayNumber: 2 }),
+        day({ dayNumber: 4, isRead: true, readAt: new Date(2026, 5, 9, 9, 0).toISOString() }),
+      ],
+      { totalDays: 7, currentDay: 2, seriesArc: { totalDaysPlanned: 3 } }
+    );
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    expect(p.lockDaysRead).toBe(1);
+  });
+
+  it('keeps the series day on the Lock Screen while that day has no content yet', () => {
+    const d = devo(
+      [day({ dayNumber: 1, isRead: true, readAt: new Date(2026, 5, 8, 9, 0).toISOString() })],
+      { totalDays: 7, currentDay: 2 }
+    );
+    const [entry] = buildWidgetTimelineEntries(
+      slice({ currentDevotional: d, allDevotionals: [d] }),
+      new Date(2026, 5, 10, 14, 0)
+    );
+    expect(entry.props).toMatchObject({ lockDayNumber: 2, lockReference: '', lockLine: '' });
   });
 });

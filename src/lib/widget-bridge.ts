@@ -10,11 +10,12 @@ import { logger } from '@/lib/logger';
 import UnfoldStreakWidget from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayWidget from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
+import UnfoldVerseWidget from '@/widgets/ios/UnfoldVerse';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
 import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import { buildWidgetTimelineEntries, getWeeklyProgress } from '@/lib/widget-timeline';
+import { buildWidgetTimelineEntries, getLockScreenProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
 // Track active reading session
@@ -34,12 +35,15 @@ let activeReadingSession: LiveActivity<{
 //
 // syncWidgets() is called on every Today useFocusEffect. Pushing new timeline
 // entries to WidgetKit has a measurable IPC cost, so we skip the native call
-// when nothing material has changed. The fingerprint captures exactly the four
-// shared-prop dimensions that affect widget rendering:
+// when nothing material has changed. The fingerprint captures the shared-prop
+// dimensions that affect widget rendering:
 //   1. streakCurrent — badge count + streak display
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
 //   3. current day id/title — which day the "Today" widget labels
 //   4. weeklyProgress — the M-Su "read" indicator dots
+//   5. current day scripture reference/text — the verse the Dashboard renders
+//   6. the Lock Screen fields (getLockScreenProps), built exactly as the
+//      timeline builds them: the day read today, its verse, and the ring
 //
 // The fingerprint is a JSON-stringified plain object of these values. It is
 // intentionally NOT a hash — the string compare is cheap and human-readable
@@ -57,6 +61,7 @@ function pushTimelineToAllWidgets(entries: ReturnType<typeof buildWidgetTimeline
   UnfoldStreakWidget.updateTimeline(entries);
   UnfoldTodayWidget.updateTimeline(entries);
   UnfoldDashboardWidget.updateTimeline(entries);
+  UnfoldVerseWidget.updateTimeline(entries);
 }
 
 /** Build the fingerprint string for the current store state. */
@@ -73,12 +78,15 @@ function buildSyncFingerprint(now: Date): string {
     hasReadToday,
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
     dayTitle: currentDay?.title ?? null,
+    scriptureReference: currentDay?.scriptureReference ?? null,
+    scriptureText: currentDay?.scriptureText ?? null,
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
     // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was
     // omitted from the fingerprint, so changing reading duration in settings never
     // triggered a widget sync.
     readingMinutes: state.user?.readingDuration ?? 5,
+    lock: getLockScreenProps(devotional, now),
   });
 }
 

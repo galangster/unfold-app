@@ -44,7 +44,7 @@ describe('deep-link allowlist — legitimate producers', () => {
 
   it('accepts the exact widgetURL literal every iOS widget source declares', () => {
     const widgetDir = path.join(__dirname, '../../widgets/ios');
-    const files = ['UnfoldStreak.tsx', 'UnfoldToday.tsx', 'UnfoldDashboard.tsx'];
+    const files = ['UnfoldStreak.tsx', 'UnfoldToday.tsx', 'UnfoldDashboard.tsx', 'UnfoldVerse.tsx'];
     for (const file of files) {
       const src = fs.readFileSync(path.join(widgetDir, file), 'utf-8');
       const match = /const deepLink = '([^']+)';/.exec(src);
