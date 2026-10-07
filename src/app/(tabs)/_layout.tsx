@@ -193,7 +193,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   }));
 
   return (
+    // The bar is pinned to the bottom, so a window that changes height moves it
+    // without a new row layout. Its own layout re-measures the row too.
     <Animated.View
+      onLayout={publishTabRowRect}
       style={[{
         position: 'absolute',
         bottom: 0,

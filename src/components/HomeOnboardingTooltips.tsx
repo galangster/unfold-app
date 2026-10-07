@@ -62,7 +62,7 @@ export interface OnboardingLayoutRects {
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
     title: 'Through the day',
-    message: 'Check-ins and notes from Companion gather here as your day unfolds. Tap one to respond, or swipe it away.',
+    message: 'Check-ins and notes from Companion gather here as your day unfolds. Tap one to respond, or dismiss it.',
     targetKey: 'context',
     placement: 'auto',
   },
@@ -219,6 +219,8 @@ export function HomeOnboardingTooltips({ layoutRects, onRevealTarget, onFinish }
   const step = availableSteps[stepIndex];
 
   // The tour lives in a Modal, which unmounts at once, so it fades out first.
+  // While it fades, it takes no taps and asks for no scroll.
+  const [closing, setClosing] = useState(false);
   const overlayOpacity = useSharedValue(1);
   const overlayFadeStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const finish = useCallback(() => {
@@ -226,6 +228,7 @@ export function HomeOnboardingTooltips({ layoutRects, onRevealTarget, onFinish }
     setHasSeenHomeTooltips(true);
   }, [setHasSeenHomeTooltips]);
   const dismiss = useCallback(() => {
+    setClosing(true);
     onFinish?.();
     if (reducedMotion) {
       finish();
@@ -253,7 +256,7 @@ export function HomeOnboardingTooltips({ layoutRects, onRevealTarget, onFinish }
   const contentTarget = step && step.targetKey !== 'tabs' ? step.targetKey : null;
   const contentRect = contentTarget ? measuredRects[contentTarget] ?? null : null;
   const distance = contentRect && !waitingForTabBar ? revealDistance(contentRect, visibleTop, visibleBottom) : 0;
-  const needsReveal = onRevealTarget !== undefined && Math.abs(distance) >= 1;
+  const needsReveal = !closing && onRevealTarget !== undefined && Math.abs(distance) >= 1;
   const lastRevealRef = useRef<{ step: number; rect: TargetRect } | null>(null);
   useEffect(() => {
     if (!needsReveal || !contentRect) return;
@@ -555,7 +558,7 @@ export function HomeOnboardingTooltips({ layoutRects, onRevealTarget, onFinish }
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
       {/* The fade-out sits on this wrapper and the fade-in on the overlay. On one
           view, the entering animation could overwrite the animated opacity. */}
-      <Animated.View style={[StyleSheet.absoluteFill, overlayFadeStyle]} pointerEvents="box-none">
+      <Animated.View style={[StyleSheet.absoluteFill, overlayFadeStyle]} pointerEvents={closing ? 'none' : 'box-none'}>
         {waitingForReveal ? (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0, 0, 0, ${BACKDROP_OPACITY})` }]} />
         ) : (

@@ -6,6 +6,8 @@ import { useUnfoldStore } from '@/lib/store';
 import { TAB_BAR_ROW_PADDING_TOP, tabBarRowPaddingBottom } from '@/lib/visible-tabs';
 
 const mockUseReducedMotion = jest.fn(() => true);
+// Set `completes` to false to hold the tour in its fade-out.
+const mockFade = { completes: true };
 
 // The real store pulls in native modules. The tour reads one flag from it.
 jest.mock('@/lib/store', () => {
@@ -49,7 +51,7 @@ jest.mock('react-native-reanimated', () => {
     useSharedValue: (value: unknown) => ({ value }),
     useAnimatedStyle: (factory: () => unknown) => factory(),
     withTiming: (value: unknown, _config: unknown, done?: (finished: boolean) => void) => {
-      done?.(true);
+      if (mockFade.completes) done?.(true);
       return value;
     },
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
@@ -74,6 +76,7 @@ function startTour(layoutRects: OnboardingLayoutRects, props: { onRevealTarget?:
 
 beforeEach(() => {
   mockUseReducedMotion.mockReturnValue(true);
+  mockFade.completes = true;
   useUnfoldStore.setState({ hasSeenHomeTooltips: false });
   useUIState.setState({ tabBarHidden: false, tabBarRowRect: TAB_ROW });
 });
@@ -167,6 +170,48 @@ describe('HomeOnboardingTooltips', () => {
 
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(useUnfoldStore.getState().hasSeenHomeTooltips).toBe(true);
+  });
+
+  it('shows the step anyway when a reveal stalls', () => {
+    jest.useFakeTimers();
+    try {
+      const onRevealTarget = jest.fn();
+      startTour({ ...NO_RECTS, rhythm: { x: 24, y: 900, width: 392, height: 150 } }, { onRevealTarget });
+
+      expect(screen.queryByText('Daily Rhythm')).toBeNull();
+
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+
+      expect(screen.getByText('Daily Rhythm')).toBeTruthy();
+      expect(screen.getByText('Next')).toBeTruthy();
+      expect(screen.getByText('Skip')).toBeTruthy();
+      expect(onRevealTarget).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('takes no taps and asks for no scroll while it fades out', () => {
+    mockUseReducedMotion.mockReturnValue(false);
+    mockFade.completes = false;
+    const onRevealTarget = jest.fn();
+    const onFinish = jest.fn();
+    startTour(
+      { ...NO_RECTS, context: { x: 24, y: 420, width: 392, height: 200 }, rhythm: { x: 24, y: 900, width: 392, height: 150 } },
+      { onRevealTarget, onFinish },
+    );
+
+    act(() => {
+      fireEvent.press(screen.getByText('Skip'));
+    });
+    act(() => {
+      fireEvent.press(screen.getByText('Next'));
+    });
+
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(onRevealTarget).not.toHaveBeenCalled();
   });
 
   it('hands Today back to the top when the tour ends', () => {

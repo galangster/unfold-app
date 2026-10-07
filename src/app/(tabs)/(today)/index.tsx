@@ -123,6 +123,7 @@ const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting w
 // declaration lists only getInnerViewNode, a node handle that measureLayout rejects.
 type ScrollViewWithInnerRef = ScrollView & { getInnerViewRef(): View | null };
 
+const EMPTY_TOOLTIP_RECTS: OnboardingLayoutRects = { reading: null, context: null, rhythm: null };
 // Long enough for a scroll to finish, animated or not, before positions are read.
 const TOOLTIP_REVEAL_SETTLE_MS = 450;
 
@@ -408,7 +409,11 @@ export default function HomeScreen() {
     },
   });
 
-  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<OnboardingLayoutRects>({ reading: null, context: null, rhythm: null });
+  const isTodayFocused = useIsFocused();
+  // The tour is a Modal above every screen, so it runs only while Today is in
+  // front. A reader who leaves mid-tour sees it again from the start.
+  const tourActive = !hasSeenHomeTooltips && isTodayFocused;
+  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<OnboardingLayoutRects>(EMPTY_TOOLTIP_RECTS);
   const readingTargetRef = useRef<View>(null);
   const contextTargetRef = useRef<View>(null);
   const rhythmTargetRef = useRef<View>(null);
@@ -417,7 +422,7 @@ export default function HomeScreen() {
   // does not move when Today scrolls. Screen position = scroll view origin +
   // content position - live offset. A window measure taken mid-scroll can
   // report the pre-scroll position on the new architecture. Nothing is measured
-  // once the tour is done.
+  // while the tour is not running.
   const scrollViewRef = useRef<ScrollViewWithInnerRef>(null);
   const scrollFrameRef = useRef<{ x: number; y: number } | null>(null);
   const tooltipContentRectsRef = useRef<Partial<Record<ContentTargetKey, TargetRect>>>({});
@@ -435,19 +440,19 @@ export default function HomeScreen() {
   }, [scrollY]);
 
   const measureScrollFrame = useCallback(() => {
-    if (hasSeenHomeTooltips) return;
+    if (!tourActive) return;
     // Optional calls: a missing handle must cost the tour, never Today itself.
     scrollViewRef.current?.getNativeScrollRef?.()?.measureInWindow((x, y) => {
       scrollFrameRef.current = { x, y };
       emitTooltipRects();
     });
-  }, [emitTooltipRects, hasSeenHomeTooltips]);
+  }, [emitTooltipRects, tourActive]);
 
   const publishTooltipRect = useCallback((
     key: ContentTargetKey,
     node: View | null,
   ) => {
-    if (hasSeenHomeTooltips) return;
+    if (!tourActive) return;
     const content = scrollViewRef.current?.getInnerViewRef?.();
     if (!node || !content) {
       delete tooltipContentRectsRef.current[key];
@@ -468,7 +473,7 @@ export default function HomeScreen() {
       tooltipContentRectsRef.current[key] = rect;
       emitTooltipRects();
     }, () => {});
-  }, [emitTooltipRects, hasSeenHomeTooltips]);
+  }, [emitTooltipRects, tourActive]);
 
   const scrollToday = useCallback((y: number) => {
     scrollViewRef.current?.scrollTo?.({ y: Math.max(0, y), animated: !reducedMotion });
@@ -483,11 +488,16 @@ export default function HomeScreen() {
     revealTimerRef.current = setTimeout(emitTooltipRects, TOOLTIP_REVEAL_SETTLE_MS);
   }, [emitTooltipRects, scrollToday, scrollY]);
 
-  // Once the tour ends, nothing reads the positions, so a pending re-publish is dropped.
-  const finishTooltips = useCallback(() => {
+  const finishTooltips = useCallback(() => scrollToday(0), [scrollToday]);
+
+  // When the tour stops, drop its positions and any pending re-publish, so a
+  // later tour starts from fresh measurements.
+  useEffect(() => {
+    if (tourActive) return;
     clearTimeout(revealTimerRef.current);
-    scrollToday(0);
-  }, [scrollToday]);
+    tooltipContentRectsRef.current = {};
+    setTooltipLayoutRects(EMPTY_TOOLTIP_RECTS);
+  }, [tourActive]);
 
   const handleReadingLayout = useCallback(() => {
     publishTooltipRect('reading', readingTargetRef.current);
@@ -520,7 +530,6 @@ export default function HomeScreen() {
     publishTooltipRect,
   ]);
 
-  const isTodayFocused = useIsFocused();
 
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -1992,7 +2001,7 @@ export default function HomeScreen() {
       {/* First-time onboarding tooltips — shown once, persisted in store.
           The debug "Replay Home Tooltips" button flips the flag back to false,
           which mounts a fresh tour and re-measures the target rects. */}
-      {!hasSeenHomeTooltips && (
+      {tourActive && (
         <HomeOnboardingTooltips
           layoutRects={tooltipLayoutRects}
           onRevealTarget={revealTooltipTarget}
