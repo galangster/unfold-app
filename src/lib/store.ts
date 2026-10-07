@@ -680,8 +680,12 @@ interface UnfoldState {
    * the new series lands (series-replacement.ts).
    */
   archiveCurrentDevotional: () => void;
-  /** Ends a replaced series once its replacement has landed. Never a series already ended. */
-  archiveReplacedDevotional: (id: string) => void;
+  /**
+   * Ends a replaced series once its replacement has landed. Never a series
+   * already ended. When it was current, a replacement already in the store
+   * (a sync pull landed it first) takes its place on Today.
+   */
+  archiveReplacedDevotional: (id: string, replacementId?: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
@@ -1386,15 +1390,19 @@ export const useUnfoldStore = create<UnfoldState>()(
         }
         recordReplacedSeries(currentId);
       },
-      archiveReplacedDevotional: (id) =>
+      archiveReplacedDevotional: (id, replacementId) =>
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || isDevotionalArchived(existing)) return state;
           const archived = applyArchiveIntent(existing, new Date().toISOString());
           enqueueDevotionalRow(archived);
+          // A replacement already ended on another device stays off Today.
+          const replacement = state.devotionals.find((d) => d.id === replacementId && !isDevotionalArchived(d));
           return {
             devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
-            ...(state.currentDevotionalId === id ? { currentDevotionalId: null, scripturePracticeReturn: null } : {}),
+            ...(state.currentDevotionalId === id
+              ? { currentDevotionalId: replacement?.id ?? null, scripturePracticeReturn: null }
+              : {}),
           };
         }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,

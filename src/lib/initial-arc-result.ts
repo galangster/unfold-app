@@ -68,11 +68,12 @@ export function applyInitialArcResult(
   const day1 = result.devotionalDay;
 
   // The series "Start a new series" replaces ends now that this one exists.
-  // First, so Today is off the old series before the new one is selected.
+  // First, so Today moves off the old series: to this one when a sync pull
+  // already landed it, otherwise to the shell added below.
   const replacedId = readReplacedSeries();
   if (replacedId) {
     clearReplacedSeries();
-    if (replacedId !== devotionalId) useUnfoldStore.getState().archiveReplacedDevotional(replacedId);
+    if (replacedId !== devotionalId) useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
   }
 
   const store = useUnfoldStore.getState();

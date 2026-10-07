@@ -78,6 +78,7 @@ import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { readReplacedSeries } from '@/lib/series-replacement';
 import {
   isReadableCurrentSeries,
   resolveCreateNewDuringPendingInitial,
@@ -797,12 +798,18 @@ export default function HomeScreen() {
     enabled: inflightSeries != null && isTodayFocused,
     onSettled: onInflightSeriesSettled,
   });
+  // "Start a new series" keeps the series it replaces current until the new
+  // one lands. That series is the old reading, never the series in flight:
+  // not by id (a session it left behind) and not as the current series.
+  const replacedSeriesId = readReplacedSeries();
+  const landedSeries = replacedSeriesId ? devotionals.filter((row) => row.id !== replacedSeriesId) : devotionals;
+  const hasLandedCurrentSeries = !!currentDevotional && currentDevotional.id !== replacedSeriesId;
   const isPreparingInflightSeries = inflightSeries != null
-    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
   const isInflightSeriesFailed = inflightSeries == null
     && generationSessionStatus === 'error'
-    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {

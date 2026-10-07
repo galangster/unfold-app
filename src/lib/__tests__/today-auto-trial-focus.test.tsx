@@ -207,6 +207,12 @@ jest.mock('@/lib/mmkv-storage', () => ({
   },
 }));
 
+let mockReplacedSeries: string | null = null;
+jest.mock('@/lib/series-replacement', () => ({
+  ...jest.requireActual('@/lib/series-replacement'),
+  readReplacedSeries: () => mockReplacedSeries,
+}));
+
 jest.mock('@/lib/store', () => {
   const useUnfoldStore = (selector: (state: Record<string, unknown>) => unknown) => selector(mockTodayStoreState);
   useUnfoldStore.getState = () => mockTodayStoreState;
@@ -986,5 +992,57 @@ describe('H7 Today auto-trial focus', () => {
     const next = JSON.parse(storage.get('auto-trial-series-intent-v1') ?? '{}') as AutoTrialIntentV1;
     expect(next.status).toBe('abandoned');
     expect(next.abandonReason).toBe('user_setup_fallback');
+  });
+});
+
+describe('Today while a new series replaces the current one', () => {
+  let saved: Record<string, unknown>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockReadBudgetBlocked = false;
+    saved = { ...mockTodayStoreState };
+  });
+
+  afterEach(() => {
+    mockReplacedSeries = null;
+    mockDevotionalCardProps = null;
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+  });
+
+  async function cardStateType() {
+    let tree: { unmount: () => void } | undefined;
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    const type = (mockDevotionalCardProps?.state as { type?: string } | undefined)?.type;
+    act(() => tree?.unmount());
+    return type;
+  }
+
+  it.each([
+    // Try again resubmitted with no job: the session was cleared first.
+    ['names no series', null],
+    // The first submission: the session still names the old series it wrote.
+    ['still names the series being replaced', 'today-series'],
+  ])('shows the failed card when the request failed before a job and the session %s', async (_label, sessionDevotionalId) => {
+    // "Start a new series?" kept today-series current until the new one lands.
+    mockReplacedSeries = 'today-series';
+    mockTodayStoreState.generationSession = {
+      status: 'error',
+      devotionalId: sessionDevotionalId,
+      title: null,
+      error: 'Something went wrong',
+    };
+
+    expect(await cardStateType()).toBe('first-series-failed');
+  });
+
+  it('keeps the current series when no new series replaces it', async () => {
+    mockTodayStoreState.generationSession = { status: 'error', devotionalId: null, title: null, error: 'Something went wrong' };
+
+    expect(await cardStateType()).not.toBe('first-series-failed');
   });
 });

@@ -185,9 +185,33 @@ describe('starting a new series', () => {
 
     land();
 
-    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe(READING_ID);
+    // Today moves to the new series, not to nothing.
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(NEW_ID);
     expect(series(READING_ID)).toMatchObject({ archivedAt: CLOCK, archivedStateAt: CLOCK });
     expect(queuedChangesFor(READING_ID)).toHaveLength(1);
+  });
+
+  it('does not put a synced new series another device already ended on Today', () => {
+    const endedElsewhere = '2026-10-07T14:00:00.000Z';
+    confirmStartNewSeries();
+    updateSyncedDevotionals((rows) => [...rows, {
+      id: NEW_ID,
+      title: 'A New Thing',
+      totalDays: 7,
+      currentDay: 1,
+      days: [],
+      createdAt: CLOCK,
+      archivedAt: endedElsewhere,
+      archivedStateAt: endedElsewhere,
+      generationMode: 'progressive',
+      userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+    }]);
+
+    land();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe(NEW_ID);
+    expect(series(NEW_ID)).toMatchObject({ archivedAt: endedElsewhere });
+    expect(queuedChangesFor(NEW_ID)).toEqual([]);
   });
 
   it('leaves a series another device already ended as it was', () => {
