@@ -921,13 +921,13 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
-    const pending = resolvePendingInitialArcResume({
+    const pending = {
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus,
       hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
       autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
-    });
+    };
     if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
       handleResumePendingInitial();
       return;

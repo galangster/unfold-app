@@ -7,18 +7,14 @@ import { getCurrentDevotional } from '@/lib/home-devotional-state';
 import { readInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { readInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { useUnfoldStore } from '@/lib/store';
-import {
-  isReadableCurrentSeries,
-  resolveCreateNewDuringPendingInitial,
-  resolvePendingInitialArcResume,
-} from '@/lib/support-clarity';
+import { isReadableCurrentSeries, resolveCreateNewDuringPendingInitial } from '@/lib/support-clarity';
 
 /**
  * Starts a new series from a screen outside Today, with the same steps as
  * Today's New Series button (handleCreateNew in src/app/(tabs)/(today)/index.tsx):
  *
  *   1. The creation gate decides on resolved entitlement first.
- *   2. A first series that is still being prepared resumes instead.
+ *   2. A series that is still being written resumes instead.
  *   3. Ending a current series asks first, then archives it.
  *   4. The new-series intake opens at its theme step.
  *
@@ -45,7 +41,7 @@ export function useStartNewSeries(gate: () => boolean): () => void {
     }
     if (!gate()) return;
 
-    const pending = resolvePendingInitialArcResume({
+    const pending = {
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus: state.generationSession.status,
@@ -53,7 +49,7 @@ export function useStartNewSeries(gate: () => boolean): () => void {
         getCurrentDevotional(state.devotionals, state.currentDevotionalId),
       ),
       autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
-    });
+    };
     if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
       router.replace('/generating');
       return;

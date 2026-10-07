@@ -9,6 +9,7 @@ const mockArchive = jest.fn(() => { calls.push('archive'); });
 const mockAbandon = jest.fn(() => { calls.push('abandon intent'); });
 const mockGate = jest.fn(() => true);
 let mockRequestId: string | null;
+let mockInflight: { jobId: string; submittedAt: number; leftForHome?: boolean; superseded?: boolean } | null;
 let mockState: {
   user: { hasCompletedOnboarding: boolean } | null;
   devotionals: { id: string; days: unknown[] }[];
@@ -19,7 +20,7 @@ let mockState: {
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@/lib/store', () => ({ useUnfoldStore: { getState: () => mockState } }));
-jest.mock('@/lib/inflight-generation-job', () => ({ readInflightGenerationJob: () => null }));
+jest.mock('@/lib/inflight-generation-job', () => ({ readInflightGenerationJob: () => mockInflight }));
 jest.mock('@/lib/initial-generation-request', () => ({ readInitialGenerationRequestId: () => mockRequestId }));
 jest.mock('@/lib/auto-trial-intent', () => ({
   readAutoTrialIntent: () => null,
@@ -47,6 +48,7 @@ describe('useStartNewSeries', () => {
     calls.length = 0;
     mockGate.mockReturnValue(true);
     mockRequestId = null;
+    mockInflight = null;
     mockState = {
       user: { hasCompletedOnboarding: true },
       devotionals: [],
@@ -92,6 +94,21 @@ describe('useStartNewSeries', () => {
     start();
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(calls).toEqual([`replace ${JSON.stringify('/generating')}`]);
+  });
+
+  it('resumes a series that is still generating instead of starting the intake over it', () => {
+    mockInflight = { jobId: 'job-1', submittedAt: 1, leftForHome: true };
+    mockState.devotionals = [{ id: 'series-1', days: [{}] }];
+    mockState.currentDevotionalId = 'series-1';
+    start();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(calls).toEqual([`replace ${JSON.stringify('/generating')}`]);
+  });
+
+  it('still starts the intake over a superseded job', () => {
+    mockInflight = { jobId: 'job-1', submittedAt: 1, superseded: true };
+    start();
+    expect(calls).toEqual(['abandon intent', `replace ${JSON.stringify(NEW_SERIES_INTAKE)}`]);
   });
 
   it('sends a reader who has not finished onboarding to onboarding, before any gate', () => {

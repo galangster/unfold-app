@@ -1,11 +1,13 @@
 import React from 'react';
 import * as ReactNative from 'react-native';
+import { cssInterop } from 'react-native-css-interop';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import FeelingsScreen from '@/app/feelings';
 import { FEELINGS } from '@/constants/feelings';
 
 const mockClose = jest.fn();
+const mockScrollTo = jest.fn();
 const mockStartNewSeries = jest.fn();
 let mockParams: { feeling?: string | string[] };
 
@@ -45,6 +47,19 @@ jest.mock('react-native-reanimated', () => {
     Easing: { cubic: 'cubic', in: (e: unknown) => e, inOut: (e: unknown) => e, out: (e: unknown) => e },
   };
 });
+
+// On device React Native 0.86's ScrollView is a function component, and
+// NativeWind's interop drops its ref; the preset mock is a class that keeps it.
+// This stand-in sits behind the interop, as on device, and records scrollTo.
+jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
+  const { createElement, useImperativeHandle } = jest.requireActual('react');
+  function ScrollView({ ref, children }: { ref?: unknown; children?: unknown }) {
+    useImperativeHandle(ref, () => ({ scrollTo: mockScrollTo }));
+    return createElement('RCTScrollView', null, children);
+  }
+  return { __esModule: true, default: ScrollView };
+});
+cssInterop(ReactNative.ScrollView, { className: 'style' });
 
 const pressButton = (name: string | RegExp) => fireEvent.press(screen.getByRole('button', { name }));
 const expectList = () => expect(screen.getByRole('header', { name: 'How are you, really?' })).toBeTruthy();
@@ -113,6 +128,14 @@ describe('feelings screen', () => {
     expectList();
     expect(screen.queryByText('For the weary')).toBeNull();
     expect(screen.getByRole('button', { name: 'Weary' })).toBeTruthy();
+  });
+
+  it('opens each view at the top after a swap', () => {
+    render(<FeelingsScreen />);
+    pressButton('Weary');
+    expect(mockScrollTo).toHaveBeenLastCalledWith({ y: 0, animated: false });
+    pressButton('All feelings');
+    expect(mockScrollTo).toHaveBeenCalledTimes(2);
   });
 
   it('trims a closing quote that opens in an earlier verse', () => {
