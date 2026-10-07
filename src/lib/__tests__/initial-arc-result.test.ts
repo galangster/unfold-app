@@ -550,40 +550,72 @@ describe('adoptStrandedInitialArcSeries', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 
+  /**
+   * The reader moves Today to another series from the Library (a paused one
+   * is live again once resumed), taps New Series, which ends it, and backs
+   * out of the intake. Each step is asserted, so a change to how either step
+   * behaves fails here instead of leaving the repair nothing to decide.
+   */
+  function moveOffToLiveSeriesThenEndIt(live: Devotional) {
+    useUnfoldStore.getState().setCurrentDevotional(live.id);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(live.id);
+    useUnfoldStore.getState().archiveCurrentDevotional();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  }
+
+  // Older than every landed series, so it never outranks one.
+  const liveSeries = () => localSeries('devo-live', {
+    createdAt: '2026-08-01T08:00:00.000Z',
+    seriesStartDate: '2026-08-01T08:00:00.000Z',
+  });
+
   it.each([
     ['as a fresh shell', false],
     ['after the sync pull landed it first', true],
   ])('never brings back a series that landed %s once the reader moved off it', (_label, pulledFirst) => {
-    const paused = localSeries('devo-paused', { archivedAt: ARCHIVED_AT, archivedStateAt: ARCHIVED_AT });
-    useUnfoldStore.setState({ devotionals: [paused], currentDevotionalId: null });
+    const live = liveSeries();
+    useUnfoldStore.setState({ devotionals: [live], currentDevotionalId: null });
     if (pulledFirst) pullLandedSeries();
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
 
-    // The reader picks a paused series from the Library, taps New Series,
-    // which ends it, and backs out of the intake. Then Today takes focus.
-    useUnfoldStore.getState().setCurrentDevotional(paused.id);
+    moveOffToLiveSeriesThenEndIt(live);
+
+    // Then Today takes focus.
+    expect(adoptStrandedInitialArcSeries()).toBe(false);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  it('never brings back a series its landing left off Today', () => {
+    // The pull lands the series while the reader is on a live series they
+    // picked, so the landing keeps Today where it is. The reader later ends
+    // that series with New Series and backs out of the intake.
+    const picked = localSeries('devo-picked');
+    useUnfoldStore.setState({ devotionals: [picked], currentDevotionalId: picked.id });
+    pullLandedSeries();
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(picked.id);
+
     useUnfoldStore.getState().archiveCurrentDevotional();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
 
     expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-1');
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 
   it.each([
     ['found it current', 'devo-1', false],
     ['made it current', null, true],
   ])('stops repairing a session an earlier build finished once it has %s', (_label, currentDevotionalId, adopted) => {
-    seedStranded({ currentDevotionalId });
+    const live = liveSeries();
+    seedStranded({ currentDevotionalId, others: [live] });
     expect(adoptStrandedInitialArcSeries()).toBe(adopted);
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
 
-    // The reader opens the archived series from the Library, then ends it
-    // with New Series and backs out of the intake.
-    useUnfoldStore.getState().setCurrentDevotional('devo-old');
-    useUnfoldStore.getState().archiveCurrentDevotional();
+    moveOffToLiveSeriesThenEndIt(live);
 
     expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-1');
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 });
 
