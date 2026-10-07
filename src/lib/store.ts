@@ -31,13 +31,19 @@ import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-he
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
-import { enqueueSyncChanges } from './sync-outbox';
+import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import type { SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
-import { applyArchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from './devotional-lifecycle';
+import {
+  applyArchiveIntent,
+  applyArchiveLifecycle,
+  devotionalLifecycleSyncFields,
+  isDevotionalArchived,
+  lifecycleTimestampMs,
+} from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
@@ -1077,6 +1083,23 @@ function enqueueDevotionalRow(devotional: Devotional): void {
 }
 
 /**
+ * Queues an archive or resume decision without promoting the row's content.
+ * The server sets archivedStateAt by compare-and-set, apart from content
+ * last-write-wins, so the change keeps the content clock and newer progress
+ * from another device stays newer. The outbox holds one change per row and
+ * drops an older one, so a write still waiting for this row carries the
+ * decision on its own clock.
+ */
+function enqueueDevotionalLifecycle(devotional: Devotional): void {
+  const lifecycle = devotionalLifecycleSyncFields(devotional);
+  const pending = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === devotional.id);
+  if (pending?.deleted) return;
+  enqueueSyncChanges([pending
+    ? { ...pending, data: { ...pending.data, ...lifecycle } }
+    : buildPersonalDataSyncChange('devotionals', devotional.id, lifecycle, devotional.updatedAt ?? devotional.createdAt)]);
+}
+
+/**
  * Patches one day of one devotional, stamping `updatedAt` on both so sync
  * last-write-wins sees the change.
  */
@@ -1373,9 +1396,9 @@ export const useUnfoldStore = create<UnfoldState>()(
             ? state.devotionals.find((d) => d.id === expectedActiveId)
             : undefined;
           const paused = previous && !isDevotionalArchived(previous) && isProgressiveSeriesCandidate(previous)
-            ? applyArchiveIntent(previous, acknowledgedClock)
+            ? applyArchiveLifecycle(previous, acknowledgedClock)
             : null;
-          if (paused) enqueueDevotionalRow(paused);
+          if (paused) enqueueDevotionalLifecycle(paused);
           return {
             devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d.id === paused?.id ? paused : d)),
             currentDevotionalId: id,

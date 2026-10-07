@@ -269,15 +269,46 @@ describe('store archive and resume lifecycle', () => {
       currentDay: 3,
     });
     expect(previous?.days).toEqual(active.days);
+    // The pause moves the lifecycle clock only. Promoting the content clock
+    // would let this device's older progress overwrite newer progress from
+    // another device.
+    expect(previous?.updatedAt).toBe(active.updatedAt);
     // Only the previous series is queued: the resumed one was already
     // acknowledged and must not mint another intent.
     const queued = peekSyncOutbox().filter((change) => change.table === 'devotionals');
-    expect(queued).toHaveLength(1);
-    expect(queued[0]).toMatchObject({
+    expect(queued).toEqual([{
+      table: 'devotionals',
       id: OTHER_ID,
-      clientUpdatedAt: resumeClock,
+      clientUpdatedAt: active.updatedAt,
       data: { archivedAt: resumeClock, archivedStateAt: resumeClock },
-    });
+      deleted: false,
+    }]);
+  });
+
+  // The outbox keeps one change per row and drops an older one. The pause
+  // must neither replace unsynced progress nor be dropped behind it.
+  it('carries the pause on progress still waiting to sync for the previous series', () => {
+    const resumeClock = '2026-09-12T15:00:05.000Z';
+    const paused = series(CURRENT_ID, { archivedAt: CLOCK, archivedStateAt: CLOCK });
+    const active = series(OTHER_ID, { createdAt: '2026-09-05T00:00:00.000Z' });
+    const pendingRead = {
+      table: 'devotionals' as const,
+      id: OTHER_ID,
+      clientUpdatedAt: '2026-09-12T14:30:00.000Z',
+      data: { title: OTHER_ID, currentDay: 4 },
+      deleted: false,
+    };
+    useUnfoldStore.setState({ devotionals: [paused, active], currentDevotionalId: OTHER_ID });
+    replaceSyncOutbox([pendingRead]);
+
+    expect(useUnfoldStore.getState().activateAcknowledgedDevotionalResume(
+      CURRENT_ID, OTHER_ID, CLOCK, resumeClock,
+    )).toBe(true);
+
+    expect(peekSyncOutbox()).toEqual([{
+      ...pendingRead,
+      data: { title: OTHER_ID, currentDay: 4, archivedAt: resumeClock, archivedStateAt: resumeClock },
+    }]);
   });
 
   it('does not enqueue when activating an already live series', () => {

@@ -1297,11 +1297,11 @@ describe('reader swipe cancellation', () => {
     if (archived) expect(after.archivedAt).toBeNull();
     expect(requestOrder).toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
     // The dialog said the active series "will be paused": it is archived on
-    // the resume clock with its progress kept, so the server stops treating
-    // it as a live candidate.
+    // the resume clock with its progress and content clock kept, so the
+    // server stops treating it as a live candidate.
     const resumeClock = mockAcceptedResume!.archivedStateAt;
     expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual({
-      ...beforeActive, archivedAt: resumeClock, archivedStateAt: resumeClock, updatedAt: resumeClock,
+      ...beforeActive, archivedAt: resumeClock, archivedStateAt: resumeClock,
     });
     expect(mockWebViewProps.current?.day?.bodyText).toBe('Resumed Day 2 content.');
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
@@ -1626,7 +1626,7 @@ describe('reader swipe cancellation', () => {
       const resumeClock = changes[0].data.archivedStateAt as string;
       expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID))
         .toEqual(outcome === 'accepted'
-          ? { ...activeBefore, archivedAt: resumeClock, archivedStateAt: resumeClock, updatedAt: resumeClock }
+          ? { ...activeBefore, archivedAt: resumeClock, archivedStateAt: resumeClock }
           : activeBefore);
       if (outcome === 'accepted') {
         expect(after.archivedStateAt).toBe(changes[0].data.archivedStateAt);
