@@ -160,7 +160,7 @@ describe('deep-link allowlist — legitimate producers', () => {
 });
 
 describe('deep-link allowlist — rejections', () => {
-  it('rejects the hidden and transitional routes explicitly', () => {
+  it('rejects the blocklisted routes explicitly', () => {
     expectRejected('unfold://unfolded', 'blocked-route');
     expectRejected('unfold:///unfolded', 'blocked-route');
     expectRejected('unfold://generating', 'blocked-route');

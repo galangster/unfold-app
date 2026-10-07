@@ -183,10 +183,10 @@ export const EXTERNAL_ROUTE_BLOCKLIST: ReadonlySet<string> = new Set([
   '/day-menu', // in-reader sheet that needs reader context
   '/qa-method-readings', // QA sample library; in-app only behind the practice gate
   '/qa-ambient-sound', // Future sound QA; explicit in-app entry only
-  // Its gates live in its in-app callers: Today's New Series runs the creation
-  // gate and the "Start a new series?" confirm first, a reader who finished
-  // onboarding skips its paywall step, and ?startAt= could pass that step. `/`
-  // already sends a new reader into onboarding and a finished one to Today.
+  // Onboarding is gated by its in-app callers (Today's New Series runs the
+  // creation gate and the end-series confirm first). A finished reader skips
+  // its paywall step, and ?startAt= can pass it. `/` sends a finished reader to
+  // Today and shows a new one the welcome screen that leads into onboarding.
   '/onboarding',
 ]);
 

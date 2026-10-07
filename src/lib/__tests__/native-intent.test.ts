@@ -126,22 +126,15 @@ describe('redirectSystemPath', () => {
       Reflect.set(global, '__DEV__', originalDev);
     }
   });
-});
 
-describe('outside links into onboarding', () => {
-  // A reader who finished onboarding skips its paywall on every visit, and
-  // Today's New Series runs the creation gate and the "Start a new series?"
-  // confirm before it opens /onboarding. An outside link would skip all of
-  // that, and ?startAt= could drop a new reader past the paywall step. The
-  // welcome anchor sends a finished reader to Today and a new one into
-  // onboarding, so outside links land there instead.
+  // Why onboarding never opens from outside: its EXTERNAL_ROUTE_BLOCKLIST note.
   it.each([
     'unfold://onboarding?startAt=themeType&flow=newSeries',
     'unfold://onboarding?flow=newSeries',
     'unfold://onboarding',
     'unfold://onboarding?startAt=themeType',
     'com.unfoldapp.ios://onboarding?flow=newSeries',
-  ])('%s opens the welcome anchor', (path) => {
+  ])('lands the outside link %s on the root anchor', (path) => {
     expect(redirectSystemPath({ path, initial: false })).toBe('/');
     expect(redirectSystemPath({ path, initial: true })).toBe('/');
   });
