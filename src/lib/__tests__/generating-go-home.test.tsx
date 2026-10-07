@@ -719,6 +719,22 @@ describe('Go home after the server ruled on the first series', () => {
     expect(todayCreateNewAction()).toBe('start-fresh');
   });
 
+  it('retires the request id after a verdict on the job its submission adopted', async () => {
+    mockSubmitGenerationJob.mockRejectedValue(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-existing', expect.any(Number));
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
   it('keeps the request id when the submission never got an answer', async () => {
     // The POST may have reached the server. The same id is what lets the next
     // submit find that job instead of writing a second series.
@@ -758,6 +774,41 @@ describe('Go home after the server ruled on the first series', () => {
     await press(tree, 'Go home');
 
     expect(readInitialGenerationRequestId()).toBe(requestId);
+  });
+
+  it('keeps a newer unanswered request id when an older failure push is opened and left', async () => {
+    // A new series' POST is lost and the reader goes home. The kept id is
+    // the only thing that can find a job the server may have made.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+    const first = await renderScreen();
+    const requestId = readInitialGenerationRequestId();
+    expect(requestId).not.toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+    await press(first, 'Go home');
+    await act(async () => {
+      first.unmount();
+    });
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+
+    // iOS kept "We hit a snag" for an older series. Opening it polls that
+    // job, which the server failed. Its verdict says nothing about the newer
+    // request.
+    mockSearchParams.jobId = 'job-old';
+    mockSearchParams.devotionalId = 'devo-old';
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: 'The writer stumbled', canRetry: false });
+    const second = await renderScreen();
+    mounted.push(second);
+    await settleOnError(second);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-old', expect.any(Number));
+
+    await press(second, 'Go home');
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+    expect(todayCreateNewAction()).toBe('resume-existing');
   });
 });
 

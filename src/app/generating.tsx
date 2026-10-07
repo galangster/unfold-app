@@ -197,6 +197,10 @@ export default function GeneratingScreen() {
   // instead of re-arming a second timer chain next to the current one.
   const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
+  // The request id this screen sent and the server answered with a job. A
+  // resumed record or a failure push names a job, not the request behind it,
+  // so a verdict on such a job cannot retire a newer request id.
+  const answeredRequestIdRef = useRef<string | null>(null);
   // Set by "Go home — we'll keep writing". A job that resolves after the
   // reader left (a submission, a retry, an adopted job) persists its record
   // already marked for Today and does not start a poll loop on a screen
@@ -799,6 +803,7 @@ export default function GeneratingScreen() {
         });
 
         if (!isSyncSessionCurrent(origin)) return;
+        answeredRequestIdRef.current = requestId;
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
 
@@ -823,6 +828,7 @@ export default function GeneratingScreen() {
           // The server already has a job for this user/day. Adopt it instead of
           // dead-ending on an error that would resubmit from scratch on retry.
           const existingJobId = failure.jobId;
+          answeredRequestIdRef.current = readInitialGenerationRequestId();
           logger.log('[generating] Submission reports an existing job; adopting it:', existingJobId);
           void logBugEvent('generation', 'generation-adopt-existing-job', { existingJobId });
           const sessionDevotionalId = useUnfoldStore.getState().generationSession.devotionalId;
@@ -954,8 +960,9 @@ export default function GeneratingScreen() {
           // Same builder as the primary path — a retried generation must not
           // silently lose the personalization fields (review finding: this
           // branch was missed in the buildInitialArcUserContext refactor).
+          const requestId = ensureInitialGenerationRequestId();
           const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
-            requestId: ensureInitialGenerationRequestId(),
+            requestId,
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: buildInitialArcUserContext(user),
@@ -963,6 +970,7 @@ export default function GeneratingScreen() {
           });
 
           if (!isSyncSessionCurrent(origin)) return;
+          answeredRequestIdRef.current = requestId;
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
@@ -1016,7 +1024,11 @@ export default function GeneratingScreen() {
       // returns the same job, so Today's create and resume taps looped back
       // here. A request that never got an answer keeps its id: the POST may
       // have created a job, and the same id finds it instead of a second one.
-      if (errorIsServerVerdict) clearInitialGenerationRequestId();
+      // A verdict retires only the id this screen's submission was answered
+      // under; an older push's job says nothing about a newer request.
+      if (errorIsServerVerdict && answeredRequestIdRef.current === readInitialGenerationRequestId()) {
+        clearInitialGenerationRequestId();
+      }
     } else {
       // We only lost contact with the server; it may still own this job.
       // Keep the record, marked for Today so it watches the job from there
