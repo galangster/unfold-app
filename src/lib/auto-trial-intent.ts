@@ -334,6 +334,29 @@ export function transitionAutoTrialIntent(
   return writeIntent(next, store);
 }
 
+/**
+ * Abandons purchased or failed auto-trial intents before the user starts a new series.
+ * Today's New Series button and useStartNewSeries both call it.
+ */
+export function abandonPurchasedIntentBeforeNewSeries(i: {
+  nowMs: number;
+  storage?: IntentStorage;
+}): void {
+  const current = readAutoTrialIntent(i.storage);
+  const reason = current?.status === 'purchased'
+    ? 'superseded_by_user_series'
+    : current?.status === 'failed'
+      ? 'user_setup_fallback'
+      : null;
+  if (!reason) return;
+  transitionAutoTrialIntent(
+    'abandoned',
+    { abandonReason: reason },
+    { nowMs: i.nowMs },
+    i.storage,
+  );
+}
+
 export function markAutoTrialIntentDismissed(
   opts: { nowMs: number },
   storage?: IntentStorage,

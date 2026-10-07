@@ -95,7 +95,12 @@ describe('pending first-series resume after a close', () => {
       generationSessionStatus: 'idle',
       hasReadableCurrentSeries: false,
     })).toBe('offer-resume');
-    expect(resolveCreateNewDuringPendingInitial('offer-resume')).toBe('resume-existing');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: false,
+    })).toBe('resume-existing');
   });
 
   it('offers a nonblocking resume when a readable series or sample already exists', () => {
@@ -106,7 +111,12 @@ describe('pending first-series resume after a close', () => {
       generationSessionStatus: 'idle',
       hasReadableCurrentSeries: true,
     })).toBe('offer-nonblocking-resume');
-    expect(resolveCreateNewDuringPendingInitial('offer-nonblocking-resume')).toBe('resume-existing');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: true,
+    })).toBe('resume-existing');
   });
 
   it('still offers a resume hero after an archived real series when a new request is outstanding', () => {
@@ -150,7 +160,43 @@ describe('pending first-series resume after a close', () => {
       hasReadableCurrentSeries: false,
       autoTrialOwnsFlow: true,
     })).toBe('none');
-    expect(resolveCreateNewDuringPendingInitial('none')).toBe('start-fresh');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId: null,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: false,
+    })).toBe('start-fresh');
+  });
+
+  // The banner above stays quiet for a live job, but New Series must not start
+  // the intake over it: /generating would resume the old job and drop the new
+  // answers.
+  it.each([
+    ['still on /generating', { jobId: 'job-1', submittedAt: 1 }],
+    ['after Go home', { jobId: 'job-1', submittedAt: 1, leftForHome: true }],
+  ])('resumes a live job %s instead of starting a new series', (_case, inflight) => {
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight,
+      requestId,
+      generationSessionStatus: 'running',
+      hasReadableCurrentSeries: true,
+    })).toBe('resume-existing');
+  });
+
+  it('starts fresh over a superseded job, or when a purchased auto-trial owns the flow', () => {
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: { jobId: 'job-1', submittedAt: 1, superseded: true },
+      requestId: null,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: true,
+    })).toBe('start-fresh');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: { jobId: 'job-1', submittedAt: 1 },
+      requestId: null,
+      generationSessionStatus: 'running',
+      hasReadableCurrentSeries: true,
+      autoTrialOwnsFlow: true,
+    })).toBe('start-fresh');
   });
 });
 

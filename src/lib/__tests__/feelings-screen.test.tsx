@@ -1,0 +1,197 @@
+import React from 'react';
+import * as ReactNative from 'react-native';
+import { cssInterop } from 'react-native-css-interop';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+
+import FeelingsScreen from '@/app/feelings';
+import { FEELINGS } from '@/constants/feelings';
+
+const mockClose = jest.fn();
+const mockScrollTo = jest.fn();
+const mockStartNewSeries = jest.fn();
+let mockParams: { feeling?: string | string[] };
+
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
+jest.mock('@/hooks/useGuardedBack', () => ({ useGuardedBack: () => mockClose }));
+jest.mock('@/hooks/useStartNewSeries', () => ({ useStartNewSeries: () => mockStartNewSeries }));
+jest.mock('@/hooks/useCreationGate', () => ({
+  useCreationGate: () => ({ gate: () => true, showExclusiveOffer: false, dismissOffer: jest.fn(), handleOfferVerifiedExit: jest.fn() }),
+}));
+jest.mock('@/components/ExclusiveOfferSheet', () => ({ ExclusiveOfferSheet: () => null }));
+// The real Button, without the barrel's sheet and gesture imports.
+jest.mock('@/components/ui', () => ({ Button: jest.requireActual('@/components/ui/Button').Button }));
+jest.mock('@/components/icons', () => ({ ArrowClockwiseIcon: () => null, CaretLeftIcon: () => null, XIcon: () => null }));
+jest.mock('@/lib/theme', () => ({
+  useTheme: () => ({ colors: jest.requireActual('@/constants/colors').DarkColors, isDark: true }),
+}));
+jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'SourceSerifPro_400Regular' }) }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+  selectionAsync: jest.fn(),
+}));
+jest.mock('react-native-reanimated', () => {
+  const { View } = jest.requireActual('react-native');
+  const builder: Record<string, unknown> = {};
+  for (const method of ['delay', 'duration', 'easing', 'reduceMotion', 'withInitialValues']) builder[method] = () => builder;
+  return {
+    __esModule: true,
+    default: { View },
+    FadeIn: builder,
+    FadeInDown: builder,
+    FadeOut: builder,
+    ReduceMotion: { System: 'system' },
+    Easing: { cubic: 'cubic', in: (e: unknown) => e, inOut: (e: unknown) => e, out: (e: unknown) => e },
+  };
+});
+
+// On device React Native 0.86's ScrollView is a function component, and
+// NativeWind's interop drops its ref; the preset mock is a class that keeps it.
+// This stand-in sits behind the interop, as on device, and records scrollTo.
+jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
+  const { createElement, useImperativeHandle } = jest.requireActual('react');
+  function ScrollView({ ref, children }: { ref?: unknown; children?: unknown }) {
+    useImperativeHandle(ref, () => ({ scrollTo: mockScrollTo }));
+    return createElement('RCTScrollView', null, children);
+  }
+  return { __esModule: true, default: ScrollView };
+});
+cssInterop(ReactNative.ScrollView, { className: 'style' });
+
+const pressButton = (name: string | RegExp) => fireEvent.press(screen.getByRole('button', { name }));
+const expectList = () => expect(screen.getByRole('header', { name: 'How are you, really?' })).toBeTruthy();
+
+describe('feelings screen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockParams = {};
+  });
+
+  it('asks how you are and offers all twelve words as buttons', () => {
+    render(<FeelingsScreen />);
+    expect(screen.getByText('Check in')).toBeTruthy();
+    expectList();
+    expect(screen.getByText('Pick a word. Unfold finds you a passage for it.')).toBeTruthy();
+    for (const feeling of FEELINGS) expect(screen.getByRole('button', { name: feeling.word })).toBeTruthy();
+  });
+
+  it('answers Weary with its label, Matthew 11:28, and the series button', () => {
+    render(<FeelingsScreen />);
+    pressButton('Weary');
+    expect(screen.getByText('For the weary')).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Weary' })).toBeTruthy();
+    expect(screen.getByText(/^28 Come to Me, all you who are weary and burdened, and I will give you rest\.$/)).toBeTruthy();
+    expect(screen.getByText('Matthew 11:28 · Berean Standard Bible')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Begin a series for this' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Anxious' })).toBeNull();
+  });
+
+  it('cycles through the feeling\'s passages with Another passage', () => {
+    render(<FeelingsScreen />);
+    pressButton('Weary');
+    expect(screen.getByText('Another passage 1/3')).toBeTruthy();
+
+    pressButton('Another passage, 1 of 3');
+    expect(screen.getByText(/He gives power to the faint and increases the strength of the weak\./)).toBeTruthy();
+    expect(screen.getByText('Isaiah 40:29 · Berean Standard Bible')).toBeTruthy();
+    expect(screen.getByText('Another passage 2/3')).toBeTruthy();
+
+    pressButton('Another passage, 2 of 3');
+    expect(screen.getByText('Psalm 116:7 · Berean Standard Bible')).toBeTruthy();
+    pressButton('Another passage, 3 of 3');
+    expect(screen.getByText('Matthew 11:28 · Berean Standard Bible')).toBeTruthy();
+  });
+
+  it('opens straight on the answer the feeling param names', () => {
+    mockParams = { feeling: 'grieving' };
+    render(<FeelingsScreen />);
+    expect(screen.getByText('For the grieving')).toBeTruthy();
+    // LORD keeps its letters while the last three are set as small capitals.
+    expect(screen.getByText(/^18 The LORD is near to the brokenhearted; He saves the contrite in spirit\.$/)).toBeTruthy();
+    expect(screen.getByText('Psalm 34:18 · Berean Standard Bible')).toBeTruthy();
+  });
+
+  it.each([['an unknown id', { feeling: 'overjoyed' }], ['no id', {}]])('opens on the list for %s', (_case, params) => {
+    mockParams = params;
+    render(<FeelingsScreen />);
+    expectList();
+    expect(screen.queryByText(/Berean Standard Bible/)).toBeNull();
+  });
+
+  it('returns to the list from All feelings', () => {
+    render(<FeelingsScreen />);
+    pressButton('Weary');
+    pressButton('All feelings');
+    expectList();
+    expect(screen.queryByText('For the weary')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Weary' })).toBeTruthy();
+  });
+
+  it('opens each view at the top after a swap', () => {
+    render(<FeelingsScreen />);
+    pressButton('Weary');
+    expect(mockScrollTo).toHaveBeenLastCalledWith({ y: 0, animated: false });
+    pressButton('All feelings');
+    expect(mockScrollTo).toHaveBeenCalledTimes(2);
+  });
+
+  it('trims a closing quote that opens in an earlier verse', () => {
+    mockParams = { feeling: 'alone' };
+    render(<FeelingsScreen />);
+    expect(screen.getByText(/Do not be afraid or discouraged\.$/)).toBeTruthy();
+  });
+
+  it('closes through the guarded back from either state', () => {
+    render(<FeelingsScreen />);
+    pressButton('Close');
+    pressButton('Weary');
+    pressButton('Close');
+    expect(mockClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts a new series from the primary button', () => {
+    render(<FeelingsScreen />);
+    pressButton('Anxious');
+    pressButton('Begin a series for this');
+    expect(mockStartNewSeries).toHaveBeenCalledTimes(1);
+  });
+
+  describe('VoiceOver focus', () => {
+    let focus: jest.SpyInstance;
+    // The event names the host instance, so a test can read which text took focus.
+    const focusedText = (call: number) => (focus.mock.calls[call][0] as { props: { children: unknown } }).props.children;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      focus = jest.spyOn(ReactNative.AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it.each([['the list', {}], ['an answer', { feeling: 'weary' }]])('leaves focus where it is when the screen opens on %s', (_view, params) => {
+      mockParams = params;
+      render(<FeelingsScreen />);
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('moves focus to the answer heading after a word, and to the prompt after All feelings', () => {
+      render(<FeelingsScreen />);
+      pressButton('Weary');
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).toHaveBeenCalledTimes(1);
+      expect(focusedText(0)).toBe('Weary');
+
+      pressButton('All feelings');
+      act(() => jest.runOnlyPendingTimers());
+      expect(focus).toHaveBeenCalledTimes(2);
+      expect(focusedText(1)).toBe('How are you, really?');
+    });
+  });
+});
