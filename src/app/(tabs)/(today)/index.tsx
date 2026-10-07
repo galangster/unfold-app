@@ -56,13 +56,13 @@ import {
   type TodayInflightDecision,
 } from '@/lib/inflight-generation-job';
 import {
+  abandonPurchasedIntentBeforeNewSeries,
   readAutoTrialIntent,
   reconcileAutoTrialIntentOnLaunch,
   settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
   type AutoTrialIntentV1,
   type AutoTrialLaunchAction,
-  type IntentStorage,
 } from '@/lib/auto-trial-intent';
 import { isAutoTrialSeries, isOnboardingFirstReading } from '@/lib/auto-trial-series';
 import { getDeviceId } from '@/lib/mmkv-storage';
@@ -259,26 +259,6 @@ export function applyTodayAutoTrialFocus(i: {
     resumeGenerating: inflightDecision.action === 'resume-on-generating',
     settleIntent,
   };
-}
-
-/** Abandons purchased or failed auto-trial intents before the user starts a new series. */
-export function abandonPurchasedIntentBeforeNewSeries(i: {
-  nowMs: number;
-  storage?: IntentStorage;
-}): void {
-  const current = readAutoTrialIntent(i.storage);
-  const reason = current?.status === 'purchased'
-    ? 'superseded_by_user_series'
-    : current?.status === 'failed'
-      ? 'user_setup_fallback'
-      : null;
-  if (!reason) return;
-  transitionAutoTrialIntent(
-    'abandoned',
-    { abandonReason: reason },
-    { nowMs: i.nowMs },
-    i.storage,
-  );
 }
 
 export default function HomeScreen() {
@@ -984,13 +964,13 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
-    const pending = resolvePendingInitialArcResume({
+    const pending = {
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus,
       hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
       autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
-    });
+    };
     if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
       handleResumePendingInitial();
       return;
