@@ -26,6 +26,7 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  lineHeight,
   kerning,
   minimumScaleFactor,
   gaugeStyle,
@@ -86,12 +87,15 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
   }
 
   if (environment.widgetFamily === 'accessoryRectangular') {
-    // A line over 76 characters drops to 12pt on four lines so it still fits.
-    const isLong = verse.length > 76;
+    // The Lock Screen gives this family about 143×56 pt of content (iOS 27,
+    // measured), so three lines of 12 pt serif on a 14 pt line height plus the
+    // reference fill it (54 pt). Line height needs iOS 26; earlier iOS keeps
+    // the serif's taller natural leading, so the verse scales down slightly
+    // rather than lose its last line.
     return (
       <VStack
         alignment="leading"
-        spacing={4}
+        spacing={2}
         modifiers={[
           frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: 'leading' }),
           accessibilityElement('ignore'),
@@ -102,9 +106,11 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
         {hasVerse && (
           <Text
             modifiers={[
-              font({ family: F.serif, size: isLong ? 12 : 13.5 }),
+              font({ family: F.serif, size: 12 }),
+              lineHeight(14),
               foregroundStyle({ type: 'hierarchical', style: 'primary' }),
-              lineLimit(isLong ? 4 : 3),
+              lineLimit(3),
+              minimumScaleFactor(0.8),
             ]}
           >
             {verse}
@@ -113,8 +119,8 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
         {hasVerse && reference !== '' && (
           <Text
             modifiers={[
-              font({ family: F.uiSemi, size: 9 }),
-              kerning(0.9),
+              font({ family: F.uiSemi, size: 8.5 }),
+              kerning(0.8),
               foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
               lineLimit(1),
             ]}
@@ -138,7 +144,9 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
   }
 
   // accessoryCircular — the series day inside a capacity ring. The ring counts
-  // finished days: the days before today, plus today once it is read.
+  // finished days: the days before today, plus today once it is read. The
+  // widget runtime drops a Gauge's value label (expo-widgets renders no slots),
+  // so the day is an overlay, sized to sit clear of the ring's inner edge.
   const hasSeries = day > 0;
   const shownDay = total > 0 ? Math.min(day, total) : day;
   const progress =
@@ -163,7 +171,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
         <VStack spacing={0}>
           <Text
             modifiers={[
-              font({ family: F.display, size: 27 }),
+              font({ family: F.display, size: 20 }),
               foregroundStyle({ type: 'hierarchical', style: 'primary' }),
               lineLimit(1),
               minimumScaleFactor(0.6),
@@ -174,7 +182,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
           {total > 0 && (
             <Text
               modifiers={[
-                font({ family: F.uiMedium, size: 9 }),
+                font({ family: F.uiMedium, size: 7.5 }),
                 foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
                 lineLimit(1),
               ]}
