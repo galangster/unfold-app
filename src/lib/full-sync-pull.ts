@@ -747,8 +747,11 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         if (!shouldApply(record, existing, 'devotional_days', pendingByRecord)) return devotional;
         if (record.deleted) return { ...devotional, days: devotional.days.filter((item) => item.id !== record.id) };
         if (!day) return devotional;
+        // The act answer is local-only, so a newer server row never carries it.
         const days = existing
-          ? devotional.days.map((item) => (item.id === existing.id || item.dayNumber === day.dayNumber ? day : item))
+          ? devotional.days.map((item) => (item.id === existing.id || item.dayNumber === day.dayNumber
+            ? { ...day, actOutcome: item.actOutcome ?? day.actOutcome }
+            : item))
           : [...devotional.days, day];
         return { ...devotional, days: days.sort((a, b) => a.dayNumber - b.dayNumber), updatedAt: record.updatedAt };
       });

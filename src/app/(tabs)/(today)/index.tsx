@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, AppState } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
@@ -91,6 +91,7 @@ import {
   getTodayCarryLine,
   getTodayDayContext,
   hasReadDevotionalToday,
+  localDayKey,
   shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
 import {
@@ -102,6 +103,7 @@ import { getReadingDayLabel } from '@/lib/devotional-day-access';
 import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { logBugEvent } from '@/lib/bug-logger';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
@@ -157,6 +159,9 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
+// Repeated foregrounds refresh Today at most once per cooldown, like the
+// day watch's own foreground discovery.
+const TODAY_FOREGROUND_REFRESH_COOLDOWN_MS = 10_000;
 
 function generatingRoute(autoTrialIntentId?: string | null): {
   pathname: '/generating';
@@ -446,6 +451,18 @@ export default function HomeScreen() {
   const isTodayFocused = useIsFocused();
 
   const [clockNow, setClockNow] = useState(() => new Date());
+  // The local day for day-dependent memos. Unlike clockNow it also moves at
+  // local midnight and on foreground, so a Today left mounted and focused
+  // overnight re-asks them the moment the app resumes. They key on the day,
+  // not the Date, so a foreground on the same day does not recompute them.
+  const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
+  // The minute clock follows the calendar clock, so on resume and at
+  // midnight the card's date decisions (read today, the day shown) move with
+  // the watch instead of up to a minute later.
+  useEffect(() => {
+    setClockNow(new Date());
+  }, [calendarNow]);
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   // The check-in keeps the series and day it opened on, with that day's
   // question and chips, until it closes, and the answer saves there. Neither a
@@ -680,44 +697,66 @@ export default function HomeScreen() {
   // Refresh the current devotional from server sync when Today gains focus.
   // Reading already has a missing-day fallback, but Home needs the same pull
   // because the hero card is where users expect to discover Day 2+.
-  useFocusEffect(
-    useCallback(() => {
-      // Drain any queued offline completions before pulling new content
-      void drainSyncOutbox();
+  const refreshCurrentDevotional = useCallback(() => {
+    // Drain any queued offline completions before pulling new content
+    void drainSyncOutbox();
 
-      const devotionalId = currentDevotionalId;
-      if (!devotionalId || readBudgetBlocked) return;
+    const devotionalId = currentDevotionalId;
+    if (!devotionalId || readBudgetBlocked) return;
 
-      let cancelled = false;
-      void (async () => {
-        try {
-          const session = captureSyncSession();
-          const pulled = await pullDevotionalContent(devotionalId);
-          if (cancelled || !isSyncSessionCurrent(session)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = captureSyncSession();
+        const pulled = await pullDevotionalContent(devotionalId);
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
-          applyPulledDevotionalContent({
-            devotionalId,
-            pulled,
-            updateDevotionalDays,
-            updateDevotionals: updateSyncedDevotionals,
-          });
-          // Only after the content is in the store — a cancelled focus above
-          // discards the response, and must not advance the cursor.
-          commitDevotionalPullCursor(pulled);
-        } catch (err) {
-          if (err instanceof SyncPullRateLimitedError) {
-            void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
-              retryAfterSeconds: err.retryAfterSeconds,
-            }, 'warn');
-            return;
-          }
-          logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+        applyPulledDevotionalContent({
+          devotionalId,
+          pulled,
+          updateDevotionalDays,
+          updateDevotionals: updateSyncedDevotionals,
+        });
+        // Only after the content is in the store — a cancelled focus above
+        // discards the response, and must not advance the cursor.
+        commitDevotionalPullCursor(pulled);
+      } catch (err) {
+        if (err instanceof SyncPullRateLimitedError) {
+          void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
+            retryAfterSeconds: err.retryAfterSeconds,
+          }, 'warn');
+          return;
         }
-      })();
+        logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+      }
+    })();
 
-      return () => { cancelled = true; };
-    }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays])
-  );
+    return () => { cancelled = true; };
+  }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays]);
+  useFocusEffect(refreshCurrentDevotional);
+
+  // A warm resume is not a focus: iOS keeps Today mounted and focused while
+  // the app is suspended, so the refresh above would not run again until the
+  // reader left and came back. Run the same refresh on foreground too, so a
+  // day the server wrote overnight lands on the open screen.
+  const lastForegroundRefreshAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    let cancelForegroundRefresh: (() => void) | undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const now = Date.now();
+      const lastRefreshAt = lastForegroundRefreshAtRef.current;
+      if (lastRefreshAt !== null && now - lastRefreshAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastForegroundRefreshAtRef.current = now;
+      cancelForegroundRefresh?.();
+      cancelForegroundRefresh = refreshCurrentDevotional();
+    });
+    return () => {
+      subscription.remove();
+      cancelForegroundRefresh?.();
+    };
+  }, [isTodayFocused, refreshCurrentDevotional]);
 
   // Check if today's reading has been completed — drives ember visibility.
   // clockNow in deps + passed as `now`: recomputes each minute so "today"
@@ -751,9 +790,13 @@ export default function HomeScreen() {
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
   // tomorrow's content and shouldn't trigger auto-generation.
+  // The local day is an input: after an evening read currentDay is ahead of
+  // the calendar, so this is false until midnight and must turn true then
+  // without any store write, or the watch below never asks for the new day.
   const isPreparingCurrentDay = useMemo(() => (
-    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
-  ), [currentDevotional, premiumPolicy]);
+    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy, calendarNow)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+  ), [currentDevotional, premiumPolicy, calendarDayKey]);
 
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
@@ -1225,13 +1268,15 @@ export default function HomeScreen() {
   // for the rest of the home UI and wrong for copy about today. Raised by
   // Greptile on PR #107.
   const dayCopyContext = useMemo(
-    () => getTodayDayContext(currentDevotional),
-    [currentDevotional],
+    () => getTodayDayContext(currentDevotional, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, calendarDayKey],
   );
 
   const todayCarryLine = useMemo(
-    () => getTodayCarryLine(devotionals, currentDevotionalId),
-    [devotionals, currentDevotionalId],
+    () => getTodayCarryLine(devotionals, currentDevotionalId, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [devotionals, currentDevotionalId, calendarDayKey],
   );
 
   const middayMessage = useMemo(
