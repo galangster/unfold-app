@@ -349,3 +349,78 @@ describe('pull of the current series when the series the server writes is not on
     expect(triggerUserDataPull).not.toHaveBeenCalled();
   });
 });
+
+// A full sync's copy of a series whose lifecycle changed elsewhere. The
+// content clock is unchanged, so only the archive fields apply.
+function fullPullLifecycleOf(local: Devotional, lifecycle: Pick<Devotional, 'archivedAt' | 'archivedStateAt'>) {
+  return {
+    id: local.id,
+    updatedAt: local.updatedAt!,
+    deleted: false,
+    data: {
+      title: local.title,
+      totalDays: local.totalDays,
+      currentDay: local.currentDay,
+      createdAt: local.createdAt,
+      seriesStartDate: local.seriesStartDate,
+      generationMode: 'progressive',
+      clientUpdatedAt: local.updatedAt,
+      ...lifecycle,
+    },
+  };
+}
+
+// Another device resumed series-b, which paused series-x, and then started
+// series-n. Once this device holds series-n, Today follows it, never the
+// older resume, whether a scoped pull or a full sync carries the change.
+describe('a resume elsewhere followed by a newer series', () => {
+  const STARTED_AT = '2026-09-12T16:20:00.000Z';
+  const liveX = series('series-x', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
+  const pausedB = series('series-b', { archivedAt: PAUSED_AT, archivedStateAt: PAUSED_AT });
+  const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
+
+  beforeEach(() => {
+    useUnfoldStore.getState().reset();
+    replaceSyncOutbox([]);
+    jest.mocked(triggerUserDataPull).mockReset();
+    jest.mocked(triggerUserDataPull).mockImplementation(() => Promise.resolve());
+  });
+
+  it('follows the newer series this device already holds when a scoped pull lands the resume and the pause', () => {
+    useUnfoldStore.setState({ devotionals: [liveX, pausedB, newN], currentDevotionalId: 'series-x' });
+
+    applyCurrentSeriesPull('series-x', [
+      row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
+      row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
+    ]);
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-n');
+    expect(triggerUserDataPull).not.toHaveBeenCalled();
+  });
+
+  it('follows the newer series when one full sync brings it with the resume and the pause', () => {
+    useUnfoldStore.setState({ devotionals: [liveX, pausedB], currentDevotionalId: 'series-x' });
+    const newSeries = fullPullOf(newN);
+
+    applyPulledUserData({
+      ...newSeries,
+      changes: {
+        ...newSeries.changes,
+        devotionals: [
+          ...newSeries.changes.devotionals,
+          fullPullLifecycleOf(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
+          fullPullLifecycleOf(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
+        ],
+      },
+    });
+
+    const state = useUnfoldStore.getState();
+    expect(state.devotionals.find((item) => item.id === 'series-b')).toMatchObject({
+      archivedAt: null, archivedStateAt: RESUME_AT,
+    });
+    expect(state.devotionals.find((item) => item.id === 'series-x')).toMatchObject({
+      archivedAt: RESUME_AT, archivedStateAt: RESUME_AT,
+    });
+    expect(state.currentDevotionalId).toBe('series-n');
+  });
+});
