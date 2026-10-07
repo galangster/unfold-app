@@ -140,10 +140,13 @@ export async function syncUserProfileToBackend(
     // snapshot that cannot win. A rejection still queues for retry below.
     const answer = correlateSyncAcknowledgements([change], payload?.results ?? [])[0]?.result;
     if (answer && isValidConflictResult(answer)) {
-      mmkvStorage.setItem(USER_PROFILE_CONFLICT_KEY, JSON.stringify({
-        id: change.id,
-        clientUpdatedAt: change.clientUpdatedAt,
-      }));
+      // Overlapping pushes can answer out of order. Keep the newest refused stamp.
+      if (!serverHoldsNewerProfile(change)) {
+        mmkvStorage.setItem(USER_PROFILE_CONFLICT_KEY, JSON.stringify({
+          id: change.id,
+          clientUpdatedAt: change.clientUpdatedAt,
+        }));
+      }
       logger.log('[user-sync] Server holds a newer profile; not re-sending this one');
       return;
     }

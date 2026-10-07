@@ -225,6 +225,30 @@ describe('user profile sync payloads', () => {
         expect.objectContaining({ table: 'users', clientUpdatedAt: NEWEST }),
       ]);
     });
+
+    it('keeps the newest refused stamp when an older conflict reply lands last', async () => {
+      const NEWER = '2026-05-06T20:00:00.002Z';
+      const replies: Array<(value: unknown) => void> = [];
+      const mockFetch = jest.fn((): Promise<unknown> => new Promise((resolve) => replies.push(resolve)));
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const older = syncUserProfileToBackend(baseUser, STALE);
+      const newer = syncUserProfileToBackend({ ...baseUser, aboutMe: 'A newer focus' }, NEWER);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(replies).toHaveLength(2);
+
+      replies[1](profileResult('conflict'));
+      await newer;
+      replies[0](profileResult('conflict'));
+      await older;
+
+      // The next app open pushes the persisted newer profile again.
+      mockFetch.mockImplementation(async () => profileResult('conflict'));
+      await syncUserProfileToBackend({ ...baseUser, aboutMe: 'A newer focus' }, NEWER);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(peekSyncOutbox()).toHaveLength(0);
+    });
   });
 
   it('does not enqueue a delayed profile failure after the captured session is reset', async () => {
