@@ -47,9 +47,10 @@ export const NOTIFICATION_IDS = {
 
 const DAILY_REMINDER_ID_SEPARATOR = ':';
 
-// Last identifier this process successfully committed for the current owner.
-// Cross-launch leftovers also use the legacy fixed id or a session-scoped id.
-let lastDailyReminderIdentifier: string | null = null;
+// Identifiers this process last committed for the current owner: one DAILY
+// request, or one dated request per morning of the horizon. Cross-launch
+// leftovers also use the legacy fixed id or a session-scoped id.
+let lastDailyReminderIdentifiers: readonly string[] = [];
 
 // Distinguishes newer daily work from older work in the same reset session.
 // Session epoch alone cannot: two in-flight 8:00 / 9:00 schedules share a session.
@@ -101,9 +102,9 @@ async function cancelOwnedDailyReminderIdentifiers(
   const extras = new Set<string>();
   extras.add(dailyReminderIdentifierForSession(session));
   extras.add(dailyReminderIdentifierForOperation(session, operation));
-  const ownedAtStart = lastDailyReminderIdentifier;
-  if (ownedAtStart) {
-    extras.add(ownedAtStart);
+  const ownedAtStart = lastDailyReminderIdentifiers;
+  for (const identifier of ownedAtStart) {
+    extras.add(identifier);
   }
   try {
     const pending = await Notifications.getAllScheduledNotificationsAsync();
@@ -131,13 +132,13 @@ async function cancelOwnedDailyReminderIdentifiers(
   if (!isDailyReminderOriginCurrent(session, operation)) {
     return;
   }
-  if (lastDailyReminderIdentifier === ownedAtStart) {
-    lastDailyReminderIdentifier = null;
+  if (lastDailyReminderIdentifiers === ownedAtStart) {
+    lastDailyReminderIdentifiers = [];
   }
 }
 
 export function resetDailyReminderOwnershipForTesting(): void {
-  lastDailyReminderIdentifier = null;
+  lastDailyReminderIdentifiers = [];
   dailyOperationEpoch = 0;
 }
 
@@ -403,13 +404,14 @@ function parseTimeString(timeString: string): { hours: number; minutes: number }
   return { hours, minutes };
 }
 
-// Reading-state-aware notification content
-export function getNotificationContent(): { title: string; body: string } {
+// Reading-state-aware notification content, for the moment it fires.
+export function getNotificationContent(now?: Date): { title: string; body: string } {
   const state = useUnfoldStore.getState();
   const currentDevotional = state.devotionals.find((d) => d.id === state.currentDevotionalId);
   return getDailyReminderContent({
     currentDevotional,
     premiumPolicy: getEffectivePremiumAccessPolicy(),
+    now,
   });
 }
 
@@ -459,9 +461,14 @@ export async function scheduleDailyReminder(
   }
 
   const { hours, minutes } = parseTimeString(timeString);
-  const { title, body } = getNotificationContent();
   const data = getCurrentDevotionalNotificationData();
   const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
+
+  if (triggerOverride.kind === 'dates') {
+    return scheduleDailyReminderDates(triggerOverride.dates, data, identifier, originatingSession, operation);
+  }
+
+  const { title, body } = getNotificationContent();
 
   try {
     const scheduled = await Notifications.scheduleNotificationAsync({
@@ -472,19 +479,12 @@ export async function scheduleDailyReminder(
         sound: true,
         ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
       },
-      trigger:
-        triggerOverride.kind === 'date'
-          ? {
-              type: Notifications.SchedulableTriggerInputTypes.DATE,
-              date: triggerOverride.date,
-              ...channel(NOTIFICATION_CHANNELS.READING),
-            }
-          : {
-              type: Notifications.SchedulableTriggerInputTypes.DAILY,
-              hour: hours,
-              minute: minutes,
-              ...channel(NOTIFICATION_CHANNELS.READING),
-            },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: hours,
+        minute: minutes,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
     });
 
     if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
@@ -495,7 +495,7 @@ export async function scheduleDailyReminder(
       return null;
     }
 
-    lastDailyReminderIdentifier = scheduled;
+    lastDailyReminderIdentifiers = [scheduled];
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
     logEvent('notification_scheduled', {
@@ -509,6 +509,76 @@ export async function scheduleDailyReminder(
     logger.error('[Notifications] Failed to schedule:', error);
     return null;
   }
+}
+
+/**
+ * One dated request per morning of the horizon. Each carries the copy for
+ * the moment it fires, so a day left unread turns into the overdue copy
+ * instead of repeating its quotable line for two weeks. Identifiers extend
+ * this operation's, so the family cancel clears every one.
+ *
+ * Returns the first identifier only when every morning was written. A
+ * partial write keeps what landed as a floor and reports failure, so the
+ * caller does not record the sync as applied.
+ */
+async function scheduleDailyReminderDates(
+  dates: readonly Date[],
+  data: ReturnType<typeof getCurrentDevotionalNotificationData>,
+  operationIdentifier: string,
+  originatingSession: number,
+  operation: number,
+): Promise<string | null> {
+  const written = await Promise.all(
+    dates.map(async (date, index) => {
+      const { title, body } = getNotificationContent(date);
+      try {
+        return await Notifications.scheduleNotificationAsync({
+          identifier: `${operationIdentifier}${DAILY_REMINDER_ID_SEPARATOR}${index}`,
+          content: {
+            title,
+            body,
+            sound: true,
+            ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date,
+            ...channel(NOTIFICATION_CHANNELS.READING),
+          },
+        });
+      } catch (error) {
+        logger.error('[Notifications] Failed to schedule a daily reminder morning:', error);
+        return null;
+      }
+    }),
+  );
+  const scheduled = written.filter((id): id is string => id !== null);
+
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    await Promise.all(scheduled.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+    logger.log('[Notifications] Late daily schedule discarded — originating owner is not current');
+    return null;
+  }
+
+  if (scheduled.length > 0) {
+    lastDailyReminderIdentifiers = scheduled;
+  }
+  if (scheduled.length === 0 || scheduled.length !== dates.length) {
+    logger.error(`[Notifications] Daily reminder: wrote ${scheduled.length} of ${dates.length} mornings`);
+    return null;
+  }
+
+  logger.log(
+    `[Notifications] Daily reminder: wrote ${scheduled.length} mornings to ${dates[dates.length - 1].toISOString()}`,
+  );
+  logEvent('notification_scheduled', {
+    type: 'daily_reminder',
+    owner: 'local',
+    specific: Boolean(data),
+    trigger: 'dates',
+    count: scheduled.length,
+  });
+  return scheduled[0];
 }
 
 /**

@@ -38,9 +38,11 @@
  * ## Sizing the horizon
  *
  * iOS keeps only the 64 soonest pending local notifications per app and
- * silently drops the rest. Two slots across 14 days is at most 28, alongside
- * the daily reminder, one act reminder and one trial notice — comfortably
- * inside the cap with room for both slots to grow.
+ * silently drops the rest. Two slots across 14 days is at most 28. The
+ * morning reminder adds at most 14 more (DAILY_REMINDER_HORIZON_DAYS in
+ * daily-reminder-content.ts), then one act reminder and one trial notice:
+ * under 50, inside the cap. `daily-reminder-schedule.test.ts` totals the
+ * worst case.
  *
  * One consequence of dated occurrences: they are absolute instants, so a
  * reader who changes timezone keeps the old local times until the schedule is

@@ -53,7 +53,7 @@ the preferred time.
 
 A queued push survives a restart and goes out once. Checks that can cancel it run
 at send time, not when the push is queued. They are a missing push token, a local
-daily reminder already scheduled, the day already read, and inactive premium
+daily reminder holding that morning, the day already read, and inactive premium
 status when the server premium gate is enabled. At send time the
 server also recomputes the send time from the current reads. If the day is still
 locked, it queues the push again.
@@ -65,7 +65,7 @@ locked, it queues the push again.
 | Day picker, reader, Today card, reveal route | `src/lib/devotional-day-access.ts` (this repo) | `getTodayReaderDayNumber` and `getSelectableDayLimit` implement `openThroughDay` |
 | A `devotional_ready` push | unfold-backend | Never sent for a day above `openThroughDay` at send time. A day generated early keeps its push until the day opens, then the push goes out at the reader's preferred time |
 | Cron and on-demand day generation | unfold-backend | May finish early. Finishing never announces the day |
-| Local daily reminder | `src/lib/daily-reminder-content.ts` (this repo) | After a read today the reminder does not fire again today: a one-shot for tomorrow when today's time is still ahead, the daily trigger otherwise |
+| Local daily reminder | `src/lib/daily-reminder-content.ts` (this repo) | One dated reminder per morning, 14 days ahead. After a read today the horizon starts tomorrow, so it never fires on a day it would announce a locked reading. When the server's ready push owns the morning a day opens, the local horizon leaves that one morning to it and keeps every later one |
 | A tapped ready push for a locked day | `resolveRevealOutcome` in `src/lib/reveal-params.ts` | Outcome `locked`. The screen raises the Sentry signal `ready_push_for_locked_day` (`src/lib/day-unlock-telemetry.ts`) and shows Today |
 
 ## The vectors
