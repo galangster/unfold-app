@@ -1064,4 +1064,31 @@ describe('Today widget sync', () => {
     expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
     act(() => tree!.unmount());
   });
+
+  it.each([
+    ['restores an older read day', [], [{ id: 'today-series-day-1', devotionalId: 'today-series', dayNumber: 1, title: 'Day 1', isRead: true, readAt: '2026-09-01T12:00:00.000Z' }]],
+    ['marks an older day read', [{ id: 'today-series-day-1', devotionalId: 'today-series', dayNumber: 1, title: 'Day 1', isRead: false }], [{ id: 'today-series-day-1', devotionalId: 'today-series', dayNumber: 1, title: 'Day 1', isRead: true, readAt: '2026-09-01T12:00:00.000Z' }]],
+  ])('syncs the widgets again when the focus pull %s under the same shown day', async (_case, localDays, pulledDays) => {
+    const { syncWidgets } = jest.requireMock('@/lib/widget-bridge') as { syncWidgets: jest.Mock };
+    const [series] = mockTodayStoreState.devotionals as Record<string, unknown>[];
+    const shownDay = { id: 'today-series-day-2', devotionalId: 'today-series', dayNumber: 2, title: 'Day 2', scriptureReference: 'John 1:1', isRead: false };
+    mockTodayStoreState.devotionals = [{ ...series, days: [...localDays, shownDay] }];
+    let tree: { update: (element: React.ReactElement) => void; unmount: () => void };
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    const syncsOnOpen = syncWidgets.mock.calls.length;
+    expect(syncsOnOpen).toBeGreaterThan(0);
+
+    // The focus pull resolves after the focus sync. Today still shows Day 2,
+    // but the Lock Screen ring and the weekly checks now count Day 1.
+    mockTodayStoreState.devotionals = [{ ...series, days: [...pulledDays, shownDay] }];
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
+    act(() => tree!.unmount());
+  });
 });
