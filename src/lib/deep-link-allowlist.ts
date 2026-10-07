@@ -133,6 +133,9 @@ export const EXTERNAL_ROUTE_ALLOWLIST: Readonly<Record<string, RouteSchema>> = {
   // plain paywall only.
   '/paywall': { params: {} },
   '/life-update': { params: {} },
+  // A slug, not the current id list: the screen ignores ids it does not know,
+  // so a link built from newer content still opens the list.
+  '/feelings': { params: { feeling: slug() } },
   '/onboarding': { params: { startAt: slug(), flow: oneOf(['newSeries']) } },
   '/share-card': {
     params: { text: text(1000), reference: text(160), translation: text(24), type: oneOf(['verse']) },

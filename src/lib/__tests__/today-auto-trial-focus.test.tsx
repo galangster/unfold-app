@@ -231,14 +231,12 @@ jest.mock('@/lib/bible-db', () => ({
   downloadBibleDb: jest.fn(async () => undefined),
 }));
 
-import HomeScreen, {
-  applyTodayAutoTrialFocus,
-  abandonPurchasedIntentBeforeNewSeries,
-} from '@/app/(tabs)/(today)/index';
+import HomeScreen, { applyTodayAutoTrialFocus } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import { beginLocalResetSession, endLocalResetSession, resetSyncSessionFenceForTesting } from '@/lib/sync-session-fence';
 import {
+  abandonPurchasedIntentBeforeNewSeries,
   buildRevealGuardKey,
   reconcileAutoTrialIntentOnLaunch,
   transitionAutoTrialIntent,
