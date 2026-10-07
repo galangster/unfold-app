@@ -465,6 +465,26 @@ describe('a new series the sync pull lands before the job result', () => {
     expect(state.generationSession.status).toBe('complete');
   });
 
+  it.each([
+    ['the finished journey the reader started it from', localSeries('devo-finished', {
+      totalDays: 1,
+      days: [{ ...day1, id: 'devo-finished:1', devotionalId: 'devo-finished', isRead: true }],
+    })],
+    ...FIRST_READING_ROWS,
+  ] as [string, Devotional][])('keeps %s on Today beside a newer series another device started', (_label, held) => {
+    // Today holds a row the landing may replace, but the same pull brought a
+    // newer live series, so the server writes that one and not this one.
+    useUnfoldStore.setState({ devotionals: [held], currentDevotionalId: held.id });
+    pullLandedSeries(undefined, [{ id: 'devo-other', createdAt: '2026-09-04T08:30:00.000Z' }]);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(held.id);
+
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe(held.id);
+    expect(state.devotionals.find((row) => row.id === 'devo-1')?.days.map((d) => d.dayNumber)).toEqual([1]);
+  });
+
   it('does not take Today from a live series the reader picked meanwhile', () => {
     const picked = localSeries('devo-picked');
     useUnfoldStore.setState({
