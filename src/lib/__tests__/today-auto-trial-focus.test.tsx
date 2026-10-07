@@ -559,6 +559,24 @@ describe('Today across local midnight', () => {
     }));
   });
 
+  it('shows the new day on resume without waiting for the minute tick', async () => {
+    await renderTodayAt(new Date(2026, 9, 3, 21, 0));
+
+    emitAppState('background');
+    act(() => {
+      jest.setSystemTime(new Date(2026, 9, 4, 7, 30));
+    });
+    emitAppState('active');
+    await settlePull();
+
+    // No 60s tick has run yet. The card already treats Oct 4 as today: Day 3
+    // was read yesterday, so Day 4 is being prepared, not locked until tomorrow.
+    expect(mockDevotionalCardProps?.state).toEqual(expect.objectContaining({
+      type: 'preparing',
+      dayNumber: 4,
+    }));
+  });
+
   it('refreshes on foreground only while Today is focused, at most once per cooldown', async () => {
     await renderTodayAt(new Date(2026, 9, 4, 7, 30));
     expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);

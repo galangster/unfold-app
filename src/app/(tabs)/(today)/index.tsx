@@ -477,6 +477,12 @@ export default function HomeScreen() {
   // not the Date, so a foreground on the same day does not recompute them.
   const calendarNow = useCalendarNow();
   const calendarDayKey = localDayKey(calendarNow);
+  // The minute clock follows the calendar clock, so on resume and at
+  // midnight the card's date decisions (read today, the day shown) move with
+  // the watch instead of up to a minute later.
+  useEffect(() => {
+    setClockNow(new Date());
+  }, [calendarNow]);
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   // The check-in keeps the series and day it opened on, with that day's
   // question and chips, until it closes, and the answer saves there. Neither a
