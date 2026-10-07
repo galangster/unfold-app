@@ -67,7 +67,7 @@ describe('feelings screen', () => {
     expect(screen.getByRole('header', { name: 'Weary' })).toBeTruthy();
     expect(screen.getByText(/^28 Come to Me, all you who are weary and burdened, and I will give you rest\.$/)).toBeTruthy();
     expect(screen.getByText('Matthew 11:28 · Berean Standard Bible')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Begin a 5-day series for this' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Begin a series for this' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Anxious' })).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe('feelings screen', () => {
   it('starts a new series from the primary button', () => {
     render(<FeelingsScreen />);
     pressButton('Anxious');
-    pressButton('Begin a 5-day series for this');
+    pressButton('Begin a series for this');
     expect(mockStartNewSeries).toHaveBeenCalledTimes(1);
   });
 });

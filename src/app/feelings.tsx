@@ -194,7 +194,7 @@ function FeelingAnswer({ feeling, onBeginSeries }: { feeling: Feeling; onBeginSe
         </ReaderText>
       </Animated.View>
       <Animated.View entering={arrive(ACTIONS_START)} style={styles.actions}>
-        <Button size="lg" fullWidth label="Begin a 5-day series for this" onPress={onBeginSeries} />
+        <Button size="lg" fullWidth label="Begin a series for this" onPress={onBeginSeries} />
         <Button
           variant="ghost"
           label={`Another passage ${shown.index + 1}/${count}`}
