@@ -772,3 +772,63 @@ describe('H10 generating auto-trial handoff', () => {
     expect(mockRevealBackdrop).toHaveBeenLastCalledWith({ variant: 'prism' });
   });
 });
+
+describe('a series the sync pull landed before /generating resumed its job', () => {
+  // A cold relaunch after the job finished: the app-start pull put the series
+  // and day 1 in the store before this screen resumed the record.
+  async function renderPullFirstCompletion(): Promise<Tree> {
+    const createdAt = '2026-09-04T08:05:00.000Z';
+    const day = {
+      id: 'devo-1:1',
+      devotionalId: 'devo-1',
+      dayNumber: 1,
+      title: 'Trust before understanding',
+      scriptureReference: 'Psalm 56:3-4',
+      scriptureText: 'When I am afraid, I put my trust in you.',
+      bodyText: 'Body',
+      quotableLine: 'Line',
+      isRead: false,
+    };
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1',
+        title: 'Learning to Trust Again',
+        totalDays: 3,
+        currentDay: 1,
+        days: [day],
+        createdAt,
+        seriesStartDate: createdAt,
+        userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+        generationMode: 'progressive',
+      } as Devotional],
+      currentDevotionalId: null,
+    });
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
+    mockPollJobStatus.mockResolvedValue({
+      status: 'complete',
+      result: { devotionalId: 'devo-1', seriesTitle: 'Learning to Trust Again', totalDays: 3, devotionalDay: day },
+    });
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(useUnfoldStore.getState().generationSession.status).toBe('complete');
+    return tree;
+  }
+
+  it('makes the landed series current', async () => {
+    await renderPullFirstCompletion();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+  });
+
+  it('opens the landed series from Begin Day 1', async () => {
+    const tree = await renderPullFirstCompletion();
+
+    await press(tree, 'Begin Day 1');
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(tabs)/(today)/reading',
+      params: { devotionalId: 'devo-1' },
+    });
+  });
+});

@@ -885,7 +885,10 @@ export default function GeneratingScreen() {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.replace('/(tabs)/(today)/reading');
+    // Name the series that landed; without it Reading opens whatever is current.
+    router.replace(landedRevealId
+      ? { pathname: '/(tabs)/(today)/reading', params: { devotionalId: landedRevealId } }
+      : '/(tabs)/(today)/reading');
   };
 
   const legacyTryAgain = async () => {
