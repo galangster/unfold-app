@@ -1,6 +1,6 @@
 /* eslint-disable import/first */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -67,12 +67,13 @@ const mockTodayStoreState: Record<string, unknown> = {
 };
 
 let mockSearchParams: Record<string, string> = {};
+let mockIsTodayFocused = true;
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: (callback: () => void | (() => void)) => require('react').useEffect(callback, [callback]),
-  useIsFocused: () => true,
+  useIsFocused: () => mockIsTodayFocused,
   useLocalSearchParams: () => mockSearchParams,
 }));
 
@@ -236,6 +237,7 @@ import HomeScreen, {
   abandonPurchasedIntentBeforeNewSeries,
 } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
+import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import { beginLocalResetSession, endLocalResetSession, resetSyncSessionFenceForTesting } from '@/lib/sync-session-fence';
 import {
@@ -396,6 +398,185 @@ describe('Today read-budget gate', () => {
       'warn',
     );
     act(() => tree!.unmount());
+  });
+});
+
+describe('Today across local midnight', () => {
+  // An on-schedule reader: the series started Oct 1 and Day 3 was read on the
+  // evening of Oct 3, so currentDay already points at Day 4. The server only
+  // writes Day 4 after local midnight, so it is not on the device yet.
+  const onScheduleSeries = {
+    id: 'today-series',
+    title: 'Today Series',
+    totalDays: 7,
+    currentDay: 4,
+    generationMode: 'progressive',
+    createdAt: new Date(2026, 9, 1, 8, 0).toISOString(),
+    seriesStartDate: new Date(2026, 9, 1, 8, 0).toISOString(),
+    days: [
+      new Date(2026, 9, 1, 8, 30),
+      new Date(2026, 9, 2, 8, 30),
+      new Date(2026, 9, 3, 20, 30),
+    ].map((readAt, index) => ({
+      id: `today-series-day-${index + 1}`,
+      devotionalId: 'today-series',
+      dayNumber: index + 1,
+      title: `Day ${index + 1}`,
+      isRead: true,
+      readAt: readAt.toISOString(),
+    })),
+  };
+  let saved: Record<string, unknown>;
+  let tree: { update: (element: React.ReactElement) => void; unmount: () => void } | null = null;
+  let appStateListeners: Set<(state: AppStateStatus) => void>;
+  // The preset's AppState.addEventListener is already a jest.fn. Put its
+  // default back afterwards; mockRestore() would wipe it, and every later
+  // subscription in this file would come back undefined.
+  const appStateListen = jest.mocked(AppState.addEventListener);
+  const defaultAppStateListen = appStateListen.getMockImplementation();
+
+  async function renderTodayAt(now: Date) {
+    jest.useFakeTimers({ now });
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+  }
+
+  // iOS resumes a suspended app without a navigation focus event: only
+  // AppState listeners hear it.
+  function emitAppState(state: AppStateStatus) {
+    act(() => {
+      [...appStateListeners].forEach((listener) => listener(state));
+    });
+  }
+
+  function lastWatchOptions() {
+    return mockGeneratedDayWatch.mock.calls[mockGeneratedDayWatch.mock.calls.length - 1]?.[0];
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    saved = { ...mockTodayStoreState };
+    mockReadBudgetBlocked = false;
+    mockIsTodayFocused = true;
+    mockTodayStoreState.devotionals = [onScheduleSeries];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    mockTodayStoreState.getJournalEntry = () => undefined;
+    appStateListeners = new Set();
+    appStateListen.mockImplementation((_type, listener) => {
+      const handler = listener as (state: AppStateStatus) => void;
+      appStateListeners.add(handler);
+      return { remove: () => appStateListeners.delete(handler) } as unknown as NativeEventSubscription;
+    });
+  });
+
+  afterEach(() => {
+    if (tree) act(() => tree!.unmount());
+    tree = null;
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+    mockReadBudgetBlocked = false;
+    mockIsTodayFocused = true;
+    appStateListen.mockImplementation(defaultAppStateListen);
+    jest.useRealTimers();
+  });
+
+  it('asks for the new day when local midnight passes with Today open', async () => {
+    await renderTodayAt(new Date(2026, 9, 3, 23, 59, 30));
+    // Day 4 is tomorrow's reading until midnight, so nothing asks for it yet.
+    expect(lastWatchOptions()).toEqual(expect.objectContaining({ dayNumber: 4, enabled: false, canMutate: false }));
+
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    // The same series object, untouched by any store write, is due on Oct 4.
+    expect((mockTodayStoreState.devotionals as unknown[])[0]).toBe(onScheduleSeries);
+    expect(lastWatchOptions()).toEqual(expect.objectContaining({
+      devotionalId: 'today-series',
+      dayNumber: 4,
+      enabled: true,
+      canMutate: true,
+    }));
+  });
+
+  it('asks for and pulls the new day on a warm resume the next morning, with no focus change', async () => {
+    await renderTodayAt(new Date(2026, 9, 3, 21, 0));
+    expect(lastWatchOptions()).toEqual(expect.objectContaining({ dayNumber: 4, enabled: false }));
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+    expect(drainSyncOutbox).toHaveBeenCalledTimes(1);
+
+    emitAppState('background');
+    act(() => {
+      jest.setSystemTime(new Date(2026, 9, 4, 7, 30));
+    });
+    emitAppState('active');
+    // The minute tick that was due while the app slept.
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    expect(lastWatchOptions()).toEqual(expect.objectContaining({
+      devotionalId: 'today-series',
+      dayNumber: 4,
+      enabled: true,
+      canMutate: true,
+    }));
+    // A day the server wrote overnight lands without the reader leaving Today.
+    expect(drainSyncOutbox).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent).toHaveBeenLastCalledWith('today-series');
+    // The card follows the watch again, so its Checking / Check Again action
+    // tracks the job, instead of a recovery-less "Check back in a moment".
+    expect(mockDevotionalCardProps?.state).toEqual(expect.objectContaining({
+      type: 'preparing',
+      dayNumber: 4,
+      recovery: expect.objectContaining({ onCheckAgain: expect.any(Function) }),
+    }));
+  });
+
+  it('refreshes on foreground only while Today is focused, at most once per cooldown', async () => {
+    await renderTodayAt(new Date(2026, 9, 4, 7, 30));
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    emitAppState('active');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    emitAppState('active');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      jest.advanceTimersByTime(6_000);
+    });
+    emitAppState('active');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(3);
+
+    // Another screen covers Today: its own focus pull covers the return.
+    mockIsTodayFocused = false;
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    emitAppState('active');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(3);
+  });
+
+  it('drains the outbox on foreground but does not pull while the read budget is spent', async () => {
+    mockReadBudgetBlocked = true;
+    await renderTodayAt(new Date(2026, 9, 4, 7, 30));
+    expect(drainSyncOutbox).toHaveBeenCalledTimes(1);
+
+    emitAppState('active');
+
+    expect(drainSyncOutbox).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent).not.toHaveBeenCalled();
   });
 });
 
