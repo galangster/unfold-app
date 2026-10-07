@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutChangeEvent, NativeSyntheticEvent, Platform, StyleProp, StyleSheet, Text, TextLayoutEventData, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { LayoutChangeEvent, NativeSyntheticEvent, Platform, StyleSheet, Text, TextLayoutEventData, TouchableOpacity, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -75,7 +75,6 @@ interface TodayCardStackProps {
   cards: readonly TodayCardStackCard[];
   colors?: ColorTheme;
   maxBackCards?: number;
-  style?: StyleProp<ViewStyle>;
   testID?: string;
   /** Test/preview override; production should rely on useAccessibleAnimation. */
   reducedMotionOverride?: boolean;
@@ -330,7 +329,6 @@ export function TodayCardStack({
   cards,
   colors: colorsOverride,
   maxBackCards,
-  style,
   testID = 'today-card-stack',
   reducedMotionOverride,
 }: TodayCardStackProps) {
@@ -460,7 +458,7 @@ export function TodayCardStack({
     <Animated.View
       entering={enteringAnimation}
       exiting={exitingAnimation}
-      style={[styles.outer, style]}
+      style={styles.outer}
       testID={testID}
       accessibilityLabel="Today card stack"
     >

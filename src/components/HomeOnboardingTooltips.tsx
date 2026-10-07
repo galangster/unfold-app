@@ -1,18 +1,32 @@
-import { useState, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import Svg, { Defs, Rect, Mask, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { useUIState, type TabBarRowRect } from '@/lib/ui-state';
 import { buildBubblePath } from '@/lib/bubble-path';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
-import { TAB_BAR_HORIZONTAL_PADDING, VISIBLE_TAB_GROUPS } from '@/lib/visible-tabs';
+import {
+  TAB_BAR_HORIZONTAL_PADDING,
+  TAB_BAR_ROW_PADDING_TOP,
+  tabBarRowPaddingBottom,
+  VISIBLE_TAB_GROUPS,
+} from '@/lib/visible-tabs';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +40,7 @@ export interface TargetRect {
 }
 
 type TargetKey = 'reading' | 'context' | 'rhythm' | 'tabs';
+export type ContentTargetKey = Exclude<TargetKey, 'tabs'>;
 
 interface TooltipStep {
   title: string;
@@ -46,8 +61,8 @@ export interface OnboardingLayoutRects {
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
-    title: 'Companion check-in',
-    message: 'When Companion speaks up, this little note helps you carry yesterday into today before you open the reading.',
+    title: 'Through the day',
+    message: 'Check-ins and notes from Companion gather here as your day unfolds. Tap one to respond, or swipe it away.',
     targetKey: 'context',
     placement: 'auto',
   },
@@ -119,31 +134,53 @@ const TOOLTIP_STROKE_WIDTH = 1;
 // Main component
 // ---------------------------------------------------------------------------
 
-const TAB_BAR_HEIGHT = 49;
 const TOOLTIP_ESTIMATED_HEIGHT = 130;
 
-/** Compute the non-Today tab rect from the shared visible-tab registry. */
-function computeTabBarRect(screenW: number, screenH: number, bottomInset: number): TargetRect {
+/** Spotlight the non-Today tabs inside the tab bar row. */
+function spotlitTabsRect(row: TabBarRowRect, bottomInset: number): TargetRect {
   const visibleTabCount = VISIBLE_TAB_GROUPS.length;
   const todayIndex = Math.max(VISIBLE_TAB_GROUPS.indexOf('(today)'), 0);
-  const usableWidth = screenW - TAB_BAR_HORIZONTAL_PADDING * 2;
-  const tabWidth = usableWidth / visibleTabCount;
-  const tabBarTop = screenH - TAB_BAR_HEIGHT - bottomInset;
-  const spotlitCount = visibleTabCount - 1;
+  const tabWidth = (row.width - TAB_BAR_HORIZONTAL_PADDING * 2) / visibleTabCount;
 
   return {
-    x: TAB_BAR_HORIZONTAL_PADDING + tabWidth * (todayIndex + 1),
-    y: tabBarTop + 4,
-    width: tabWidth * spotlitCount,
-    height: TAB_BAR_HEIGHT - 4,
+    x: row.x + TAB_BAR_HORIZONTAL_PADDING + tabWidth * (todayIndex + 1),
+    y: row.y + TAB_BAR_ROW_PADDING_TOP,
+    width: tabWidth * (visibleTabCount - 1),
+    height: Math.max(row.height - TAB_BAR_ROW_PADDING_TOP - tabBarRowPaddingBottom(bottomInset), 0),
   };
+}
+
+
+/** A reveal that never lands must not leave the reader on a dim screen. */
+const REVEAL_TIMEOUT_MS = 1500;
+// Room left between a revealed target and the edge of the visible area.
+const REVEAL_MARGIN = 24;
+
+/**
+ * How far Today must scroll so a target sits between `top` and `bottom`.
+ * Negative scrolls up. A target taller than the gap keeps its top in view.
+ */
+export function sameTargetRect(a: TargetRect | null, b: TargetRect | null): boolean {
+  if (!a || !b) return a === b;
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function revealDistance(rect: TargetRect, top: number, bottom: number): number {
+  if (rect.y < top) return rect.y - top - REVEAL_MARGIN;
+  const below = rect.y + rect.height - bottom;
+  if (below <= 0) return 0;
+  return Math.min(below + REVEAL_MARGIN, rect.y - top);
 }
 
 interface HomeOnboardingTooltipsProps {
   layoutRects?: OnboardingLayoutRects;
+  /** Scroll Today by `distance` points so the current target is in view. Negative scrolls up. */
+  onRevealTarget?: (distance: number) => void;
+  /** The tour is closing, from Skip or from the last step. */
+  onFinish?: () => void;
 }
 
-export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsProps) {
+export function HomeOnboardingTooltips({ layoutRects, onRevealTarget, onFinish }: HomeOnboardingTooltipsProps) {
   const { colors, isDark } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -154,16 +191,25 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [tooltipHeight, setTooltipHeight] = useState(TOOLTIP_ESTIMATED_HEIGHT);
+  const tabBarHidden = useUIState((s) => s.tabBarHidden);
+  const tabBarRowRect = useUIState((s) => s.tabBarRowRect);
+  // The tabs step and the visible area come from the measured tab bar row, so
+  // the tour waits for it unless the tab bar is hidden.
+  const tabBarRow = tabBarHidden ? null : tabBarRowRect;
+  const waitingForTabBar = !tabBarHidden && !tabBarRowRect;
+  // A target is visible only between these lines.
+  const visibleTop = insets.top + 12;
+  const visibleBottom = (tabBarRow ? tabBarRow.y : screenH - insets.bottom) - 16;
 
   const measuredRects = useMemo<Record<string, TargetRect>>(() => {
     if (hasSeenHomeTooltips) return {};
     const rects: Record<string, TargetRect> = {};
-    rects.tabs = computeTabBarRect(screenW, screenH, insets.bottom);
+    if (tabBarRow) rects.tabs = spotlitTabsRect(tabBarRow, insets.bottom);
     if (layoutRects?.reading) rects.reading = layoutRects.reading;
     if (layoutRects?.context) rects.context = layoutRects.context;
     if (layoutRects?.rhythm) rects.rhythm = layoutRects.rhythm;
     return rects;
-  }, [hasSeenHomeTooltips, layoutRects, screenW, screenH, insets.bottom]);
+  }, [hasSeenHomeTooltips, layoutRects, tabBarRow, insets.bottom]);
 
   const availableSteps = useMemo(
     () => TOOLTIP_STEPS.filter((tooltipStep) => measuredRects[tooltipStep.targetKey]),
@@ -172,10 +218,23 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const stepIndex = Math.min(currentStep, Math.max(availableSteps.length - 1, 0));
   const step = availableSteps[stepIndex];
 
-  const dismiss = useCallback(() => {
+  // The tour lives in a Modal, which unmounts at once, so it fades out first.
+  const overlayOpacity = useSharedValue(1);
+  const overlayFadeStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
+  const finish = useCallback(() => {
     setIsVisible(false);
     setHasSeenHomeTooltips(true);
   }, [setHasSeenHomeTooltips]);
+  const dismiss = useCallback(() => {
+    onFinish?.();
+    if (reducedMotion) {
+      finish();
+      return;
+    }
+    overlayOpacity.value = withTiming(0, { duration: Duration.fast, easing: Ease.out }, (done) => {
+      if (done) runOnJS(finish)();
+    });
+  }, [finish, onFinish, overlayOpacity, reducedMotion]);
 
   const handleNext = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -187,8 +246,32 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
     }
   }, [availableSteps.length, currentStep, dismiss]);
 
-  // Don't render if already seen or dismissed
-  if (hasSeenHomeTooltips || !isVisible || !step) return null;
+  // A target outside the visible area is scrolled into view before the tour points at it.
+  // The tour shows a dim screen until Today publishes positions that show the target, or
+  // until REVEAL_TIMEOUT_MS passes. A step asks once per target position, so a scroll
+  // that cannot go further does not loop.
+  const contentTarget = step && step.targetKey !== 'tabs' ? step.targetKey : null;
+  const contentRect = contentTarget ? measuredRects[contentTarget] ?? null : null;
+  const distance = contentRect && !waitingForTabBar ? revealDistance(contentRect, visibleTop, visibleBottom) : 0;
+  const needsReveal = onRevealTarget !== undefined && Math.abs(distance) >= 1;
+  const lastRevealRef = useRef<{ step: number; rect: TargetRect } | null>(null);
+  useEffect(() => {
+    if (!needsReveal || !contentRect) return;
+    const last = lastRevealRef.current;
+    if (last && last.step === stepIndex && sameTargetRect(last.rect, contentRect)) return;
+    lastRevealRef.current = { step: stepIndex, rect: contentRect };
+    onRevealTarget?.(distance);
+  }, [needsReveal, contentRect, stepIndex, distance, onRevealTarget]);
+  const [revealTimedOutStep, setRevealTimedOutStep] = useState(-1);
+  useEffect(() => {
+    if (!needsReveal) return;
+    const timer = setTimeout(() => setRevealTimedOutStep(stepIndex), REVEAL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [needsReveal, stepIndex]);
+  const waitingForReveal = needsReveal && revealTimedOutStep !== stepIndex;
+
+  // Don't render if already seen or dismissed, or before the tab bar reports its row
+  if (hasSeenHomeTooltips || !isVisible || !step || waitingForTabBar) return null;
 
   // Don't render until we have the current step's target measured
   const targetRect = measuredRects[step.targetKey] ?? null;
@@ -210,7 +293,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   let arrowDirection: 'up' | 'down';
   const activeHeight = tooltipHeight > 0 ? tooltipHeight : TOOLTIP_ESTIMATED_HEIGHT;
 
-  const bottomGuard = screenH - insets.bottom - TAB_BAR_HEIGHT - 16;
+  const bottomGuard = visibleBottom;
   const belowFits = targetRect.y + targetRect.height + stepTuning.spotlightPadding + GAP + activeHeight <= bottomGuard;
   const shouldPlaceBelow = step.placement === 'below' || (step.placement === 'auto' && belowFits);
 
@@ -223,7 +306,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
     arrowDirection = 'down';
   }
 
-  const minTooltipTop = insets.top + 12;
+  const minTooltipTop = visibleTop;
   const maxTooltipTop = Math.max(minTooltipTop, bottomGuard - activeHeight);
   tooltipTop = Math.max(minTooltipTop, Math.min(tooltipTop, maxTooltipTop));
 
@@ -255,10 +338,9 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const spotW = targetRect.width + stepTuning.spotlightPadding * 2;
   const spotH = targetRect.height + stepTuning.spotlightPadding * 2;
 
-  return (
+  const overlay = (
     <Animated.View
       entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-      exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
       style={styles.overlay}
       pointerEvents="box-none"
     >
@@ -299,6 +381,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
               />
               {/* Solid hole matching target bounds */}
               <Rect
+                testID="home-tooltip-spotlight"
                 x={spotX}
                 y={spotY}
                 width={spotW}
@@ -465,6 +548,21 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
         </View>
       </Animated.View>
     </Animated.View>
+  );
+
+  // A Modal draws above the tab bar, so the dim and the spotlight reach the tabs.
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+      {/* The fade-out sits on this wrapper and the fade-in on the overlay. On one
+          view, the entering animation could overwrite the animated opacity. */}
+      <Animated.View style={[StyleSheet.absoluteFill, overlayFadeStyle]} pointerEvents="box-none">
+        {waitingForReveal ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0, 0, 0, ${BACKDROP_OPACITY})` }]} />
+        ) : (
+          overlay
+        )}
+      </Animated.View>
+    </Modal>
   );
 }
 

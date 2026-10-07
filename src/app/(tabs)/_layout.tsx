@@ -23,7 +23,7 @@ import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
-import { TAB_BAR_HORIZONTAL_PADDING, titleForVisibleTab } from '@/lib/visible-tabs';
+import { TAB_BAR_HORIZONTAL_PADDING, titleForVisibleTab, TAB_BAR_ROW_PADDING_TOP, tabBarRowPaddingBottom } from '@/lib/visible-tabs';
 import { useUnfoldStore } from '@/lib/store';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 // Expo Router owns its tab navigator types in SDK 56+. Use structural typing
@@ -139,6 +139,15 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
 
+  // The first-run Today tour points at the real tabs, so publish where they sit.
+  const tabRowRef = useRef<View>(null);
+  const publishTabRowRect = () => {
+    tabRowRef.current?.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      useUIState.getState().setTabBarRowRect({ x, y, width, height });
+    });
+  };
+
   // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
   const setPlayerTier = useAudioPlayerState((s) => s.setTier);
@@ -234,11 +243,13 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       {/* Tab items */}
       <View style={adaptiveSafeGutterStyle(insets.left, insets.right)}>
       <View
+        ref={tabRowRef}
+        onLayout={publishTabRowRect}
         style={{
           flexDirection: 'row',
           ...tabClusterStyle,
-          paddingTop: Spacing['2'],
-          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: TAB_BAR_ROW_PADDING_TOP,
+          paddingBottom: tabBarRowPaddingBottom(insets.bottom),
           paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
           // Dark matches colors.background exactly; light matches colors.backgroundPure.
           backgroundColor: Platform.OS === 'ios'

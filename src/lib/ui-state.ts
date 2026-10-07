@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import type { AutoTrialEntry, AutoTrialSurface } from '@/lib/auto-trial-exit';
 import type { TodayCompletionAmbience } from '@/lib/today-ambient-rive';
 
+/** Where the tab bar row sits on screen, measured by the tab bar itself. */
+export interface TabBarRowRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PendingPaywallGrant {
   surface: AutoTrialSurface;
   entry: AutoTrialEntry;
@@ -14,6 +22,9 @@ export const useUIState = create<{
   /** 'slide' for scroll-based, 'instant' for verse-selection (no animation, no flash) */
   tabBarHideMode: 'slide' | 'instant';
   setTabBarHidden: (hidden: boolean, mode?: 'slide' | 'instant') => void;
+  /** The tab bar's measured row, so overlays can point at the real tabs. */
+  tabBarRowRect: TabBarRowRect | null;
+  setTabBarRowRect: (rect: TabBarRowRect) => void;
   /** True while transitioning from reveal → reading. Home screen renders a ripple loader. */
   revealTransitioning: boolean;
   setRevealTransitioning: (value: boolean) => void;
@@ -63,6 +74,8 @@ export const useUIState = create<{
   tabBarHidden: false,
   tabBarHideMode: 'slide',
   setTabBarHidden: (hidden, mode = 'slide') => set({ tabBarHidden: hidden, tabBarHideMode: mode }),
+  tabBarRowRect: null,
+  setTabBarRowRect: (rect) => set({ tabBarRowRect: rect }),
   revealTransitioning: false,
   setRevealTransitioning: (value) => set({ revealTransitioning: value }),
   debugForceTrialExpired: false,
