@@ -638,13 +638,6 @@ export interface GenerationSession {
   error?: string;
   startedAt?: string;
   updatedAt?: string;
-  /**
-   * Whether the series is current is settled for this session: a landing in
-   * this build decided it, or Today's stranded-series repair made the series
-   * current or found it current. Unset only on a session an earlier build
-   * finished, which is all that repair is for.
-   */
-  landingSettled?: boolean;
 }
 
 export type ResumeRoute = 'reading' | 'journal';
@@ -1787,9 +1780,6 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...(payload?.title ? { title: payload.title } : {}),
             updatedAt: new Date().toISOString(),
             error: undefined,
-            // Every landing that completes a session has already decided
-            // whether its series is current.
-            landingSettled: true,
           },
         })),
 

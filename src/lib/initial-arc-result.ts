@@ -75,11 +75,15 @@ function holdsNoChosenSeries(current: Devotional | undefined): boolean {
  * chosen series, the finished journey it was started from, or this
  * generation's own series: never over a live series the reader picked
  * meanwhile. An archived row is never selected, because selecting it would
- * unarchive a series archived on another device.
+ * unarchive a series archived on another device. And only the series the
+ * server writes, the strict active winner, is selected: beside a newer live
+ * series (one another device started, say) this one stays off Today, where
+ * its later days would be refused as not active.
  */
 function canSelectLandedSeries(landed: Devotional): boolean {
   if (isDevotionalArchived(landed)) return false;
   const { currentDevotionalId, devotionals } = useUnfoldStore.getState();
+  if (!isStrictActiveSeriesWinner(landed.id, devotionals)) return false;
   if (currentDevotionalId === landed.id) return true;
   const current = devotionals.find((row) => row.id === currentDevotionalId);
   return holdsNoChosenSeries(current) || isSeriesComplete(current);
@@ -107,7 +111,7 @@ function fillMissingReaderContext(devotionalId: string, context: ReaderContext):
  * mark the generation session complete. Idempotent: when the shell already
  * exists (a retry, or the sync pull landed it first) only the day is added,
  * and the store ignores a day it already holds; the series still becomes
- * current when nothing the reader chose holds Today.
+ * current when the server writes it and nothing the reader chose holds Today.
  */
 export function applyInitialArcResult(
   result: InitialArcResult,
@@ -182,40 +186,6 @@ export function applyInitialArcResult(
   store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
-}
-
-function settleSessionLanding(): void {
-  useUnfoldStore.setState((state) => ({ generationSession: { ...state.generationSession, landingSettled: true } }));
-}
-
-/**
- * Repair for readers an earlier build stranded: the sync pull landed their
- * new series first, and the job result completed the session without making
- * it current. When the finished session names a series that is in the
- * store, unarchived and unread from day 1, Today holds no series the reader
- * chose, and the server would write that series, make it current. Returns
- * whether it did. Only a session an earlier build finished qualifies, and
- * only until the series has been current here: a reader who later moves off
- * it keeps their choice.
- */
-export function adoptStrandedInitialArcSeries(): boolean {
-  const { generationSession, currentDevotionalId, devotionals, setCurrentDevotional } = useUnfoldStore.getState();
-  if (generationSession.status !== 'complete' || !generationSession.devotionalId || generationSession.landingSettled) {
-    return false;
-  }
-  const landed = devotionals.find((row) => row.id === generationSession.devotionalId);
-  if (!landed) return false;
-  if (landed.id === currentDevotionalId) {
-    settleSessionLanding();
-    return false;
-  }
-  if (isDevotionalArchived(landed)) return false;
-  if (landed.days.some((day) => day.dayNumber === 1 && day.isRead)) return false;
-  if (!holdsNoChosenSeries(devotionals.find((row) => row.id === currentDevotionalId))) return false;
-  if (!isStrictActiveSeriesWinner(landed.id, devotionals)) return false;
-  setCurrentDevotional(landed.id);
-  settleSessionLanding();
-  return true;
 }
 
 /**

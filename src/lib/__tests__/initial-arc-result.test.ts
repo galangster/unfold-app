@@ -52,7 +52,6 @@ import {
 } from '../inflight-generation-job';
 import {
   DEFAULT_SERIES_TITLE,
-  adoptStrandedInitialArcSeries,
   applyInitialArcResult,
   settleInflightInitialArcWatch,
 } from '../initial-arc-result';
@@ -316,12 +315,13 @@ const FIRST_READING_ROWS: [string, Devotional][] = [
 /**
  * The rows the worker commits with a finished initial_arc job, as the
  * app-start (or reconnect) full-sync pull hands them over: the series with no
- * lifecycle clock, and its day 1.
+ * lifecycle clock, and its day 1. `alongside` adds other live series the same
+ * pull brings, by id and creation time.
  */
 function pullLandedSeries(lifecycle: { archivedAt: string | null; archivedStateAt: string | null } = {
   archivedAt: null,
   archivedStateAt: null,
-}) {
+}, alongside: { id: string; createdAt: string }[] = []) {
   applyPulledUserData({
     timestamp: PULLED_AT,
     changes: {
@@ -339,7 +339,12 @@ function pullLandedSeries(lifecycle: { archivedAt: string | null; archivedStateA
           createdAt: '2026-09-04T08:05:00.000Z',
           ...lifecycle,
         },
-      }],
+      }, ...alongside.map(({ id, createdAt }) => ({
+        id,
+        updatedAt: PULLED_AT,
+        deleted: false,
+        data: { title: `Series ${id}`, totalDays: 3, currentDay: 1, generationMode: 'progressive', seriesStartDate: createdAt, createdAt },
+      }))],
       devotional_days: [{
         id: 'devo-1:1',
         updatedAt: PULLED_AT,
@@ -438,6 +443,28 @@ describe('a new series the sync pull lands before the job result', () => {
     });
   });
 
+  it.each([
+    ['a newer series another device started', '2026-09-04T08:30:00.000Z', null],
+    ['a series created at the same instant', '2026-09-04T08:05:00.000Z', null],
+    ['an older live series', '2026-09-04T07:30:00.000Z', 'devo-1'],
+  ])('with %s in the same pull, becomes current only as the series the server writes', (_label, otherCreatedAt, expected) => {
+    // The pull brings both series and selects neither; then this device's
+    // job finishes its local poll. Only a strict winner may take Today.
+    useUnfoldStore.setState({
+      devotionals: [localSeries('devo-old', { archivedAt: ARCHIVED_AT, archivedStateAt: ARCHIVED_AT })],
+      currentDevotionalId: null,
+    });
+    pullLandedSeries(undefined, [{ id: 'devo-other', createdAt: otherCreatedAt }]);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe(expected);
+    expect(state.devotionals.find((row) => row.id === 'devo-1')?.days.map((d) => d.dayNumber)).toEqual([1]);
+    expect(state.generationSession.status).toBe('complete');
+  });
+
   it('does not take Today from a live series the reader picked meanwhile', () => {
     const picked = localSeries('devo-picked');
     useUnfoldStore.setState({
@@ -484,138 +511,6 @@ describe('a new series the sync pull lands before the job result', () => {
       archivedStateAt: PULLED_AT,
     });
     expect(peekSyncOutbox().filter((change) => change.table === 'devotionals')).toEqual([]);
-  });
-});
-
-describe('adoptStrandedInitialArcSeries', () => {
-  // A reader an earlier build stranded: the pull landed the series, the job
-  // result then completed the session without making the series current.
-  function seedStranded(overrides: { landed?: Partial<Devotional>; currentDevotionalId?: string | null; others?: Devotional[] } = {}) {
-    useUnfoldStore.setState({
-      devotionals: [
-        localSeries('devo-1', overrides.landed),
-        localSeries('devo-old', { archivedAt: ARCHIVED_AT, archivedStateAt: ARCHIVED_AT }),
-        ...(overrides.others ?? []),
-      ],
-      currentDevotionalId: overrides.currentDevotionalId ?? null,
-      generationSession: { status: 'complete', devotionalId: 'devo-1', totalDays: 3, generatedDayNumbers: [], title: 'Series devo-1' },
-    });
-    mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
-    replaceSyncOutbox([]);
-  }
-
-  it('makes the finished session\'s unread series current when Today has none', () => {
-    seedStranded();
-
-    expect(adoptStrandedInitialArcSeries()).toBe(true);
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
-  });
-
-  it.each(FIRST_READING_ROWS)('makes it current over %s', (_label, firstReading) => {
-    seedStranded({ currentDevotionalId: firstReading.id, others: [firstReading] });
-
-    expect(adoptStrandedInitialArcSeries()).toBe(true);
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
-  });
-
-  it('leaves an archived series archived and Today empty', () => {
-    seedStranded({ landed: { archivedAt: PULLED_AT, archivedStateAt: PULLED_AT } });
-
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-
-    const state = useUnfoldStore.getState();
-    expect(state.currentDevotionalId).toBeNull();
-    expect(state.devotionals.find((row) => row.id === 'devo-1')?.archivedAt).toBe(PULLED_AT);
-    expect(peekSyncOutbox()).toEqual([]);
-  });
-
-  it('leaves a reader on a live series, or past day 1, where they are', () => {
-    seedStranded({ currentDevotionalId: 'devo-picked', others: [localSeries('devo-picked')] });
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-picked');
-
-    seedStranded({ landed: { days: [{ ...day1, id: 'devo-1:1', devotionalId: 'devo-1', isRead: true }] } });
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  });
-
-  it('leaves Today empty when the server would write a newer live series instead', () => {
-    // Another device started a newer series; the pull brought it over unselected.
-    seedStranded({ others: [localSeries('devo-newer', { createdAt: '2026-08-25T08:00:00.000Z' })] });
-
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  });
-
-  /**
-   * The reader moves Today to another series from the Library (a paused one
-   * is live again once resumed), taps New Series, which ends it, and backs
-   * out of the intake. Each step is asserted, so a change to how either step
-   * behaves fails here instead of leaving the repair nothing to decide.
-   */
-  function moveOffToLiveSeriesThenEndIt(live: Devotional) {
-    useUnfoldStore.getState().setCurrentDevotional(live.id);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe(live.id);
-    useUnfoldStore.getState().archiveCurrentDevotional();
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  }
-
-  // Older than every landed series, so it never outranks one.
-  const liveSeries = () => localSeries('devo-live', {
-    createdAt: '2026-08-01T08:00:00.000Z',
-    seriesStartDate: '2026-08-01T08:00:00.000Z',
-  });
-
-  it.each([
-    ['as a fresh shell', false],
-    ['after the sync pull landed it first', true],
-  ])('never brings back a series that landed %s once the reader moved off it', (_label, pulledFirst) => {
-    const live = liveSeries();
-    useUnfoldStore.setState({ devotionals: [live], currentDevotionalId: null });
-    if (pulledFirst) pullLandedSeries();
-    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
-
-    moveOffToLiveSeriesThenEndIt(live);
-
-    // Then Today takes focus.
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  });
-
-  it('never brings back a series its landing left off Today', () => {
-    // The pull lands the series while the reader is on a live series they
-    // picked, so the landing keeps Today where it is. The reader later ends
-    // that series with New Series and backs out of the intake.
-    const picked = localSeries('devo-picked');
-    useUnfoldStore.setState({ devotionals: [picked], currentDevotionalId: picked.id });
-    pullLandedSeries();
-    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe(picked.id);
-
-    useUnfoldStore.getState().archiveCurrentDevotional();
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  });
-
-  it.each([
-    ['found it current', 'devo-1', false],
-    ['made it current', null, true],
-  ])('stops repairing a session an earlier build finished once it has %s', (_label, currentDevotionalId, adopted) => {
-    const live = liveSeries();
-    seedStranded({ currentDevotionalId, others: [live] });
-    expect(adoptStrandedInitialArcSeries()).toBe(adopted);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
-
-    moveOffToLiveSeriesThenEndIt(live);
-
-    expect(adoptStrandedInitialArcSeries()).toBe(false);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 });
 
