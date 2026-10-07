@@ -1,5 +1,6 @@
 import type { Devotional, DevotionalDay } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
+import type { ActiveSeriesCandidate } from './devotional-active-selection';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import {
   didDevotionalLifecycleChange,
@@ -203,12 +204,21 @@ export function applyPulledDevotionalContent({
   devotionalId: string;
   pulled: PulledDevotionalContent;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
-  updateDevotionals: (updater: (devotionals: Devotional[]) => Devotional[]) => void;
+  /**
+   * Applies the updater and selects the current series. It receives every
+   * pulled series row too: a row this device does not hold can still be the
+   * series the server writes, and Today must not follow an older one.
+   */
+  updateDevotionals: (
+    updater: (devotionals: Devotional[]) => Devotional[],
+    pulledSeries?: readonly ActiveSeriesCandidate[],
+  ) => void;
 }): void {
   assertBoundPulledSession(pulled);
   if (pulled.devotional || pulled.days.length > 0 || pulledSeriesBesides(pulled, devotionalId).length > 0) {
-    updateDevotionals((devotionals) =>
-      applyPulledDevotionalContentToDevotionals(devotionals, devotionalId, pulled),
+    updateDevotionals(
+      (devotionals) => applyPulledDevotionalContentToDevotionals(devotionals, devotionalId, pulled),
+      pulled.canonicalSeries,
     );
   }
 

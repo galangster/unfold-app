@@ -1,4 +1,4 @@
-import { selectSyncedCurrentDevotionalId } from '../devotional-resume-selection';
+import { selectSyncedCurrentDevotionalId, selectUnheldActiveSeriesId } from '../devotional-resume-selection';
 
 const ARCHIVE_AT = '2026-09-12T15:00:00.000Z';
 const RESUME_AT = '2026-09-12T16:00:00.000Z';
@@ -150,13 +150,31 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     expect(select([{ ...resumedB, generationMode: 'batch' }])).toBeNull();
     // A live sibling on the same clock leaves no strict winner.
     expect(select([resumedB, { ...resumedB, id: 'series-c' }])).toBeNull();
-    // A newer live series that only this pull brings outranks the resume. The
-    // proof runs on the pulled rows, not on the copy held before the pull.
+    // A newer live series that only this pull brings outranks the resume:
+    // the server writes it, so Today follows it and not the resume. The proof
+    // runs on the pulled rows, not on the copy held before the pull.
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
       previous: [liveX, resumedB],
       next: [pausedX, resumedB, { id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' }],
-    })).toBeNull();
+    })).toBe('series-c');
+  });
+
+  // The pull of series-x carries a series started elsewhere after the
+  // resume, which this device does not hold yet. The server writes that one.
+  it('follows neither the resume nor an older series while the newer series is not on this device', () => {
+    const startedElsewhere = { id: 'series-n', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' };
+    const selection = {
+      previousCurrentId: 'series-x',
+      previous: [liveX, pausedB],
+      next: [pausedX, resumedB],
+      pulled: [pausedX, resumedB, startedElsewhere],
+    };
+    expect(selectSyncedCurrentDevotionalId(selection)).toBeNull();
+    expect(selectUnheldActiveSeriesId(selection.next, selection.pulled)).toBe('series-n');
+    // Without the pulled rows the resume would win.
+    expect(selectSyncedCurrentDevotionalId({ ...selection, pulled: undefined })).toBe('series-b');
+    expect(selectUnheldActiveSeriesId(selection.next, [pausedX, resumedB])).toBeNull();
   });
 
   // Ending a series to start a new one archives the current series too. An
@@ -167,6 +185,19 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
       previousCurrentId: 'series-x',
       previous: [liveX, olderLive],
       next: [{ ...liveX, archivedAt: NEWER_RESUME_AT, archivedStateAt: NEWER_RESUME_AT }, olderLive],
+    })).toBeNull();
+  });
+
+  // Ending a series stamps the device clock. A clock running slow can stamp
+  // the end of series-x before an older series was last resumed, though
+  // series-x began after that resume.
+  it('leaves Today empty when a slow clock stamps the end before an older resume', () => {
+    const olderResumed = { id: 'series-y', createdAt: CREATED_AT, generationMode: 'progressive', archivedAt: null, archivedStateAt: ARCHIVE_AT };
+    const startedAfter = { ...liveX, createdAt: RESUME_AT };
+    expect(selectSyncedCurrentDevotionalId({
+      previousCurrentId: 'series-x',
+      previous: [startedAfter, olderResumed],
+      next: [{ ...startedAfter, archivedAt: OLDER_AT, archivedStateAt: OLDER_AT }, olderResumed],
     })).toBeNull();
   });
 

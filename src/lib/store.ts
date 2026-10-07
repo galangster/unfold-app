@@ -32,6 +32,7 @@ import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { captureSyncSession, isSyncSessionCurrent } from './sync-session-fence';
 import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
@@ -44,7 +45,11 @@ import {
   isDevotionalArchived,
   lifecycleTimestampMs,
 } from './devotional-lifecycle';
-import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
+import {
+  selectSyncedCurrentDevotionalId,
+  selectUnheldActiveSeriesId,
+  type ResumeSelectionSeries,
+} from './devotional-resume-selection';
 import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
@@ -1042,18 +1047,68 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
 
-/** Reconcile pulled content and its current-series selection. */
-export function updateSyncedDevotionals(updater: (devotionals: Devotional[]) => Devotional[]): void {
+/**
+ * Reconcile pulled content and its current-series selection. `pulledSeries`
+ * is every series row the pull returned, including rows this device does not
+ * hold yet.
+ */
+export function updateSyncedDevotionals(
+  updater: (devotionals: Devotional[]) => Devotional[],
+  pulledSeries?: readonly ResumeSelectionSeries[],
+): void {
+  let awaitingFrom = undefined as string | null | undefined;
   useUnfoldStore.setState((state) => {
     const devotionals = updater(state.devotionals);
-    return {
-      devotionals,
-      currentDevotionalId: selectSyncedCurrentDevotionalId({
-        previousCurrentId: state.currentDevotionalId,
+    const currentDevotionalId = selectSyncedCurrentDevotionalId({
+      previousCurrentId: state.currentDevotionalId,
+      previous: state.devotionals,
+      next: devotionals,
+      pulled: pulledSeries,
+    });
+    if (currentDevotionalId === null && selectUnheldActiveSeriesId(devotionals, pulledSeries)) {
+      awaitingFrom = state.currentDevotionalId;
+    }
+    return { devotionals, currentDevotionalId };
+  });
+  if (awaitingFrom !== undefined) followUnheldActiveSeries(awaitingFrom, pulledSeries);
+}
+
+/**
+ * The pull left Today without a series, and the series the server writes is
+ * one this device does not hold yet. Today stays empty rather than follow an
+ * older series, which the server would refuse to continue. Pull everything
+ * now. Once the new series is here, Today follows it by the same rule as a
+ * pull that carries it, unless Today took a series meanwhile. The pulled rows
+ * still count, so a full sync that fails or misses the new series leaves
+ * Today empty instead of handing it to an older one.
+ */
+function followUnheldActiveSeries(
+  pausedId: string | null,
+  pulledSeries: readonly ResumeSelectionSeries[] | undefined,
+): void {
+  const session = captureSyncSession();
+  let fullSync: Promise<void>;
+  try {
+    // full-sync-pull imports the store: a static import here would be a cycle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pull = require('./full-sync-pull') as typeof import('./full-sync-pull');
+    fullSync = pull.triggerUserDataPull('unheld-active-series');
+  } catch (error) {
+    logger.warn('[store] Could not request a full sync for a series not on this device:', error);
+    return;
+  }
+  void fullSync.then(() => {
+    if (!pausedId || !isSyncSessionCurrent(session)) return;
+    useUnfoldStore.setState((state) => {
+      if (state.currentDevotionalId !== null) return state;
+      const currentDevotionalId = selectSyncedCurrentDevotionalId({
+        previousCurrentId: pausedId,
         previous: state.devotionals,
-        next: devotionals,
-      }),
-    };
+        next: state.devotionals,
+        pulled: pulledSeries,
+      });
+      return currentDevotionalId ? { currentDevotionalId } : state;
+    });
   });
 }
 
