@@ -136,15 +136,13 @@ describe('deep-link allowlist — legitimate producers', () => {
     expectAllowed('unfold://(tabs)/(bible)/search', '/search');
   });
 
-  it('accepts notebook, settings, check-in, onboarding, share-card, and static screens', () => {
+  it('accepts notebook, settings, check-in, share-card, and static screens', () => {
     expectAllowed('unfold://(tabs)/(journal)/note-detail?noteId=note_1725000000000_abc123def', '/note-detail');
     expectAllowed('unfold://note-detail?startEditing=true&folderId=folder_1725000000000_abc123def', '/note-detail');
     expectAllowed('unfold://(tabs)/(journal)/recently-deleted', '/recently-deleted');
     expectAllowed('unfold://(tabs)/(you)/settings?from=home', '/settings');
     expectAllowed('unfold://(tabs)/(you)/checkin-schedule?type=evening', '/checkin-schedule');
     expectAllowed('unfold://checkin-schedule?type=midday', '/checkin-schedule');
-    expectAllowed('unfold://onboarding?startAt=themeType&flow=newSeries', '/onboarding');
-    expectAllowed('unfold://onboarding', '/onboarding');
     expectAllowed(
       'unfold://share-card?text=For%20God%20so%20loved%20the%20world&reference=John%203%3A16&translation=BSB&type=verse',
       '/share-card',
@@ -162,10 +160,12 @@ describe('deep-link allowlist — legitimate producers', () => {
 });
 
 describe('deep-link allowlist — rejections', () => {
-  it('rejects the hidden and transitional routes explicitly', () => {
+  it('rejects the blocklisted routes explicitly', () => {
     expectRejected('unfold://unfolded', 'blocked-route');
     expectRejected('unfold:///unfolded', 'blocked-route');
     expectRejected('unfold://generating', 'blocked-route');
+    expectRejected('unfold://onboarding', 'blocked-route');
+    expectRejected('unfold://onboarding?startAt=themeType&flow=newSeries', 'blocked-route');
     expectRejected('unfold://qa-ambient-sound', 'blocked-route');
     expectRejected('unfold://qa-method-readings', 'blocked-route');
     expectRejected('unfold://qa-method-readings?method=lectio_divina', 'blocked-route');
@@ -287,9 +287,6 @@ describe('deep-link allowlist — rejections', () => {
     expectRejected('unfold://my-content?from=reader-settings', 'invalid-param');
     expectRejected('unfold://settings?from=(you)', 'invalid-param');
     expectRejected('unfold://checkin-schedule?type=morning', 'invalid-param');
-    expectRejected('unfold://onboarding?flow=reset', 'invalid-param');
-    expectRejected('unfold://onboarding?startAt=%3Cscript%3E', 'invalid-param');
-    expectRejected('unfold://onboarding?startAt=1theme', 'invalid-param');
     expectRejected('unfold://share-card?text=x&type=wallpaper', 'invalid-param');
     expectRejected('unfold://note-detail?startEditing=yes', 'invalid-param');
   });
