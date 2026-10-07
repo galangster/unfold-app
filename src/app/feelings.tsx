@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -24,6 +24,14 @@ import { useReadingFont } from '@/lib/useReadingFont';
 // headings stop growing at 1.3, and the words drop to one column at 1.5.
 const DISPLAY_MAX_SCALE = 1.3;
 const SINGLE_COLUMN_FONT_SCALE = 1.5;
+
+// The single-line words shrink to fit, so they take no lineHeight: iOS shrinks
+// the font but not a fixed line, and a frame that rounds a hair short then never
+// fits and the word falls to 4 pt. PP Editorial's own line is 1.4x its size, all
+// of the extra above the letters, so a negative top margin trims the line back
+// to the designed height.
+const DISPLAY_NATURAL_LINE = 1.4;
+const trimToLine = (fontSize: number, lineHeight: number) => lineHeight - fontSize * DISPLAY_NATURAL_LINE;
 
 // Motion. Each piece rises a little as it fades in; nothing runs past 340 ms.
 const RISE = 8;
@@ -59,6 +67,9 @@ export default function FeelingsScreen() {
 
 function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefined }) {
   const { colors } = useTheme();
+  // A full-screen modal: SafeAreaView reads no insets here, so pad from the
+  // window insets, as unfolded.tsx does.
+  const insets = useSafeAreaInsets();
   const close = useGuardedBack();
   const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
   const startNewSeries = useStartNewSeries(gate);
@@ -77,7 +88,7 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.topBar}>
         {chosen && (
           <Animated.View entering={arrive(ANSWER_START)} exiting={leave}>
@@ -93,7 +104,9 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
         )}
         <Button variant="icon" icon={<XIcon weight="light" />} accessibilityLabel="Close" onPress={close} style={styles.close} />
       </View>
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
+      {/* cssInterop off: through NativeWind's interop the ref never attaches,
+          and show() needs it to open each view at the top. */}
+      <ScrollView ref={scrollRef} cssInterop={false} contentContainerStyle={styles.content}>
         {chosen ? (
           <FeelingAnswer key={chosen.id} feeling={chosen} onBeginSeries={startNewSeries} />
         ) : (
@@ -107,7 +120,7 @@ function FeelingsCheckIn({ initialFeeling }: { initialFeeling: Feeling | undefin
         surface="churned_sheet"
         context="churned"
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -279,13 +292,12 @@ const styles = StyleSheet.create({
   wholeRow: { flexBasis: '100%' },
   // A 1 pt rule above each word, as the approved prototype draws it.
   word: { minHeight: 58, justifyContent: 'center', borderTopWidth: 1, paddingVertical: Spacing['2'] },
-  wordText: { fontFamily: FontFamily.display, fontSize: 29, lineHeight: 34, letterSpacing: -0.29 },
+  wordText: { fontFamily: FontFamily.display, fontSize: 29, letterSpacing: -0.29, marginTop: trimToLine(29, 34) },
   answerWord: {
     fontFamily: FontFamily.display,
     fontSize: 64,
-    lineHeight: 72,
     letterSpacing: -1.6,
-    marginTop: Spacing['1.5'],
+    marginTop: Spacing['1.5'] + trimToLine(64, 72),
     marginBottom: Spacing['5'],
   },
   passage: { fontSize: 22, lineHeight: 34 },

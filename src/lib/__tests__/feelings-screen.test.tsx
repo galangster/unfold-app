@@ -22,7 +22,9 @@ jest.mock('@/lib/theme', () => ({
   useTheme: () => ({ colors: jest.requireActual('@/constants/colors').DarkColors, isDark: true }),
 }));
 jest.mock('@/lib/useReadingFont', () => ({ useReadingFont: () => ({ body: 'SourceSerifPro_400Regular' }) }));
-jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: jest.requireActual('react-native').View }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
 jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
   impactAsync: jest.fn(),
