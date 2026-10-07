@@ -151,8 +151,8 @@ describe('feelings screen', () => {
       jest.restoreAllMocks();
     });
 
-    it('leaves focus where it is when the screen opens', () => {
-      mockParams = { feeling: 'weary' };
+    it.each([['the list', {}], ['an answer', { feeling: 'weary' }]])('leaves focus where it is when the screen opens on %s', (_view, params) => {
+      mockParams = params;
       render(<FeelingsScreen />);
       act(() => jest.runOnlyPendingTimers());
       expect(focus).not.toHaveBeenCalled();
