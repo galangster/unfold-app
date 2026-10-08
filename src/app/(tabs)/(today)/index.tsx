@@ -26,6 +26,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
+import { getLockScreenProps, getNextMidnight, getTodayReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -785,6 +786,24 @@ export default function HomeScreen() {
   const currentDevotional = useMemo(() => (
     getCurrentDevotional(devotionals, currentDevotionalId)
   ), [currentDevotionalId, devotionals]);
+
+  // The focus sync above runs before the focus pull lands, replaces or
+  // restores a day, and the day watch below lands one while Today stays
+  // open. Sync the widgets again when what they show changes. A replaced day
+  // keeps the day count, and an earlier day restored or marked read keeps the
+  // reading too, so the key is the series fields of the sync fingerprint,
+  // built as it builds them: the reading of both timeline entries, the day
+  // total, the weekly checks and the Lock Screen ring. Writing on a day does
+  // not change them, so it does not re-sync.
+  const widgetSyncKey = useMemo(() => JSON.stringify({
+    reading: [clockNow, getNextMidnight(clockNow)].map((forDate) => getTodayReadingProps(currentDevotional, forDate)),
+    totalDays: getServerOwnedSeriesTotalDays(currentDevotional),
+    weeklyProgress: getWeeklyProgress(devotionals, clockNow),
+    lock: getLockScreenProps(currentDevotional, clockNow),
+  }), [currentDevotional, devotionals, clockNow]);
+  useEffect(() => {
+    syncWidgets();
+  }, [currentDevotionalId, widgetSyncKey]);
 
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).

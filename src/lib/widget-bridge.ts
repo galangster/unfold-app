@@ -15,7 +15,13 @@ import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
 import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import { buildWidgetTimelineEntries, getLockScreenProps, getWeeklyProgress } from '@/lib/widget-timeline';
+import {
+  buildWidgetTimelineEntries,
+  getLockScreenProps,
+  getNextMidnight,
+  getTodayReadingProps,
+  getWeeklyProgress,
+} from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
 // Track active reading session
@@ -39,9 +45,12 @@ let activeReadingSession: LiveActivity<{
 // dimensions that affect widget rendering:
 //   1. streakCurrent — badge count + streak display
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
-//   3. current day id/title — which day the "Today" widget labels
+//   3. current day id — the series and the day it is on
 //   4. weeklyProgress — the M-Su "read" indicator dots
-//   5. current day scripture reference/text — the verse the Dashboard renders
+//   5. the Today and Dashboard reading fields (getTodayReadingProps) for
+//      BOTH entries, built exactly as the timeline builds them: the day Today
+//      shows, its verse and quote, and the next day, which can land after
+//      today's reading
 //   6. the Lock Screen fields (getLockScreenProps), built exactly as the
 //      timeline builds them: the day read today, its verse, and the ring
 //
@@ -68,7 +77,6 @@ function pushTimelineToAllWidgets(entries: ReturnType<typeof buildWidgetTimeline
 function buildSyncFingerprint(now: Date): string {
   const state = useUnfoldStore.getState();
   const devotional = state.getCurrentDevotional();
-  const currentDay = devotional?.days?.find((d) => d.dayNumber === devotional.currentDay);
 
   const hasReadToday = hasReadTodayGlobal({ streakLastReadDate: state.streakLastReadDate, now });
 
@@ -77,9 +85,7 @@ function buildSyncFingerprint(now: Date): string {
     streakLastReadDate: state.streakLastReadDate,
     hasReadToday,
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
-    dayTitle: currentDay?.title ?? null,
-    scriptureReference: currentDay?.scriptureReference ?? null,
-    scriptureText: currentDay?.scriptureText ?? null,
+    reading: [now, getNextMidnight(now)].map((forDate) => getTodayReadingProps(devotional, forDate)),
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
     // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was
