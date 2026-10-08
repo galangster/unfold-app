@@ -150,6 +150,8 @@ const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockWaitForUnfoldPremiumEntitlement = jest.fn();
 const mockSyncTrialEndingNotification = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockAskNotificationPermissionInContext = jest.fn((..._args: unknown[]) => Promise.resolve('granted'));
+const mockReadNotificationPermissionState = jest.fn((..._args: unknown[]) => Promise.resolve('granted'));
 
 jest.mock('@/lib/revenuecatClient', () => ({
   POST_PURCHASE_ENTITLEMENT_WAIT_MS: 10_000,
@@ -161,6 +163,11 @@ jest.mock('@/lib/revenuecatClient', () => ({
 
 jest.mock('@/lib/trial-notification', () => ({
   syncTrialEndingNotification: (...args: unknown[]) => mockSyncTrialEndingNotification(...args),
+}));
+
+jest.mock('@/lib/notification-ask', () => ({
+  askNotificationPermissionInContext: (...args: unknown[]) => mockAskNotificationPermissionInContext(...args),
+  readNotificationPermissionState: (...args: unknown[]) => mockReadNotificationPermissionState(...args),
 }));
 
 jest.mock('@/lib/mmkv-storage', () => ({
@@ -698,6 +705,78 @@ describe('ThreeStepPaywall headline labels', () => {
   it('reads the no-trial headline with normal spaces', async () => {
     const tree = await render(baseProps({ hasFreeTrial: false }));
     expect(headlineLabels(tree)).toContain('Unlock everything Unfold can do.');
+  });
+});
+
+const PERMISSION_REASON = 'Allow notifications to get this reminder.';
+
+// 1.1.18 release smoke (F08): page 2 promised a reminder before the trial
+// ends, but onboarding never asked for notification permission, so the
+// reminder was skipped.
+describe('ThreeStepPaywall trial reminder permission', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+    mockAskNotificationPermissionInContext.mockResolvedValue('granted');
+    mockReadNotificationPermissionState.mockResolvedValue('undetermined');
+  });
+
+  async function renderOnReminderPage() {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await pressPrimaryCTA(tree);
+    return tree;
+  }
+
+  it('says why it will ask while the permission is undecided', async () => {
+    const tree = await renderOnReminderPage();
+
+    expect(findText(tree, PERMISSION_REASON).length).toBeGreaterThan(0);
+  });
+
+  it('shows no reason when the permission is already decided', async () => {
+    mockReadNotificationPermissionState.mockResolvedValue('granted');
+    const tree = await renderOnReminderPage();
+
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+  });
+
+  it('moves on without asking when the permission is already decided', async () => {
+    mockReadNotificationPermissionState.mockResolvedValue('denied');
+    const tree = await renderOnReminderPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+  });
+
+  it('asks once from the page 2 button and moves to page 3 after any answer', async () => {
+    let answer!: () => void;
+    mockAskNotificationPermissionInContext.mockReturnValue(new Promise<string>((resolve) => {
+      answer = () => resolve('denied');
+    }));
+    const tree = await renderOnReminderPage();
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+
+    await pressPrimaryCTA(tree);
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledTimes(1);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledWith({ trigger: 'trial_reminder', registration: 'background' });
+    expect(primaryCTALabel(tree)).toBe('See your free trial');
+
+    await act(async () => {
+      answer();
+    });
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+  });
+
+  it('does not ask on the no-trial path, which has no reminder page', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: false }));
+    await pressPrimaryCTA(tree);
+
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(mockReadNotificationPermissionState).not.toHaveBeenCalled();
   });
 });
 
