@@ -300,6 +300,20 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(mockNavigate).toHaveBeenCalledTimes(2);
   });
 
+  it('offers one link beside Begin the Next Study after a finished series', async () => {
+    const onChooseOther = jest.fn();
+    const tree = await mount({ variant: 'completion', onChooseOther });
+    const { Text } = require('react-native');
+    const labels = tree.root.findAllByType(Text).map((node: { props: { children: unknown } }) => node.props.children);
+
+    expect(labels).toContain('Begin the Next Study');
+    expect(labels).toContain('Create your own series');
+    expect(labels).not.toContain('Choose another direction');
+    const link = tree.root.findByProps({ accessibilityLabel: 'Create your own series' });
+    act(() => link.props.onPress());
+    expect(onChooseOther).toHaveBeenCalledTimes(1);
+  });
+
   it('skips the recommendation fetch when storedPick is present', async () => {
     const tree = await mount({
       storedPick,

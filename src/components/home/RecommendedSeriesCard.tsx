@@ -251,6 +251,8 @@ export function RecommendedSeriesCard({
   // the bare word 'Theme' with no value attached.
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
+  // After a finished series, this link is the only other next step on Today.
+  const otherLabel = isCompletion ? 'Create your own series' : 'Choose another direction';
   const themeName = displayThemeName(recommendation!.themeName);
   const reasonText = cleanRecommendationReason(recommendation!.reason)
     ?? fallbackReason(recommendation!.suggestedLength, themeName);
@@ -306,11 +308,11 @@ export function RecommendedSeriesCard({
             activeOpacity={0.72}
             onPress={onChooseOther}
             accessibilityRole="button"
-            accessibilityLabel="Choose a different devotional direction"
+            accessibilityLabel={isCompletion ? otherLabel : 'Choose a different devotional direction'}
             accessibilityHint="Opens the new series setup instead of this recommendation"
             style={styles.secondaryAction}
           >
-            <Text style={[styles.secondaryText, { color: colors.textMuted }]}>Choose another direction</Text>
+            <Text style={[styles.secondaryText, { color: colors.textMuted }]}>{otherLabel}</Text>
           </TouchableOpacity>
         </View>
       </GlassSurface>

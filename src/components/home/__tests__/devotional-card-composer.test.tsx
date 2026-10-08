@@ -94,10 +94,12 @@ jest.mock('expo-router', () => ({
 }));
 
 // Cuts off the whole empty/journey-complete subtree (store, api-config,
-// qa-tools, expo-haptics, expo-router's useRouter) — none of that is exercised
-// by the unread/complete-today/tomorrow-locked states under test here.
+// qa-tools, expo-haptics, expo-router's useRouter). The journey-complete tests
+// render the card's fallback to stand in for a recommendation that failed.
+let mockRecommendationFailed = false;
 jest.mock('../RecommendedSeriesCard', () => ({
-  RecommendedSeriesCard: () => null,
+  RecommendedSeriesCard: ({ renderFallback }: { renderFallback?: () => React.ReactNode }) =>
+    (mockRecommendationFailed && renderFallback ? renderFallback() : null),
 }));
 
 jest.mock('@/components/ui', () => ({
@@ -269,6 +271,33 @@ function findByLabel(tree: any, label: string) {
 }
 
 // ─── Tests ──────────────────────────────────────────────────────
+
+describe('DevotionalCard journey-complete next steps', () => {
+  afterEach(() => {
+    mockRecommendationFailed = false;
+  });
+
+  function journeyCompleteState(onCreateNew = jest.fn()): DevotionalCardState {
+    return { type: 'journey-complete', seriesTitle: 'Your First Devotional', onCreateNew };
+  }
+
+  it('leaves the next step to the recommendation instead of a second Create Series button', () => {
+    const tree = renderInAct(<DevotionalCard state={journeyCompleteState()} />);
+    expect(findByLabel(tree, 'Create a new devotional series')).toHaveLength(0);
+    expect(textContent(tree.root)).not.toContain('Create Series');
+    act(() => tree.unmount());
+  });
+
+  it('keeps Create Series as the one next step when no recommendation can show', () => {
+    mockRecommendationFailed = true;
+    const onCreateNew = jest.fn();
+    const tree = renderInAct(<DevotionalCard state={journeyCompleteState(onCreateNew)} />);
+    expect(textContent(tree.root).match(/Create Series/g)).toHaveLength(1);
+    act(() => findByLabel(tree, 'Create a new devotional series')[0].props.onPress());
+    expect(onCreateNew).toHaveBeenCalledTimes(1);
+    act(() => tree.unmount());
+  });
+});
 
 describe('DevotionalCard composer integration', () => {
   it('opens the same next reading without assigning it to yesterday', () => {
