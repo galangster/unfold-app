@@ -20,17 +20,10 @@ jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(() => jest.fn()),
 }));
 
-// The full sync a pull asks for is observed and run by hand; it applies with
-// the real full-sync mappers.
-jest.mock('../full-sync-pull', () => ({
-  ...jest.requireActual('../full-sync-pull'),
-  triggerUserDataPull: jest.fn(() => Promise.resolve()),
-}));
-
 // eslint-disable-next-line import/first -- store import must run after Jest module mocks are registered.
 import { applyPulledDevotionalContent } from '../devotional-pulled-content';
 // eslint-disable-next-line import/first
-import { applyPulledUserData, triggerUserDataPull } from '../full-sync-pull';
+import { applyPulledUserData } from '../full-sync-pull';
 // eslint-disable-next-line import/first
 import { isStrictActiveSeriesWinner } from '../devotional-active-selection';
 // eslint-disable-next-line import/first
@@ -135,14 +128,16 @@ describe('pull of the current series when it was paused elsewhere', () => {
     expect(peekSyncOutbox()).toEqual([]);
   });
 
-  it('moves Today to the resumed series when the resume and the pause arrive in separate pulls', () => {
+  // Once the resume was applied it no longer reads as newer, so the pull that
+  // lands the pause leaves Today empty, as before this release.
+  it('leaves Today empty when the resume and the pause arrive in separate pulls', () => {
     applyCurrentSeriesPull('series-x', [row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT })]);
     // The pause has not reached the server yet: series-x stays current.
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-x');
 
     applyCurrentSeriesPull('series-x', [row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT })]);
 
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-b');
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
     expect(peekSyncOutbox()).toEqual([]);
   });
 
@@ -218,60 +213,44 @@ function fullPullOf(local: Devotional) {
 
 // The series the server writes is the strict active winner of every series
 // row, and a pull of the current series can carry one this device does not
-// hold yet. Today never moves to an older series in its place: it waits for
-// the full sync that brings the new one.
+// hold yet. Today never moves to an older series in its place: it stays empty.
 describe('pull of the current series when the series the server writes is not on this device', () => {
   const STARTED_AT = '2026-09-12T16:20:00.000Z';
   const liveX = series('series-x', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
   const pausedB = series('series-b', { archivedAt: PAUSED_AT, archivedStateAt: PAUSED_AT });
 
-  let fullSync: Promise<void> | undefined;
-  function runFullSyncWith(local: Devotional): void {
-    jest.mocked(triggerUserDataPull).mockImplementationOnce(() => {
-      fullSync = Promise.resolve().then(() => applyPulledUserData(fullPullOf(local)));
-      return fullSync;
-    });
-  }
-
   beforeEach(() => {
     useUnfoldStore.getState().reset();
     replaceSyncOutbox([]);
-    // Drops a full sync a previous test queued but never asked for.
-    jest.mocked(triggerUserDataPull).mockReset();
-    jest.mocked(triggerUserDataPull).mockImplementation(() => Promise.resolve());
-    fullSync = undefined;
   });
 
   // Another device resumed series-b, which paused series-x, and then started
   // series-n before series-b's own pause reached the server.
-  it('does not follow an older resume when a newer series was started elsewhere', async () => {
+  it('does not follow an older resume when a newer series was started elsewhere', () => {
     const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
     useUnfoldStore.setState({ devotionals: [liveX, pausedB], currentDevotionalId: 'series-x' });
-    runFullSyncWith(newN);
 
     applyCurrentSeriesPull('series-x', [
       row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
       row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
       row(newN, {}),
     ]);
-
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-    expect(triggerUserDataPull).toHaveBeenCalledTimes(1);
 
-    await fullSync;
+    applyPulledUserData(fullPullOf(newN));
 
     const state = useUnfoldStore.getState();
     expect(state.devotionals.some((item) => item.id === 'series-n')).toBe(true);
-    expect(state.currentDevotionalId).toBe('series-n');
+    expect(state.currentDevotionalId).toBeNull();
   });
 
   // An earlier build left series-m live, day 1 unread, while the reader moved
   // on to series-f. On another device the reader ended series-f and started
   // series-n; this device holds only series-f and series-m.
   it.each([
-    ['after the end', '2026-09-12T16:20:00.000Z', 'series-n'],
-    ['before the end', '2026-09-12T15:30:00.000Z', null],
-  ] as const)('asks for a full sync, never the older series, when the new series started %s', async (_when, startedAt, landsOn) => {
+    ['after the end', '2026-09-12T16:20:00.000Z'],
+    ['before the end', '2026-09-12T15:30:00.000Z'],
+  ] as const)('never follows the older series when the new series started %s', (_when, startedAt) => {
     const strandedM = series('series-m', {
       createdAt: '2026-09-01T00:00:00.000Z',
       days: [{ ...series('series-m').days[0], isRead: false, readAt: undefined }],
@@ -279,74 +258,29 @@ describe('pull of the current series when the series the server writes is not on
     const liveF = series('series-f', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
     const newN = series('series-n', { createdAt: startedAt, seriesStartDate: startedAt });
     useUnfoldStore.setState({ devotionals: [liveF, strandedM], currentDevotionalId: 'series-f' });
-    runFullSyncWith(newN);
 
     applyCurrentSeriesPull('series-f', [
       row(liveF, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
       row(newN, {}),
     ]);
-
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-    expect(triggerUserDataPull).toHaveBeenCalledTimes(1);
 
-    await fullSync;
+    applyPulledUserData(fullPullOf(newN));
 
     const state = useUnfoldStore.getState();
     // Once the new series is here, the older one no longer proves itself the
     // server's series from the rows this device holds.
     expect(isStrictActiveSeriesWinner('series-m', state.devotionals)).toBe(false);
-    expect(state.currentDevotionalId).toBe(landsOn);
+    expect(state.currentDevotionalId).toBeNull();
   });
 
-  it('still does not follow the older resume when the full sync brings nothing', async () => {
-    const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
-    useUnfoldStore.setState({ devotionals: [liveX, pausedB], currentDevotionalId: 'series-x' });
-    jest.mocked(triggerUserDataPull).mockImplementationOnce(() => {
-      fullSync = Promise.resolve();
-      return fullSync;
-    });
-
-    applyCurrentSeriesPull('series-x', [
-      row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
-      row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
-      row(newN, {}),
-    ]);
-    await fullSync;
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-  });
-
-  it('keeps a series Today took while the full sync ran', async () => {
-    const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
-    const liveY = series('series-y', { createdAt: '2026-09-02T00:00:00.000Z' });
-    useUnfoldStore.setState({ devotionals: [liveX, liveY], currentDevotionalId: 'series-x' });
-    jest.mocked(triggerUserDataPull).mockImplementationOnce(() => {
-      fullSync = Promise.resolve().then(() => {
-        useUnfoldStore.getState().setCurrentDevotional('series-y');
-        applyPulledUserData(fullPullOf(newN));
-      });
-      return fullSync;
-    });
-
-    applyCurrentSeriesPull('series-x', [
-      row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
-      row(newN, {}),
-    ]);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-
-    await fullSync;
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-y');
-  });
-
-  it('keeps a current series the pull leaves live and asks for nothing', () => {
+  it('keeps a current series the pull leaves live', () => {
     const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
     useUnfoldStore.setState({ devotionals: [liveX, pausedB], currentDevotionalId: 'series-x' });
 
     applyCurrentSeriesPull('series-x', [row(newN, {})]);
 
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-x');
-    expect(triggerUserDataPull).not.toHaveBeenCalled();
   });
 });
 
@@ -371,8 +305,9 @@ function fullPullLifecycleOf(local: Devotional, lifecycle: Pick<Devotional, 'arc
 }
 
 // Another device resumed series-b, which paused series-x, and then started
-// series-n. Once this device holds series-n, Today follows it, never the
-// older resume, whether a scoped pull or a full sync carries the change.
+// series-n. Once this device holds series-n, Today never follows the older
+// resume, whether a scoped pull or a full sync carries the change. Nothing
+// proves series-n by an explicit resume, so Today stays empty.
 describe('a resume elsewhere followed by a newer series', () => {
   const STARTED_AT = '2026-09-12T16:20:00.000Z';
   const liveX = series('series-x', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
@@ -382,11 +317,9 @@ describe('a resume elsewhere followed by a newer series', () => {
   beforeEach(() => {
     useUnfoldStore.getState().reset();
     replaceSyncOutbox([]);
-    jest.mocked(triggerUserDataPull).mockReset();
-    jest.mocked(triggerUserDataPull).mockImplementation(() => Promise.resolve());
   });
 
-  it('follows the newer series this device already holds when a scoped pull lands the resume and the pause', () => {
+  it('never follows the older resume when this device already holds the newer series', () => {
     useUnfoldStore.setState({ devotionals: [liveX, pausedB, newN], currentDevotionalId: 'series-x' });
 
     applyCurrentSeriesPull('series-x', [
@@ -394,11 +327,10 @@ describe('a resume elsewhere followed by a newer series', () => {
       row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
     ]);
 
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-n');
-    expect(triggerUserDataPull).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 
-  it('follows the newer series when one full sync brings it with the resume and the pause', () => {
+  it('never follows the older resume when one full sync brings the newer series with the resume and the pause', () => {
     useUnfoldStore.setState({ devotionals: [liveX, pausedB], currentDevotionalId: 'series-x' });
     const newSeries = fullPullOf(newN);
 
@@ -421,6 +353,6 @@ describe('a resume elsewhere followed by a newer series', () => {
     expect(state.devotionals.find((item) => item.id === 'series-x')).toMatchObject({
       archivedAt: RESUME_AT, archivedStateAt: RESUME_AT,
     });
-    expect(state.currentDevotionalId).toBe('series-n');
+    expect(state.currentDevotionalId).toBeNull();
   });
 });

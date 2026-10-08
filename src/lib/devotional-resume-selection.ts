@@ -2,31 +2,9 @@ import {
   isDevotionalArchived,
   lifecycleTimestampMs,
 } from './devotional-lifecycle';
-import {
-  activeSeriesRank,
-  isStrictActiveSeriesWinner,
-  outranksActiveSiblings,
-  type ActiveSeriesCandidate,
-} from './devotional-active-selection';
+import { outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional-active-selection';
 
 export type ResumeSelectionSeries = ActiveSeriesCandidate;
-
-type SyncedSelection = {
-  previousCurrentId: string | null | undefined;
-  /**
-   * The series Today showed until it ended, while Today has none. It stands in
-   * for the current series in the successor rule only.
-   */
-  awaitingSuccessorOf?: string | null;
-  previous: readonly ResumeSelectionSeries[];
-  next: readonly ResumeSelectionSeries[];
-  /**
-   * Every series row the pull returned. A pull of one series also carries
-   * rows this device does not hold yet, and one of them can be the series
-   * the server writes now.
-   */
-  pulled?: readonly ResumeSelectionSeries[];
-};
 
 /** The rows held here, plus every pulled row this device does not hold yet. */
 function withUnheldPulledSeries(
@@ -42,21 +20,27 @@ function withUnheldPulledSeries(
  * series. Restore Today only from a newer accepted explicit resume
  * (archivedAt null plus a newer archivedStateAt). Stale, rejected, archived,
  * or omitted lifecycle rows never become current. Several qualifying resumes
- * resolve to the newest accepted intent clock. A current series paused by a
- * resume elsewhere hands Today to that resume (selectPausedCurrentSuccessor).
- * While Today waits on a series that ended, the same rule hands Today to the
- * series that took its place.
+ * resolve to the newest accepted intent clock.
  * Today never moves to a series that another live series outranks, held here
  * or only pulled: a pull of one series can carry a newer series started on
- * another device, and the server writes that one.
+ * another device, and the server writes that one. Today stays empty instead.
  */
-export function selectSyncedCurrentDevotionalId(options: SyncedSelection): string | null {
+export function selectSyncedCurrentDevotionalId(options: {
+  previousCurrentId: string | null | undefined;
+  previous: readonly ResumeSelectionSeries[];
+  next: readonly ResumeSelectionSeries[];
+  /**
+   * Every series row the pull returned. A pull of one series also carries
+   * rows this device does not hold yet, and one of them can be the series
+   * the server writes now.
+   */
+  pulled?: readonly ResumeSelectionSeries[];
+}): string | null {
   const selected = options.next.find((item) => item.id === options.previousCurrentId);
   if (selected && !isDevotionalArchived(selected)) {
     return selected.id;
   }
 
-  const candidates = withUnheldPulledSeries(options.next, options.pulled);
   const previousById = new Map(options.previous.map((item) => [item.id, item]));
   let chosenId: string | null = null;
   let chosenClock = Number.NEGATIVE_INFINITY;
@@ -73,49 +57,9 @@ export function selectSyncedCurrentDevotionalId(options: SyncedSelection): strin
     }
   }
   const chosen = options.next.find((series) => series.id === chosenId);
-  if (chosen && outranksActiveSiblings(chosen, candidates)) return chosen.id;
-  const paused = selected ?? options.next.find((series) => series.id === options.awaitingSuccessorOf);
-  return paused ? selectPausedCurrentSuccessor(paused, options.next, candidates) : null;
-}
-
-/**
- * The series the server writes now, when this device does not hold it yet:
- * the strict active winner of the held rows and every pulled row. Until a
- * full sync brings it, the held rows alone prove nothing about the server's
- * series.
- */
-export function selectUnheldActiveSeriesId(
-  next: readonly ResumeSelectionSeries[],
-  pulled: readonly ResumeSelectionSeries[] = [],
-): string | null {
-  const candidates = withUnheldPulledSeries(next, pulled);
-  const unheld = candidates.slice(next.length);
-  return unheld.find((series) => isStrictActiveSeriesWinner(series.id, candidates))?.id ?? null;
-}
-
-/**
- * "Continue this series" on another device resumes one series and pauses the
- * current one on the same clock, but the pause can reach the server long after
- * the resume. Once the resume was pulled its clock no longer reads as newer,
- * so when the pause lands, follow the strict active winner: the series the
- * server generates, proven on every held and pulled row. It must rank at or
- * above the paused series on the server's clock (the later of start and
- * resume, for both), so only a series resumed or started at or after the
- * pause qualifies. A device clock running slow can stamp the pause before an
- * older series' last resume, though the paused series began after it; the
- * paused series' start keeps that older series off Today. A winner this
- * device does not hold yet leaves Today empty until a full sync brings it.
- */
-function selectPausedCurrentSuccessor(
-  paused: ResumeSelectionSeries,
-  held: readonly ResumeSelectionSeries[],
-  candidates: readonly ResumeSelectionSeries[],
-): string | null {
-  if (lifecycleTimestampMs(paused.archivedStateAt) === 0) return null;
-  const pausedRank = activeSeriesRank(paused);
-  const successor = held.find((series) => activeSeriesRank(series) >= pausedRank
-    && isStrictActiveSeriesWinner(series.id, candidates));
-  return successor?.id ?? null;
+  return chosen && outranksActiveSiblings(chosen, withUnheldPulledSeries(options.next, options.pulled))
+    ? chosen.id
+    : null;
 }
 
 function isAcceptedExplicitResume(

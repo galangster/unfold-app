@@ -1302,8 +1302,13 @@ describe('pulled series lifecycle', () => {
 
   // "Continue this series" on another device resumes series-1 at once and
   // pauses series-2 on the same clock through its outbox, which can drain
-  // much later. This device then pulls the two writes separately.
-  it.each(['separate pulls', 'one pull'] as const)('moves Today to a series resumed elsewhere when the pause arrives in %s', (order) => {
+  // later. One pull carrying both moves Today to series-1. In separate pulls
+  // the resume no longer reads as newer once the pause lands, so Today stays
+  // empty, as before this release.
+  it.each([
+    ['separate pulls', null],
+    ['one pull', 'series-1'],
+  ] as const)('follows a series resumed elsewhere only when the pause arrives in one pull with it: %s', (order, landsOn) => {
     useUnfoldStore.setState({
       devotionals: [
         localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
@@ -1330,7 +1335,7 @@ describe('pulled series lifecycle', () => {
     }
 
     const state = useUnfoldStore.getState();
-    expect(state.currentDevotionalId).toBe('series-1');
+    expect(state.currentDevotionalId).toBe(landsOn);
     expect(state.devotionals.find((item) => item.id === 'series-2')).toMatchObject({
       archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, currentDay: 4,
     });

@@ -9,9 +9,10 @@ import {
   mergeDevotionalLifecycle,
   parseLifecycleTimestamp,
 } from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
-import { selectSyncedToday, useUnfoldStore } from './store';
+import { useUnfoldStore } from './store';
 import { peekSyncOutbox } from './sync-outbox';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
@@ -758,7 +759,11 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
 
     return {
       devotionals,
-      ...selectSyncedToday(state, devotionals),
+      currentDevotionalId: selectSyncedCurrentDevotionalId({
+        previousCurrentId: state.currentDevotionalId,
+        previous: previousDevotionals,
+        next: devotionals,
+      }),
       // Journal rows the server minted before entry ids were day-derived still
       // carry random ids, so upserting them by id alone re-creates exactly the
       // per-day duplicates the v41→42 migration merged. Collapse the day again

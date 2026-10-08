@@ -1,4 +1,4 @@
-import { selectSyncedCurrentDevotionalId, selectUnheldActiveSeriesId } from '../devotional-resume-selection';
+import { selectSyncedCurrentDevotionalId } from '../devotional-resume-selection';
 
 const ARCHIVE_AT = '2026-09-12T15:00:00.000Z';
 const RESUME_AT = '2026-09-12T16:00:00.000Z';
@@ -114,7 +114,10 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
   const resumedB = { ...pausedB, archivedAt: null, archivedStateAt: RESUME_AT };
   const pausedX = { ...liveX, archivedAt: RESUME_AT, archivedStateAt: RESUME_AT };
 
-  it('follows the resumed series when the resume and the pause arrive in separate pulls', () => {
+  // Once the resume was pulled it no longer reads as newer, so the pull that
+  // lands the pause leaves Today empty, as before. A sync never guesses a
+  // successor from rows that do not prove the server's series.
+  it('leaves Today empty when the resume and the pause arrive in separate pulls', () => {
     const afterResume = selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
       previous: [liveX, pausedB],
@@ -125,7 +128,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
       previousCurrentId: afterResume,
       previous: [liveX, resumedB],
       next: [pausedX, resumedB],
-    })).toBe('series-b');
+    })).toBeNull();
   });
 
   it('follows the resumed series when both arrive in one pull', () => {
@@ -136,28 +139,22 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     })).toBe('series-b');
   });
 
-  it('never follows a series that is not the strict active winner', () => {
-    const select = (next: Array<Record<string, unknown> & { id: string }>) => selectSyncedCurrentDevotionalId({
+  // The server writes the strict active winner. A resume that another live
+  // series ranks with or above is not the series it writes.
+  it('never follows a resume that another live series outranks', () => {
+    const select = (others: Array<Record<string, unknown> & { id: string }>) => selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
-      previous: [liveX, ...next.filter((series) => series.id !== 'series-x')],
-      next: [pausedX, ...next],
+      previous: [liveX, pausedB, ...others],
+      next: [pausedX, resumedB, ...others],
     });
-    // No other series: Today stays empty.
-    expect(select([])).toBeNull();
-    // Archived, onboarding-sample and batch rows are never candidates.
-    expect(select([{ ...resumedB, archivedAt: RESUME_AT }])).toBeNull();
-    expect(select([{ ...resumedB, id: 'onboarding-sample-device' }])).toBeNull();
-    expect(select([{ ...resumedB, generationMode: 'batch' }])).toBeNull();
-    // A live sibling on the same clock leaves no strict winner.
-    expect(select([resumedB, { ...resumedB, id: 'series-c' }])).toBeNull();
-    // A newer live series that only this pull brings outranks the resume:
-    // the server writes it, so Today follows it and not the resume. The proof
-    // runs on the pulled rows, not on the copy held before the pull.
-    expect(selectSyncedCurrentDevotionalId({
-      previousCurrentId: 'series-x',
-      previous: [liveX, resumedB],
-      next: [pausedX, resumedB, { id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' }],
-    })).toBe('series-c');
+    // A newer live series held here: the server writes that one.
+    expect(select([{ id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' }])).toBeNull();
+    // A live series on the same clock leaves no strict winner.
+    expect(select([{ id: 'series-c', createdAt: RESUME_AT, generationMode: 'progressive' }])).toBeNull();
+    // Archived, onboarding-sample and batch rows are never the server's series.
+    expect(select([{ id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'progressive', archivedAt: NEWER_RESUME_AT, archivedStateAt: NEWER_RESUME_AT }])).toBe('series-b');
+    expect(select([{ id: 'onboarding-sample-device', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' }])).toBe('series-b');
+    expect(select([{ id: 'series-c', createdAt: NEWER_RESUME_AT, generationMode: 'batch' }])).toBe('series-b');
   });
 
   // The pull of series-x carries a series started elsewhere after the
@@ -171,10 +168,8 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
       pulled: [pausedX, resumedB, startedElsewhere],
     };
     expect(selectSyncedCurrentDevotionalId(selection)).toBeNull();
-    expect(selectUnheldActiveSeriesId(selection.next, selection.pulled)).toBe('series-n');
     // Without the pulled rows the resume would win.
     expect(selectSyncedCurrentDevotionalId({ ...selection, pulled: undefined })).toBe('series-b');
-    expect(selectUnheldActiveSeriesId(selection.next, [pausedX, resumedB])).toBeNull();
   });
 
   // Ending a series to start a new one archives the current series too. An
@@ -198,14 +193,6 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
       previousCurrentId: 'series-x',
       previous: [startedAfter, olderResumed],
       next: [{ ...startedAfter, archivedAt: OLDER_AT, archivedStateAt: OLDER_AT }, olderResumed],
-    })).toBeNull();
-  });
-
-  it('leaves Today empty when the archive carries no clock to match a resume', () => {
-    expect(selectSyncedCurrentDevotionalId({
-      previousCurrentId: 'series-x',
-      previous: [liveX, resumedB],
-      next: [{ ...liveX, archivedAt: RESUME_AT }, resumedB],
     })).toBeNull();
   });
 });
