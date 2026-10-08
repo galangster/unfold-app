@@ -155,6 +155,7 @@ import {
 } from '@/lib/auto-trial-intent';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { ensureInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { forgetReplacedSeriesUnlessPending } from '@/lib/series-replacement';
 import { resolveCompanionDisplayName, resolveCompanionNameToPersist } from '@/lib/support-clarity';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
@@ -1820,6 +1821,8 @@ export default function OnboardingScreen() {
     }) as StepId | null;
     if (!prevStepId && isNewSeriesFlow) {
       Keyboard.dismiss();
+      // Leaving before a new series is asked for keeps the current one.
+      forgetReplacedSeriesUnlessPending();
       router.dismissTo('/(tabs)/(today)');
       return;
     }
