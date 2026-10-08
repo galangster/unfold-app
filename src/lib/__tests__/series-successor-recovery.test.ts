@@ -254,6 +254,7 @@ describe('a full sync already in flight when a pull sees the new series', () => 
     pullRequests[1](fullSync([newN]));
     await settle();
     expect(today()).toBe('series-n');
+    expect(useUnfoldStore.getState().awaitingSuccessorOf).toBeNull();
   });
 
   it('pulls once more and no further when that pull misses the new series too', async () => {
@@ -313,6 +314,28 @@ describe('a full sync already in flight when a pull sees the new series', () => 
     expect(pullRequests).toHaveLength(1);
   });
 
+  // The reader signs in to another account while the old account's request
+  // is in flight. Its series-r was continued at 16:02, before series-n began.
+  it('lets the next account\'s first full sync ignore the rows the old account\'s pull saw', async () => {
+    const resumedR = series('series-r', { createdAt: '2026-09-01T00:00:00.000Z' });
+    await endSeriesXWhileAppStartPullIsInFlight();
+    const reset = beginLocalResetSession();
+    useUnfoldStore.getState().reset();
+    endLocalResetSession(reset);
+
+    void triggerUserDataPull('app-start');
+    await settle();
+    expect(pullRequests).toHaveLength(2);
+    pullRequests[1](fullSync([resumedR, { archivedAt: null, archivedStateAt: '2026-09-12T16:02:00.000Z' }]));
+    await settle();
+    expect(today()).toBe('series-r');
+
+    pullRequests[0](fullSync());
+    await settle();
+    expect(pullRequests).toHaveLength(2);
+    expect(today()).toBe('series-r');
+  });
+
   // Elsewhere series-x ended, series-q began and ended, and series-n began,
   // all while the app-start request was in flight. Its rows show series-q
   // live; the pull of series-x already showed it ended.
@@ -360,6 +383,71 @@ describe('Today emptied by the end of its series', () => {
     await settle();
 
     expect(today()).toBe('series-n');
+  });
+
+  // Once the follow-up ends, the rows the pull saw no longer count. Elsewhere
+  // the reader deleted series-n and continued series-m on a device whose
+  // clock runs slow, so series-m ranks below series-n.
+  it('selects from what a later full sync brings once the follow-up ended', async () => {
+    const pausedM = series('series-m', { createdAt: '2026-09-01T00:00:00.000Z', ...ended('2026-09-10T00:00:00.000Z') });
+    useUnfoldStore.setState({ devotionals: [liveX, pausedM], currentDevotionalId: 'series-x' });
+    pullOneSeries('series-x', [seriesRow(liveX, ended(ENDED_AT)), seriesRow(newN)]);
+    await settle();
+    await failEveryPull();
+    expect(today()).toBeNull();
+
+    void triggerUserDataPull('reconnect');
+    await settle();
+    const reply = fullSync([pausedM, { archivedAt: null, archivedStateAt: '2026-09-12T16:02:00.000Z' }]);
+    reply.changes.devotionals!.push({
+      id: 'series-n',
+      updatedAt: '2026-09-12T16:10:00.000Z',
+      deleted: true,
+      data: { deletedAt: '2026-09-12T16:10:00.000Z', clientUpdatedAt: '2026-09-12T16:10:00.000Z' },
+    });
+    pullRequests[pullRequests.length - 1](reply);
+    await settle();
+
+    expect(today()).toBe('series-m');
+  });
+
+  // An app-start full sync lands the end of series-x before series-n exists.
+  it('waits when a full sync ends the series Today shows, and follows the series a later full sync brings', async () => {
+    useUnfoldStore.setState({ devotionals: [liveX], currentDevotionalId: 'series-x' });
+    void triggerUserDataPull('app-start');
+    await settle();
+    pullRequests[0](fullSync([liveX, ended(ENDED_AT)]));
+    await settle();
+    expect(today()).toBeNull();
+    expect(useUnfoldStore.getState().awaitingSuccessorOf).toBe('series-x');
+
+    void triggerUserDataPull('reconnect');
+    await settle();
+    pullRequests[1](fullSync([newN]));
+    await settle();
+    expect(today()).toBe('series-n');
+    expect(useUnfoldStore.getState().awaitingSuccessorOf).toBeNull();
+  });
+
+  it('stops waiting once a sync puts the new series on Today', async () => {
+    const laterM = series('series-m', { createdAt: '2026-09-12T17:00:00.000Z', seriesStartDate: '2026-09-12T17:00:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [liveX], currentDevotionalId: 'series-x' });
+    pullOneSeries('series-x', [seriesRow(liveX, ended(ENDED_AT))]);
+    void triggerUserDataPull('reconnect');
+    await settle();
+    pullRequests[0](fullSync([newN]));
+    await settle();
+    expect(today()).toBe('series-n');
+
+    // Deleting that series empties Today without ending a series elsewhere,
+    // so a series started later elsewhere does not take Today.
+    useUnfoldStore.getState().removeDevotional('series-n');
+    void triggerUserDataPull('reconnect');
+    await settle();
+    pullRequests[1](fullSync([laterM]));
+    await settle();
+
+    expect(today()).toBeNull();
   });
 
   // The reader started series-p here, which ended series-o. Another device
