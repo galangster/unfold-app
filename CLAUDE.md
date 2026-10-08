@@ -52,6 +52,9 @@ Run the named gates before you commit. Contract section 11 governs a push.
 bun run typecheck && bun run lint --quiet && bun run test
 ```
 
+Before you submit a build for App Review, run the release smoke in
+`docs/RELEASE-SMOKE.md`.
+
 Apple platform build, run, test, simulator, device, and log tasks use
 FlowDeck. Do not call `xcodebuild`, `xcrun`, `simctl`, or `devicectl`.
 

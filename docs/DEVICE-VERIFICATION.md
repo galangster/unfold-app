@@ -8,6 +8,10 @@ editor all lack web implementations, and Home white-screens on the Rive import.
 CI covers typecheck, lint, unit tests, and e2e selector integrity; everything
 visual or interactive has to happen here.
 
+Before you submit a build for App Review, run the release smoke in
+[RELEASE-SMOKE.md](RELEASE-SMOKE.md). Every simulator run also audits the
+design of what it visits ([§8](#design-audit-on-every-simulator-run)).
+
 ---
 
 ## 0. What FlowDeck is (and what it still needs)
@@ -159,7 +163,7 @@ Prefer `--by-id` over label matching — copy changes far more often than testID
 When you need a new hook, add a `testID` in the component rather than reaching
 for a text match.
 
-### Four things that will otherwise cost you an hour
+### Things that will otherwise cost you an hour
 
 - **Taps above roughly `y=150` are swallowed by sticky headers.** A row reported
   at `y=118` sits *under* the Settings header and the tap does nothing — but the
@@ -180,6 +184,34 @@ for a text match.
   limitation, **not** a dead selector — Maestro reads the native view hierarchy
   and sees them. Never "fix" a Maestro flow because FlowDeck can't find a
   container; you would be breaking a working test.
+- **UI commands wait for the app to go idle.** An endless animation, such as
+  the companion avatar, the Today rays or the onboarding embers, can hang
+  `tap`, `screen` and `batch`. Stop a command that hangs for 60 s. Capture the
+  screen with `flowdeck simulator frames`. Ask Nick before you drive that
+  screen with another tool.
+- **A label `tap` reaches only elements marked as buttons.** The founder
+  note's "Continue" and "Open your devotional" ignore it. Tap the centre of the
+  element's frame with `--point x,y`.
+- **`scroll --until "<label>"` reports Found for an element still off-screen.**
+  Use `swipe up`. Then read the screen again.
+- **Taps inside a React Native `Modal` need `--duration 0.05`.** The default
+  zero-length tap does nothing there.
+- **The first `open-url` after a launch is dropped.** Send it two times. When
+  iOS asks "Open in “Unfold”?", tap Open. It can need two taps.
+- **Tap a multi-line field before you type into it.** `type` can also drop the
+  text after a space. Type a short probe first. Check the probe. Then type the
+  rest.
+- **`flowdeck stop` can need a force kill, and it leaves `flowdeck logs` and
+  `run --log` streams running.** Stop those streams by hand. After a stop,
+  start a new UI session or use `screen --json`, because the old session's
+  captures go stale.
+- **The Lock Screen widget editor locks FlowDeck out.** `screen`, `tap` and
+  `swipe` wait 45 s for an unlock, then fail. `simulator frames` still
+  captures. A long press works as `tap --point x,y --duration 2.2`. To leave
+  the editor, press `simulator button lock` two times, then
+  `button swipe-home`.
+- **`frames` and `record` generate their own file names in `--output`.**
+  Rename the files after each capture.
 
 ## 5. Letting an agent drive it
 
@@ -265,6 +297,26 @@ for approval rather than declaring it fixed:
 
 Cover the cross-cutting matrix in §7 for anything visual: dark + light, Reduce
 Motion on + off, and a non-gold accent.
+
+### Design audit on every simulator run
+
+Nick's standing rule, 2026-10-08: whenever an agent drives the app on a
+simulator, for any reason, it also audits the design of everything it visits.
+A long findings list is the expected result. A missed issue is the failure.
+
+1. Audit each screen and transition for information architecture, UI and UX,
+   flow, copy and motion. Do this beside the check you came to run.
+2. Load `audit-ui` and `apple-hig`. Load `debug-animation` for motion. Add any
+   other design skill that fits the screen.
+3. Write each finding as: screen · severity (blocker, high, medium, low) ·
+   what is wrong · a BEFORE capture · two or three options · your pick.
+4. Capture motion as video with `flowdeck ui simulator record`. Use
+   `flowdeck simulator frames` for a burst of stills.
+5. Before you change anything visual, show Nick a BEFORE capture and an AFTER
+   for each option. An AFTER can be a mock, a prototype route or a throwaway
+   worktree build. For motion, show BEFORE and AFTER recordings.
+6. Change the app only after Nick picks an option. Then show the final BEFORE
+   and AFTER side by side, as above.
 
 ## 9. Reporting bugs
 

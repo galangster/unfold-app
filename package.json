@@ -21,6 +21,7 @@
     "verify:release": "node scripts/verify-release.mjs",
     "capture:release-proof": "node scripts/capture-release-proof.mjs",
     "test:release-proof": "node --test scripts/__tests__/release-proof.test.mjs",
+    "test:release-smoke": "node --test scripts/__tests__/release-smoke.test.mjs",
     "verify:report": "node scripts/verify-report.mjs",
     "prepare:bible-db": "node scripts/prepare-bible-db.mjs",
     "test": "jest --passWithNoTests",
