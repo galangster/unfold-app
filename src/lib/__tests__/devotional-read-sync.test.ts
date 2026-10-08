@@ -290,6 +290,17 @@ describe('syncDevotionalDayRead', () => {
     expect(peekSyncOutbox()).toEqual(buildDevotionalReadSyncChanges({ devotional, day, readAt }));
   });
 
+  it('queues the read before its first await, while the auth headers are still pending', () => {
+    jest.mocked(getAuthHeaders).mockReturnValueOnce(new Promise(() => undefined));
+    global.fetch = jest.fn() as unknown as typeof fetch;
+    const readAt = '2026-04-25T12:00:00.000Z';
+
+    void syncDevotionalDayRead({ devotional, day, readAt, isOnline: true });
+
+    expect(peekSyncOutbox()).toEqual(buildDevotionalReadSyncChanges({ devotional, day, readAt }));
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('clears the queued read once the server accepts it', async () => {
     const readAt = '2026-04-25T12:00:00.000Z';
     const changes = buildDevotionalReadSyncChanges({ devotional, day, readAt });
