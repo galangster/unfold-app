@@ -636,6 +636,35 @@ describe('ThreeStepPaywall decide-later exit', () => {
   });
 });
 
+/** The label inside the primary CTA. */
+function primaryCTALabel(tree: any): string | undefined {
+  return primaryCTA(tree).findAll((n: any) => typeof n.props?.children === 'string')[0]?.props.children;
+}
+
+// 1.1.18 release smoke (F02): page 1 said "Start Free Trial" but only moved to
+// page 2. The trial starts on the pricing page, so only that page asks for it.
+describe('ThreeStepPaywall CTA copy with a free trial', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+  });
+
+  it('says Continue on page 1 and asks to start the trial only on the last page', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+
+    expect(primaryCTALabel(tree)).toBe('Continue');
+    expect(findText(tree, 'Start Free Trial')).toHaveLength(0);
+
+    await pressPrimaryCTA(tree);
+    expect(primaryCTALabel(tree)).toBe('See your free trial');
+
+    await pressPrimaryCTA(tree);
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Screen 1 phone mockup sizing. The bezel used to be sized from the window
 // width alone (62% wide at 9:19.5), which made it taller than the page area on

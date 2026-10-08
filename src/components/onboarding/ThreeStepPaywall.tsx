@@ -178,7 +178,8 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
   if (!hasFreeTrial) {
     return isFinal ? 'Unlock Premium' : 'Continue';
   }
-  if (page === 0) return 'Start Free Trial';
+  // Page 1 only moves on. Only the page that starts the trial asks for it.
+  if (page === 0) return 'Continue';
   if (page === 1) return 'See your free trial';
   // No dollar figure in the CTA: a zero-dollar price there was the most
   // conspicuous price on the screen, competing with the billed amount (3.1.2c).
