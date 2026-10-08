@@ -74,11 +74,16 @@ import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote
 import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
+import { useRerenderAt } from '@/hooks/useRerenderAt';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { resolveGeneratingCloseCopy, resolveGeneratingGoHomeLabel } from '@/lib/support-clarity';
 import { resolveGeneratingPalette } from '@/lib/generating-palette';
-import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
+import {
+  canRetrySeriesReveal,
+  seriesRevealRetryOpensAtMs,
+  type SeriesRevealState,
+} from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -273,6 +278,9 @@ export default function GeneratingScreen() {
     [autoTrialHandoffId, autoState],
   );
   const autoSetUpSeries = auto.setUpSeries;
+  // Try again stays hidden until a rate limit's retry time. Nothing else
+  // renders the error screen then, so the screen renders itself.
+  useRerenderAt(autoTrialHandoffId ? seriesRevealRetryOpensAtMs(autoState) : null);
   const canRetry = autoTrialHandoffId
     ? canRetrySeriesReveal(autoState, Date.now())
     : canRetryJob;
