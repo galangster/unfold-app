@@ -67,9 +67,10 @@ const mockTodayStoreState: Record<string, unknown> = {
 };
 
 let mockSearchParams: Record<string, string> = {};
+const mockRouterPush = jest.fn();
 let mockIsTodayFocused = true;
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
+  useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: (callback: () => void | (() => void)) => require('react').useEffect(callback, [callback]),
@@ -134,7 +135,13 @@ jest.mock('@/components/home/DevotionalCard', () => ({
     return null;
   },
 }));
-jest.mock('@/components/home/TodayCardStack', () => ({ TodayCardStack: () => null }));
+let mockTodayStackCards: { kind: string; onPress?: () => void }[] = [];
+jest.mock('@/components/home/TodayCardStack', () => ({
+  TodayCardStack: (props: { cards: { kind: string; onPress?: () => void }[] }) => {
+    mockTodayStackCards = props.cards;
+    return null;
+  },
+}));
 jest.mock('@/components/home/GreetingRow', () => ({ GreetingRow: () => null }));
 jest.mock('@/components/home/BentoGrid', () => ({ BentoGrid: () => null }));
 jest.mock('@/components/home/SeriesCarousel', () => ({ SeriesCarousel: () => null }));
@@ -912,6 +919,113 @@ describe('Today midday check-in', () => {
     act(() => submitAfterReset({ mood: 5, moodLabel: 'Steady' }));
     expect(mockTodayStoreState.addCheckIn).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith('Check-in not saved', expect.any(String));
+  });
+});
+
+// Opening a saved line or a resume card is history, not a series choice. A
+// switch here unarchived the old series and moved the server's generation
+// target off the reader's live series.
+describe('Today keeps the current series when opening history', () => {
+  const CURRENT = mockTodayStoreState.devotionals as Record<string, unknown>[];
+  const ARCHIVED_AT = '2026-08-31T00:00:00.000Z';
+  const earlierSeries = {
+    id: 'earlier-series',
+    title: 'Earlier Series',
+    totalDays: 7,
+    currentDay: 4,
+    generationMode: 'progressive',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    seriesStartDate: '2026-08-01T00:00:00.000Z',
+    archivedAt: ARCHIVED_AT,
+    archivedStateAt: ARCHIVED_AT,
+    days: [{ id: 'earlier-series-day-3', devotionalId: 'earlier-series', dayNumber: 3, title: 'Day 3', isRead: true }],
+  };
+  const onboardingSample = {
+    id: 'onboarding-sample-first',
+    title: 'Your first reading',
+    totalDays: 1,
+    currentDay: 1,
+    createdAt: '2026-07-30T00:00:00.000Z',
+    archivedAt: ARCHIVED_AT,
+    archivedStateAt: ARCHIVED_AT,
+    days: [{ id: 'onboarding-sample-first-day-1', devotionalId: 'onboarding-sample-first', dayNumber: 1, title: 'Day 1', isRead: true }],
+  };
+  let saved: Record<string, unknown>;
+  let tree: { update: (element: React.ReactElement) => void; unmount: () => void } | null = null;
+
+  async function renderToday() {
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+  }
+
+  function stackCard(kind: string) {
+    return mockTodayStackCards.find((card) => card.kind === kind);
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    saved = { ...mockTodayStoreState };
+    mockTodayStackCards = [];
+    mockTodayStoreState.devotionals = [...CURRENT, earlierSeries, onboardingSample];
+  });
+
+  afterEach(() => {
+    if (tree) act(() => tree!.unmount());
+    tree = null;
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+  });
+
+  it.each([
+    ['an archived earlier series', 'earlier-series', 3, '1'],
+    ['the onboarding first reading', 'onboarding-sample-first', 1, '1'],
+    ['the current series', 'today-series', 1, undefined],
+  ] as const)('opens a saved line from %s without switching series', async (_label, devotionalId, dayNumber, readOnly) => {
+    mockTodayStoreState.highlights = [{
+      id: `highlight-${devotionalId}`,
+      devotionalId,
+      devotionalTitle: 'Series',
+      dayNumber,
+      dayTitle: `Day ${dayNumber}`,
+      highlightedText: 'A line worth keeping',
+      createdAt: '2026-08-10T00:00:00.000Z',
+    }];
+    await renderToday();
+
+    act(() => stackCard('remember-this')!.onPress!());
+
+    expect(mockTodayStoreState.setCurrentDevotional).not.toHaveBeenCalled();
+    expect(mockRouterPush).toHaveBeenLastCalledWith({
+      pathname: '/(tabs)/(today)/reading',
+      params: {
+        devotionalId,
+        dayNumber: String(dayNumber),
+        highlightId: `highlight-${devotionalId}`,
+        ...(readOnly ? { readOnly } : {}),
+      },
+    });
+  });
+
+  it('offers a resume card only for the current series and resumes without switching', async () => {
+    // A reflection written on a paused series from the library.
+    mockTodayStoreState.resumeContext = { route: 'journal', devotionalId: 'earlier-series', dayNumber: 3, devotionalTitle: 'Earlier Series' };
+    await renderToday();
+    expect(stackCard('resume')).toBeUndefined();
+
+    mockTodayStoreState.resumeContext = { route: 'journal', devotionalId: 'today-series', dayNumber: 1, devotionalTitle: 'Today Series' };
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    act(() => stackCard('resume')!.onPress!());
+
+    expect(mockTodayStoreState.setCurrentDevotional).not.toHaveBeenCalled();
+    expect(mockRouterPush).toHaveBeenLastCalledWith({
+      pathname: '/(tabs)/(today)/journal',
+      params: { devotionalId: 'today-series', dayNumber: '1' },
+    });
   });
 });
 
