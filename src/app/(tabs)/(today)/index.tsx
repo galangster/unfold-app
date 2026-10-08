@@ -1,0 +1,2002 @@
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { drainSyncOutbox } from '@/lib/sync-outbox';
+import { usePrevious } from '@/hooks/usePrevious';
+import { View, StyleSheet, Alert, AppState } from 'react-native';
+import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
+import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { Spacing } from '@/constants/spacing';
+import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
+import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
+import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
+import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
+import { useQuery } from '@tanstack/react-query';
+import { StreakBox } from '@/components/StreakBox';
+import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import { RippleLoader } from '@/components/RippleLoader';
+import { useUIState } from '@/lib/ui-state';
+import { StreakCelebration } from '@/components/StreakCelebration';
+import { CheckInSheet } from '@/components/CheckInSheet';
+import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
+import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
+import { syncWidgets } from '@/lib/widget-bridge';
+import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { useMiddayNotificationOpen } from '@/hooks/useMiddayNotificationOpen';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
+import { usePremiumNudge } from '@/hooks/usePremiumNudge';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import {
+  CHECKIN_NOT_SAVED_REASON,
+  CHECKIN_NOT_SAVED_TITLE,
+  getContentAwareEveningMessage,
+  getMiddayCheckInBody,
+} from '@/constants/check-in-messages';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { Duration, Ease } from '@/constants/animations';
+import { pollJobStatus } from '@/lib/generation-api';
+import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
+import {
+  hasInflightSeriesLanded,
+  readInflightGenerationJob,
+  resolveInflightResume,
+  resolvePreparingFirstSeriesTitle,
+  resolveTodayInflightAction,
+  type InflightGenerationJob,
+  type TodayInflightDecision,
+} from '@/lib/inflight-generation-job';
+import {
+  abandonPurchasedIntentBeforeNewSeries,
+  readAutoTrialIntent,
+  reconcileAutoTrialIntentOnLaunch,
+  settleLandedAutoTrialSeries,
+  transitionAutoTrialIntent,
+  type AutoTrialIntentV1,
+  type AutoTrialLaunchAction,
+} from '@/lib/auto-trial-intent';
+import { isAutoTrialSeries, isOnboardingFirstReading } from '@/lib/auto-trial-series';
+import { getDeviceId } from '@/lib/mmkv-storage';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { countReadDaysWithinBoundary } from '@/lib/series-path';
+import { classifyInitialArcPoll, type InitialArcPollResult } from '@/lib/inflight-initial-arc-watch';
+import { classifyPollFailure } from '@/lib/generation-poll-outcome';
+import { settleInflightInitialArcWatch } from '@/lib/initial-arc-result';
+import { useInflightInitialArcWatch } from '@/hooks/useInflightInitialArcWatch';
+import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
+import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
+import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import {
+  isReadableCurrentSeries,
+  resolveCreateNewDuringPendingInitial,
+  resolvePendingInitialArcResume,
+  type PendingInitialArcResume,
+} from '@/lib/support-clarity';
+import { captureSyncSession, isSyncSessionCurrent, subscribeLocalResetIdle } from '@/lib/sync-session-fence';
+import {
+  getCurrentDevotional,
+  getHomeDevotionalDayData,
+  getTodayCarryLine,
+  getTodayDayContext,
+  hasReadDevotionalToday,
+  localDayKey,
+  shouldAutoPrepareCurrentDevotionalDay,
+} from '@/lib/home-devotional-state';
+import {
+  getBridgeDayNumber,
+  getEveningWindDownDayNumber,
+  getMiddayCheckInDayNumber,
+} from '@/lib/today-companion-state';
+import { getReadingDayLabel } from '@/lib/devotional-day-access';
+import { resolveRitualCompletion } from '@/lib/ritual-session';
+import { getDeviceTimezone } from '@/lib/device-timezone';
+import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
+import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
+import { logBugEvent } from '@/lib/bug-logger';
+import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
+import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
+import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
+import { shouldShowCompletedEmberAmbience } from '@/lib/today-ambient-rive';
+
+const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
+const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
+const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
+const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
+const TODAY_RELATIONSHIP_SPACING = {
+  heroToOptionalStack: Spacing['5'],
+  heroToRhythm: Spacing['5'],
+  optionalStackToRhythm: Spacing['4'],
+  rhythmToBento: Spacing['3'],
+} as const;
+
+type TodayPremiumFeature = 'streak' | 'audio' | 'series' | 'general';
+
+function getTodayPremiumFeature(feature: string): TodayPremiumFeature {
+  if (feature === 'streak' || feature === 'audio' || feature === 'series') return feature;
+  return 'general';
+}
+
+type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bridge' | 'bridge-loading'>;
+
+// Zone components
+import { type ContextSlotType } from '@/lib/context-slot-priority';
+import { computeDevotionalState } from '@/components/home/compute-devotional-state';
+import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
+import { DevotionalCard } from '@/components/home/DevotionalCard';
+import { GreetingRow } from '@/components/home/GreetingRow';
+import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
+import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
+import { useAmbientPlayerScrollPadding, useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
+import { BentoGrid } from '@/components/home/BentoGrid';
+import { SeriesCarousel } from '@/components/home/SeriesCarousel';
+import { CompactStreakRow } from '@/components/home/CompactStreakRow';
+import { stripOuterQuotes } from '@/lib/cn';
+import { pickRememberThis, rememberThisQuote, rememberThisSource } from '@/lib/remember-this';
+
+function formatResumeRelativeTime(iso?: string): string {
+  if (!iso) return 'Saved just now';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 60) return `Saved ${diffMinutes}m ago`;
+  const hours = Math.floor(diffMinutes / 60);
+  if (hours < 24) return `Saved ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `Saved ${days}d ago`;
+}
+
+const REVEAL_RESUME_WINDOW_MS = 15_000;
+// Repeated foregrounds refresh Today at most once per cooldown, like the
+// day watch's own foreground discovery.
+const TODAY_FOREGROUND_REFRESH_COOLDOWN_MS = 10_000;
+
+function generatingRoute(autoTrialIntentId?: string | null): {
+  pathname: '/generating';
+  params?: { autoTrialIntentId: string };
+} {
+  return autoTrialIntentId
+    ? { pathname: '/generating', params: { autoTrialIntentId } }
+    : { pathname: '/generating' };
+}
+
+export function applyTodayAutoTrialFocus(i: {
+  intent: AutoTrialIntentV1 | null;
+  deviceId: string;
+  nowMs: number;
+  hasCompletedOnboarding: boolean;
+  landedDevotionalIds: readonly string[];
+  inflightJob: InflightGenerationJob | null;
+  revealGuardKey: string | null;
+  firstReadingIds?: readonly string[];
+  generationSessionStatus: import('@/lib/store').GenerationSessionStatus;
+  resolveInflight?: (
+    job: InflightGenerationJob | null,
+    status: import('@/lib/store').GenerationSessionStatus,
+  ) => TodayInflightDecision;
+}):
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: true;
+      navigation: { pathname: '/generating'; params?: { autoTrialIntentId: string } };
+      inflightDecision: null;
+      resumeGenerating: false;
+      settleIntent: AutoTrialIntentV1 | null;
+    }
+  | {
+      launchAction: AutoTrialLaunchAction;
+      skipResolver: false;
+      navigation: null;
+      inflightDecision: TodayInflightDecision;
+      resumeGenerating: boolean;
+      settleIntent: AutoTrialIntentV1 | null;
+    } {
+  const launchAction = reconcileAutoTrialIntentOnLaunch({
+    intent: i.intent,
+    deviceId: i.deviceId,
+    nowMs: i.nowMs,
+    hasCompletedOnboarding: i.hasCompletedOnboarding,
+    landedDevotionalIds: i.landedDevotionalIds,
+    inflightJob: i.inflightJob,
+    revealGuardKey: i.revealGuardKey,
+    firstReadingIds: i.firstReadingIds,
+  });
+
+  if (launchAction.action === 'open_reveal') {
+    return {
+      launchAction,
+      skipResolver: true,
+      navigation: generatingRoute(i.intent?.intentId),
+      inflightDecision: null,
+      resumeGenerating: false,
+      settleIntent: null,
+    };
+  }
+
+  const settleIntent = launchAction.action === 'mark_landed' && i.intent?.devotionalId
+    ? i.intent
+    : null;
+
+  if (launchAction.action === 'mark_landed' && launchAction.then === 'open_reveal' && i.intent) {
+    return {
+      launchAction,
+      skipResolver: true,
+      navigation: generatingRoute(i.intent.intentId),
+      inflightDecision: null,
+      resumeGenerating: false,
+      settleIntent,
+    };
+  }
+
+  const resolveInflight = i.resolveInflight ?? resolveTodayInflightAction;
+  const raw = resolveInflight(i.inflightJob, i.generationSessionStatus);
+  const inflightDecision = (
+    raw.action === 'resume-on-generating'
+    && i.inflightJob
+    && i.intent
+    && i.inflightJob.jobId === i.intent.jobId
+  )
+    ? { action: 'watch-on-today' as const, job: i.inflightJob }
+    : raw;
+
+  return {
+    launchAction,
+    skipResolver: false,
+    navigation: null,
+    inflightDecision,
+    resumeGenerating: inflightDecision.action === 'resume-on-generating',
+    settleIntent,
+  };
+}
+
+export default function HomeScreen() {
+  const readBudgetBlocked = useReadBudgetBlocked();
+  const router = useRouter();
+  const routeParams = useLocalSearchParams<{
+    voiceCheckInPrototype?: string | string[];
+    voiceCheckInDemo?: string;
+    focus?: string | string[];
+  }>();
+  const { colors } = useTheme();
+  const adaptiveLayout = useAdaptiveLayout();
+  const todayUsesSplit = adaptiveLayout.usesSplit;
+  // Two equal pages that meet on the window midline, where a folding display
+  // bends. The pane geometry carries its own offsets, so the frame sits flush
+  // with the safe-area edges instead of centering a capped column.
+  const todayPanes = resolveAdaptivePanes(adaptiveLayout);
+  const todayFrameStyle = todayPanes
+    ? adaptivePanesFrameStyle(todayPanes)
+    : adaptiveFrameStyle(
+        todayUsesSplit ? adaptiveLayout.splitMaxWidth : adaptiveLayout.clusterMaxWidth,
+      );
+  const todayColumnsStyle = todayUsesSplit
+    ? [styles.splitColumns, {
+        gap: todayPanes ? todayPanes.gutter : adaptiveLayout.columnGap,
+        minHeight: Math.max(0, adaptiveLayout.availableHeight - 200),
+      }]
+    : undefined;
+  const todayHeroColumnStyle = todayUsesSplit
+    ? [styles.splitHeroColumn, todayPanes ? { width: todayPanes.first } : styles.splitEqualColumn]
+    : undefined;
+  const todayTrailColumnStyle = todayUsesSplit
+    ? [styles.splitTrailColumn, todayPanes ? { width: todayPanes.second } : styles.splitEqualColumn]
+    : undefined;
+  // DevotionalCard sizes its hero from the width of its own column.
+  const todayHeroWidth = todayPanes
+    ? todayPanes.first
+    : todayUsesSplit
+      ? (adaptiveLayout.splitMaxWidth - adaptiveLayout.columnGap) / 2
+      : adaptiveLayout.clusterMaxWidth;
+  const { entering } = useAccessibleAnimation();
+  const user = useUnfoldStore((s) => s.user);
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const resumeContext = useUnfoldStore((s) => s.resumeContext);
+  const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
+  const updateUser = useUnfoldStore((s) => s.updateUser);
+  const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
+  const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
+  const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
+  const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
+  const markMiddayCheckInCompleted = useUnfoldStore((s) => s.markMiddayCheckInCompleted);
+  const beginRitualSession = useUnfoldStore((s) => s.beginRitualSession);
+  const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
+  const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
+  const feedbackLastDate = useUnfoldStore((s) => s.appFeedbackPromptLastDate);
+  const feedbackReadingsAtLast = useUnfoldStore((s) => s.appFeedbackReadingsAtLast);
+  const feedbackSeriesAtLast = useUnfoldStore((s) => s.appFeedbackSeriesAtLast);
+  const lastReviewDate = useUnfoldStore((s) => s.reviewPromptLastDate);
+  const recordAppFeedbackPrompt = useUnfoldStore((s) => s.recordAppFeedbackPrompt);
+  const [showAppFeedback, setShowAppFeedback] = useState(false);
+  const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
+  const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
+  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
+  const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
+  const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
+  const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
+  const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
+  const dismissedEveningCardDate = useUnfoldStore((s) => s.dismissedEveningCardDate);
+  const dismissedBridgeCardDate = useUnfoldStore((s) => s.dismissedBridgeCardDate);
+  const dismissedRememberThisCardDate = useUnfoldStore((s) => s.dismissedRememberThisCardDate);
+  const highlights = useUnfoldStore((s) => s.highlights);
+  const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
+  const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
+  const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
+  const setDismissedBridgeCardDate = useUnfoldStore((s) => s.setDismissedBridgeCardDate);
+  const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
+
+  const checkIns = useUnfoldStore((s) => s.checkIns);
+  const hasHydrated = useHasHydrated();
+
+  // Auto-navigate to reading when coming from the reveal screen.
+  // The reveal sets resumeContext with a fresh touchedAt timestamp,
+  // then navigates here. We detect the fresh context and immediately
+  // push to reading — avoids the home screen flash.
+  useEffect(() => {
+    if (!resumeContext?.touchedAt) return;
+    // Only auto-navigate for reading context (set by reveal.tsx).
+    // Journal context also sets resumeContext but should NOT trigger
+    // auto-navigate to reading — that steals focus from the journal.
+    if (resumeContext.route !== 'reading') return;
+    const age = Date.now() - new Date(resumeContext.touchedAt).getTime();
+    if (age < REVEAL_RESUME_WINDOW_MS) {
+      // Fresh from reveal — auto-navigate and clear
+      clearResumeContext();
+      router.push({
+        pathname: '/(tabs)/(today)/reading',
+        params: {
+          devotionalId: resumeContext.devotionalId,
+          dayNumber: String(resumeContext.dayNumber),
+        },
+      });
+    }
+  }, [resumeContext?.touchedAt]);
+
+  // Safe area insets for tooltip y-offset calculation
+  const insets = useSafeAreaInsets();
+
+  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<{
+    reading: { x: number; y: number; width: number; height: number } | null;
+    context: { x: number; y: number; width: number; height: number } | null;
+    rhythm: { x: number; y: number; width: number; height: number } | null;
+  }>({ reading: null, context: null, rhythm: null });
+  const readingTargetRef = useRef<View>(null);
+  const contextTargetRef = useRef<View>(null);
+  const rhythmTargetRef = useRef<View>(null);
+
+  const publishTooltipRect = useCallback((
+    key: 'reading' | 'context' | 'rhythm',
+    node: View | null,
+  ) => {
+    if (!node) {
+      setTooltipLayoutRects((prev) => (prev[key] === null ? prev : { ...prev, [key]: null }));
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
+      const horizontalInset = Spacing['6'];
+      const topInset = key === 'reading' ? Spacing['5'] : 0;
+      const rect = {
+        x: x + horizontalInset,
+        y: y + topInset,
+        width: Math.max(width - horizontalInset * 2, 0),
+        height: Math.max(height - topInset, 0),
+      };
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setTooltipLayoutRects((prev) => {
+        const previous = prev[key];
+        if (
+          previous &&
+          previous.x === rect.x &&
+          previous.y === rect.y &&
+          previous.width === rect.width &&
+          previous.height === rect.height
+        ) {
+          return prev;
+        }
+        return { ...prev, [key]: rect };
+      });
+    });
+  }, []);
+
+  const handleReadingLayout = useCallback(() => {
+    publishTooltipRect('reading', readingTargetRef.current);
+  }, [publishTooltipRect]);
+
+  const handleContextLayout = useCallback(() => {
+    publishTooltipRect('context', contextTargetRef.current);
+  }, [publishTooltipRect]);
+
+  const handleRhythmLayout = useCallback(() => {
+    publishTooltipRect('rhythm', rhythmTargetRef.current);
+  }, [publishTooltipRect]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      publishTooltipRect('reading', readingTargetRef.current);
+      publishTooltipRect('context', contextTargetRef.current);
+      publishTooltipRect('rhythm', rhythmTargetRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    adaptiveLayout.width,
+    adaptiveLayout.height,
+    adaptiveLayout.usesSplit,
+    insets.left,
+    insets.right,
+    insets.top,
+    publishTooltipRect,
+  ]);
+
+  // Scroll tracking for the hero DevotionalCard parallax
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+  const isTodayFocused = useIsFocused();
+
+  const [clockNow, setClockNow] = useState(() => new Date());
+  // The local day for day-dependent memos. Unlike clockNow it also moves at
+  // local midnight and on foreground, so a Today left mounted and focused
+  // overnight re-asks them the moment the app resumes. They key on the day,
+  // not the Date, so a foreground on the same day does not recompute them.
+  const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
+  // The minute clock follows the calendar clock, so on resume and at
+  // midnight the card's date decisions (read today, the day shown) move with
+  // the watch instead of up to a minute later.
+  useEffect(() => {
+    setClockNow(new Date());
+  }, [calendarNow]);
+  const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  // The check-in keeps the series and day it opened on, with that day's
+  // question and chips, until it closes, and the answer saves there. Neither a
+  // minute tick past midnight, the ritual carry-over window, nor a synced
+  // series change may move it to another day.
+  const [openedCheckIn, setOpenedCheckIn] = useState<{
+    devotionalId: string;
+    dayNumber: number;
+    question?: string;
+    chips?: string[];
+    /** A day still in preparation is not in the store yet; its answer saves anyway. */
+    dayInStore: boolean;
+    session: number;
+  } | null>(null);
+  const [showVoiceCheckInSheet, setShowVoiceCheckInSheet] = useState(false);
+  const [voiceCheckInAutoStart, setVoiceCheckInAutoStart] = useState(false);
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
+  const { gate, showExclusiveOffer, dismissOffer, handleOfferVerifiedExit } = useCreationGate();
+  const voiceCheckInPrototypeParam = Array.isArray(routeParams.voiceCheckInPrototype)
+    ? routeParams.voiceCheckInPrototype[0]
+    : routeParams.voiceCheckInPrototype;
+  const voiceCheckInsEnabled = isVoiceCheckInsEnabled()
+    || (isQaToolsEnabled() && voiceCheckInPrototypeParam === '1');
+
+  // Update clock-driven Today card visibility every minute — but only while
+  // this screen is focused. Home stays mounted behind other tabs and the
+  // reading stack, and an unfocused tick re-renders the whole screen for
+  // nothing. Refreshing on refocus covers time that passed while away.
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    setClockNow(new Date());
+    const interval = setInterval(() => {
+      setClockNow(new Date());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isTodayFocused]);
+
+  // Silently download Bible DB in background if not yet ready
+  const bibleDbTriggered = useRef(false);
+  useEffect(() => {
+    if (bibleDbTriggered.current) return;
+    const { status } = getBibleDbStatus();
+    if (status === 'ready' || status === 'downloading') return;
+    bibleDbTriggered.current = true;
+    // Fire-and-forget — no UI, no progress indicators
+    downloadBibleDb().catch(() => {});
+  }, []);
+
+  // In-flight series job from a previous screen or app session. Read
+  // only while Today is the focused screen, and re-read every time it gains
+  // focus and whenever the generation session moves (a submission resolving
+  // after the reader already left; the job settling). Focus, not mount: a
+  // /generating pushed on top of the tabs (RecommendedSeriesCard) leaves this
+  // instance mounted and unfocused, so a mount-only read could go stale, and
+  // an unfocused instance must never redirect. With the leftForHome marker
+  // the reader tapped "Go home — we'll keep writing": keep the record, show
+  // the preparing card and watch the job from here. Without it the record is
+  // app-kill recovery — and the server, never the record's age, decides
+  // where the reader goes: /generating is re-entered only while it reports
+  // the job alive or complete; a failed job settles here, as the watch would,
+  // so the failed card shows instead of a bounce into /generating's error
+  // state; an unreachable server keeps the record for the next focus. A
+  // server that answers "no such job" (404 / 400) is a verdict, not
+  // unreachable: that record is dropped too, or it would be kept forever.
+  const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
+  const generationSessionDevotionalId = useUnfoldStore((s) => s.generationSession.devotionalId);
+  const generationSessionTitle = useUnfoldStore((s) => s.generationSession.title);
+  const generationSessionError = useUnfoldStore((s) => s.generationSession.error);
+  const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
+  const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
+  const [pendingInitialResume, setPendingInitialResume] = useState<PendingInitialArcResume>('none');
+  const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
+  const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
+
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    const intent = readAutoTrialIntent();
+    const inflightJob = readInflightGenerationJob();
+    const focus = applyTodayAutoTrialFocus({
+      intent,
+      deviceId: getDeviceId(),
+      nowMs: Date.now(),
+      hasCompletedOnboarding: user?.hasCompletedOnboarding === true,
+      landedDevotionalIds: useUnfoldStore.getState().devotionals.map((row) => row.id),
+      firstReadingIds: useUnfoldStore.getState().devotionals
+        .filter(isOnboardingFirstReading)
+        .map((row) => row.id),
+      inflightJob,
+      revealGuardKey: useUIState.getState().autoTrialRevealGuardKey,
+      generationSessionStatus,
+    });
+    if (focus.launchAction.action === 'abandon') {
+      transitionAutoTrialIntent(
+        'abandoned',
+        { abandonReason: focus.launchAction.reason },
+        { nowMs: Date.now() },
+      );
+    }
+    if (focus.settleIntent?.devotionalId) {
+      settleLandedAutoTrialSeries(focus.settleIntent, focus.settleIntent.devotionalId);
+    }
+    setAutoIntent(readAutoTrialIntent());
+    if (focus.skipResolver) {
+      setInflightSeries(null);
+      setPendingInitialResume('none');
+      if (focus.navigation) {
+        router.push(focus.navigation);
+      }
+      return;
+    }
+    const decision = focus.inflightDecision;
+    if (decision.action !== 'resume-on-generating') {
+      if (decision.action === 'none') {
+        const store = useUnfoldStore.getState();
+        const pendingResume = resolvePendingInitialArcResume({
+          inflight: inflightJob,
+          requestId: readInitialGenerationRequestId(),
+          generationSessionStatus,
+          hasReadableCurrentSeries: isReadableCurrentSeries(
+            getCurrentDevotional(store.devotionals, store.currentDevotionalId),
+          ),
+          autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+        });
+        setPendingInitialResume(pendingResume);
+      } else {
+        setPendingInitialResume('none');
+      }
+      const next = decision.action === 'watch-on-today' ? decision.job : null;
+      // The same record read again on focus keeps its object, so the watch
+      // keyed on it is not restarted.
+      setInflightSeries((prev) => (
+        prev && next
+        && prev.jobId === next.jobId
+        && prev.devotionalId === next.devotionalId
+        && prev.submittedAt === next.submittedAt
+        && prev.leftForHome === next.leftForHome
+        && prev.superseded === next.superseded
+          ? prev
+          : next
+      ));
+      return;
+    }
+    setInflightSeries(null);
+    setPendingInitialResume('none');
+    const { jobId, devotionalId } = decision.job;
+    let cancelled = false;
+    const session = captureSyncSession();
+    void (async () => {
+      let poll: InitialArcPollResult;
+      try {
+        poll = { status: await pollJobStatus(jobId, session) };
+      } catch (err) {
+        poll = { error: err };
+        logger.warn(
+          classifyPollFailure(err) === 'job-gone'
+            ? '[home] Server does not hold the inflight job; dropping the record:'
+            : '[home] Could not check inflight job; keeping the record:',
+          err instanceof Error ? err.message : err,
+        );
+      }
+      if (cancelled || !isSyncSessionCurrent(session)) return;
+      const resume = resolveInflightResume(poll);
+      if (resume === 'resume') {
+        const serverStatus = 'status' in poll ? poll.status.status : null;
+        logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
+        // Navigate to generating screen — it will pick up the inflight job from MMKV
+        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+        return;
+      }
+      if (resume === 'discard') {
+        // The server's verdict (its failed status, or "no such job") is the
+        // failed outcome the watch would settle on; one poll with no history
+        // classifies it the same way. 'discard' is always settled — the
+        // check narrows the type.
+        const step = classifyInitialArcPoll(poll, {
+          consecutiveUnknown: 0,
+          consecutiveNetworkErrors: 0,
+          elapsedMs: 0,
+          fallbackDevotionalId: devotionalId,
+        });
+        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId]);
+  const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // The series failed after the reader left for Today (the watch below
+  // settled on a failure, or the submission itself failed). The session holds
+  // the error and the series never reached the store; without a card for it
+  // Today sat on the new-user empty state and said nothing. Try again
+  // re-enters /generating, which resumes the kept record when the watch only
+  // lost contact with the server, and otherwise submits a fresh job from the
+  // same answers.
+  const handleRetryInflightSeries = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+  }, [router]);
+  const handleResumePendingInitial = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({ pathname: '/generating' });
+  }, [router]);
+  const handleDismissInflightSeriesFailure = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    clearGenerationSession();
+    clearInitialGenerationRequestId();
+    setPendingInitialResume('none');
+  }, [clearGenerationSession]);
+
+  // Check premium status through the tri-state policy so QA premium override can
+  // unlock UI without mutating RevenueCat's persisted mirror.
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
+
+  // Premium sync handled globally by useRevenueCatSync in _layout.tsx
+
+  // Premium nudge system
+  const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'home' });
+
+  // Sync widget data whenever home screen mounts or re-focuses
+  // Also reset nudge session so one nudge can show per focus cycle
+  useFocusEffect(
+    useCallback(() => {
+      syncWidgets();
+      useUnfoldStore.getState().resetNudgeSession();
+    }, [])
+  );
+
+  // Refresh the current devotional from server sync when Today gains focus.
+  // Reading already has a missing-day fallback, but Home needs the same pull
+  // because the hero card is where users expect to discover Day 2+.
+  const refreshCurrentDevotional = useCallback(() => {
+    // Drain any queued offline completions before pulling new content
+    void drainSyncOutbox();
+
+    const devotionalId = currentDevotionalId;
+    if (!devotionalId || readBudgetBlocked) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = captureSyncSession();
+        const pulled = await pullDevotionalContent(devotionalId);
+        if (cancelled || !isSyncSessionCurrent(session)) return;
+
+        applyPulledDevotionalContent({
+          devotionalId,
+          pulled,
+          updateDevotionalDays,
+          updateDevotionals: updateSyncedDevotionals,
+        });
+        // Only after the content is in the store — a cancelled focus above
+        // discards the response, and must not advance the cursor.
+        commitDevotionalPullCursor(pulled);
+      } catch (err) {
+        if (err instanceof SyncPullRateLimitedError) {
+          void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
+            retryAfterSeconds: err.retryAfterSeconds,
+          }, 'warn');
+          return;
+        }
+        logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays]);
+  useFocusEffect(refreshCurrentDevotional);
+
+  // A warm resume is not a focus: iOS keeps Today mounted and focused while
+  // the app is suspended, so the refresh above would not run again until the
+  // reader left and came back. Run the same refresh on foreground too, so a
+  // day the server wrote overnight lands on the open screen.
+  const lastForegroundRefreshAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    let cancelForegroundRefresh: (() => void) | undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const now = Date.now();
+      const lastRefreshAt = lastForegroundRefreshAtRef.current;
+      if (lastRefreshAt !== null && now - lastRefreshAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastForegroundRefreshAtRef.current = now;
+      cancelForegroundRefresh?.();
+      cancelForegroundRefresh = refreshCurrentDevotional();
+    });
+    return () => {
+      subscription.remove();
+      cancelForegroundRefresh?.();
+    };
+  }, [isTodayFocused, refreshCurrentDevotional]);
+
+  // Check if today's reading has been completed — drives ember visibility.
+  // clockNow in deps + passed as `now`: recomputes each minute so "today"
+  // stays fresh across midnight while the screen stays mounted (COR-8).
+  const hasReadToday = useMemo(() => (
+    hasReadDevotionalToday({ devotionals, currentDevotionalId, now: clockNow })
+  ), [currentDevotionalId, devotionals, clockNow]);
+
+  // Streak celebration: once per calendar day, keyed off the unified streak
+  // engine's day-flip. streakLastReadDate is only written by recordStreakRead,
+  // which is a same-day no-op — so the key flips at most once per day and
+  // devotional switches cannot re-fire a misleading "+1" (COR-7).
+  const streakDayKey = getStreakDayKey(streakLastReadDate);
+  const prevStreakDayKey = usePrevious(streakDayKey);
+  const [showCelebration, setShowCelebration] = useState(false);
+  useEffect(() => {
+    if (shouldCelebrateStreakDayFlip({
+      prevDayKey: prevStreakDayKey,
+      dayKey: streakDayKey,
+      todayKey: new Date().toDateString(),
+    })) {
+      setShowCelebration(true);
+    }
+  }, [streakDayKey, prevStreakDayKey]);
+
+  const currentDevotional = useMemo(() => (
+    getCurrentDevotional(devotionals, currentDevotionalId)
+  ), [currentDevotionalId, devotionals]);
+
+  // Server-side generation handles content creation. The client only tracks
+  // whether the current day's content hasn't arrived yet (shows a loading card).
+  // Never show "preparing" for days beyond today's calendar position — those are
+  // tomorrow's content and shouldn't trigger auto-generation.
+  // The local day is an input: after an evening read currentDay is ahead of
+  // the calendar, so this is false until midnight and must turn true then
+  // without any store write, or the watch below never asks for the new day.
+  const isPreparingCurrentDay = useMemo(() => (
+    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy, calendarNow)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+  ), [currentDevotional, premiumPolicy, calendarDayKey]);
+
+  const dailyGeneration = useGeneratedDayWatch({
+    devotionalId: currentDevotional?.id,
+    dayNumber: currentDevotional?.currentDay,
+    enabled: isPreparingCurrentDay && isTodayFocused && !readBudgetBlocked,
+    canMutate: premiumPolicy === 'granted'
+      && currentDevotional?.id === currentDevotionalId
+      && isPreparingCurrentDay,
+    onDay: addGeneratedDay,
+  });
+
+  // The series the reader left /generating for. It is not in the store until
+  // the job finishes, so the preparing card is driven by the in-flight record
+  // and this watch lands day 1 (or the failure) exactly as /generating would
+  // have. The gate is "has that series landed", not "is there no devotional":
+  // a reader who tapped "Start study" on a finished journey still has that
+  // journey, and Today showed it — with the same "Start study" — as if the
+  // tap had done nothing. A churned account is paused, not preparing.
+  useInflightInitialArcWatch({
+    job: inflightSeries,
+    enabled: inflightSeries != null && isTodayFocused,
+    onSettled: onInflightSeriesSettled,
+  });
+  const isPreparingInflightSeries = inflightSeries != null
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
+  const isInflightSeriesFailed = inflightSeries == null
+    && generationSessionStatus === 'error'
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && premiumPolicy !== 'denied';
+
+  const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
+    if (!isQaToolsEnabled()) return null;
+    if (user?.aboutMe !== QA_TODAY_PROFILE_MARKER) return null;
+
+    const match = user.currentSituation.match(new RegExp(`${QA_TODAY_CONTEXT_SLOT_PREFIX} ([a-z-]+)`));
+    const slot = match?.[1];
+    if (slot === 'midday' || slot === 'evening' || slot === 'bridge' || slot === 'bridge-loading') return slot;
+    return null;
+  }, [user?.aboutMe, user?.currentSituation]);
+
+  const isQaPreparingLoadingPreview = isQaToolsEnabled()
+    && user?.aboutMe === QA_TODAY_PROFILE_MARKER
+    && user.currentSituation.includes(QA_TODAY_PREPARING_LOADING_MARKER);
+
+  // Daily Bridge — generate a personalized transition from yesterday to today
+  const bridgeInput = useMemo(() => {
+    if (qaContextSlot === 'bridge' || qaContextSlot === 'bridge-loading') return null;
+    if (!currentDevotional || !user?.name) return null;
+
+    const bridgeDayNumber = getBridgeDayNumber(currentDevotional, hasReadToday);
+    if (!bridgeDayNumber) return null;
+
+    const todayDay = (currentDevotional.days ?? []).find((d) => d.dayNumber === bridgeDayNumber);
+    if (!todayDay) return null;
+
+    // Find yesterday's check-in for the same allowed day the bridge introduces.
+    const yesterdayCheckIn = checkIns.find(
+      (c) => c.devotionalId === currentDevotional.id && c.dayNumber === bridgeDayNumber - 1
+    );
+
+    const bridgeCheckIn: BridgeCheckIn | undefined = yesterdayCheckIn
+      ? {
+          mood: yesterdayCheckIn.mood,
+          moodLabel: yesterdayCheckIn.moodLabel,
+          chipAnswer: yesterdayCheckIn.chipAnswer,
+          freeText: yesterdayCheckIn.freeText,
+        }
+      : undefined;
+
+    return {
+      input: {
+        userName: user.name,
+        yesterdayCheckIn: bridgeCheckIn,
+        todayTheme: todayDay.title,
+        todayScripture: todayDay.scriptureReference,
+        currentSituation: user.currentSituation || '',
+      },
+      devotionalId: currentDevotional.id,
+      dayNumber: bridgeDayNumber,
+    };
+  }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot, hasReadToday]);
+
+  const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
+    // Keyed to match generateBridge's own MMKV cache identity (devotional +
+    // day + calendar date). Embedding the whole input object here forked a new
+    // cache entry on every free-text profile edit for the same day's bridge.
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps -- input is deliberately not part of the bridge's cache identity
+    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, clockNow.toISOString().slice(0, 10)],
+    queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
+    enabled: isPremium && !!bridgeInput,
+    staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
+    retry: 1,
+  });
+
+  // Only the current series resumes from Today. A saved pointer to any other
+  // series (written before this rule, or before a series change) is ignored:
+  // following it would switch the series the server generates.
+  const resumeDevotional = useMemo(() => {
+    if (!resumeContext?.devotionalId || resumeContext.devotionalId !== currentDevotionalId) return null;
+    return devotionals.find((d) => d.id === resumeContext.devotionalId) ?? null;
+  }, [resumeContext?.devotionalId, currentDevotionalId, devotionals]);
+
+  const shouldShowResumeCard = useMemo(() => {
+    if (!resumeContext || !resumeDevotional) return false;
+    const isResumeDevotionalComplete = resumeDevotional.days.filter(d => d.isRead).length === resumeDevotional.totalDays;
+    if (isResumeDevotionalComplete) return false;
+    const resumeDay = resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber);
+    // Journal route — always show; user may want to add notes to a completed day
+    if (resumeContext.route === 'journal') return true;
+    // Reading route — hide if that specific day is already read (not just "current day advanced")
+    if (resumeDay?.isRead) return false;
+    return resumeContext.dayNumber !== resumeDevotional.currentDay;
+  }, [resumeContext, resumeDevotional]);
+
+  const handleContinueReading = (dayNumber?: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (dayNumber) {
+      router.push({ pathname: '/(tabs)/(today)/reading', params: { dayNumber: String(dayNumber) } });
+    } else {
+      router.push('/(tabs)/(today)/reading');
+    }
+  };
+
+  const handleOpenBible = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/(tabs)/(bible)');
+  }, [router]);
+
+  const handleRenewPremium = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowPremiumSheet(true);
+  }, []);
+
+  const handleResume = useCallback(() => {
+    if (!resumeContext || !resumeDevotional) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (resumeContext.route === 'journal') {
+      router.push({
+        pathname: '/(tabs)/(today)/journal',
+        params: {
+          devotionalId: resumeContext.devotionalId,
+          dayNumber: String(resumeContext.dayNumber),
+        },
+      });
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/(today)/reading',
+      params: {
+        dayNumber: String(resumeContext.dayNumber),
+      },
+    });
+  }, [resumeContext, resumeDevotional, router]);
+
+  const openNewSeriesDiscovery = () => {
+    abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
+    router.push({
+      pathname: '/onboarding',
+      params: { startAt: 'themeType', flow: 'newSeries' },
+    });
+  };
+
+  const handleCreateNew = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!gate()) return;
+    const pending = {
+      inflight: readInflightGenerationJob(),
+      requestId: readInitialGenerationRequestId(),
+      generationSessionStatus,
+      hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
+      autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+    };
+    if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
+      handleResumePendingInitial();
+      return;
+    }
+    if (currentDevotionalId) {
+      Alert.alert(
+        'Start a new series?',
+        'Starting a new series will end your current one.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => {
+              archiveCurrentDevotional();
+              openNewSeriesDiscovery();
+            },
+          },
+        ],
+      );
+    } else {
+      openNewSeriesDiscovery();
+    }
+  };
+
+  const openCheckInSheet = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentDevotional) {
+      const dayNumber = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
+      const day = currentDevotional.days.find((candidate) => candidate.dayNumber === dayNumber);
+      setOpenedCheckIn({
+        devotionalId: currentDevotional.id,
+        dayNumber,
+        question: day?.checkInQuestion,
+        chips: day?.checkInChips,
+        dayInStore: day !== undefined,
+        session: captureSyncSession(),
+      });
+      beginRitualSession({ kind: 'midday', devotionalId: currentDevotional.id, dayNumber });
+    }
+    setShowCheckInSheet(true);
+  }, [beginRitualSession, currentDevotional]);
+
+  const handleCheckIn = useCallback(() => {
+    if (!gate()) return;
+    openCheckInSheet();
+  }, [gate, openCheckInSheet]);
+
+  // An account reset ends an open check-in; its series and day no longer exist.
+  useEffect(() => subscribeLocalResetIdle(() => {
+    setShowCheckInSheet(false);
+    setOpenedCheckIn(null);
+  }), []);
+
+  const clearMiddayNotificationFocus = useCallback(() => {
+    router.setParams({ focus: '' });
+  }, [router]);
+
+  const handleLifeUpdate = useCallback(() => {
+    router.push('/life-update');
+  }, [router]);
+
+  const handleVoiceCheckIn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(true);
+    setShowVoiceCheckInSheet(true);
+  }, []);
+
+  const handleVoiceCheckInHistory = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setVoiceCheckInAutoStart(false);
+    setShowVoiceCheckInSheet(true);
+  }, []);
+
+  const handleCheckInComplete = (data: {
+    mood: MoodLevel;
+    moodLabel: string;
+    chipAnswer?: string;
+    freeText?: string;
+  }): boolean => {
+    const opened = openedCheckIn;
+    const store = useUnfoldStore.getState();
+    // An account reset ends the check-in: its words belong to the account that
+    // was removed, and the reset closes the sheet when it finishes.
+    if (!opened || !isSyncSessionCurrent(opened.session)) {
+      setShowCheckInSheet(false);
+      Alert.alert(CHECKIN_NOT_SAVED_TITLE, CHECKIN_NOT_SAVED_REASON);
+      return false;
+    }
+    // Save nothing when a sync deleted the opened series while the sheet was
+    // open, or when the opened day was in the store and is gone. A day still in
+    // preparation was never there. The sheet stays open: it says why, and it
+    // keeps the words the reader wrote.
+    const openedSeries = store.devotionals.find((devotional) => devotional.id === opened.devotionalId);
+    const dayGone = opened.dayInStore && !openedSeries?.days.some((day) => day.dayNumber === opened.dayNumber);
+    if (!openedSeries || dayGone) return false;
+    const clock = resolveRitualCompletion({
+      session: store.ritualSessions.midday,
+      identity: { kind: 'midday', devotionalId: opened.devotionalId, dayNumber: opened.dayNumber },
+      completedTimeZone: getDeviceTimezone(),
+    });
+    addCheckIn({
+      devotionalId: opened.devotionalId,
+      dayNumber: opened.dayNumber,
+      mood: data.mood,
+      moodLabel: data.moodLabel,
+      chipAnswer: data.chipAnswer,
+      freeText: data.freeText,
+      timeOfDay: 'midday',
+      createdAt: clock.iso,
+    });
+    // Record the completion date. The single-owner useCheckInNotifications
+    // hook does NOT react to this field — we keep the DAILY trigger on its
+    // recurring schedule and the trigger naturally recurs tomorrow. This
+    // replaces the old cancelAndRescheduleMiddayForTomorrow() helper which
+    // silently downgraded the DAILY trigger to a one-shot DATE trigger.
+    // See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
+    markMiddayCheckInCompleted(clock.localYmd);
+    store.clearRitualSession('midday');
+    setShowCheckInSheet(false);
+    return true;
+  };
+
+  const handleEveningWindDown = useCallback(() => {
+    if (!gate()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const targetDayNumber = getEveningWindDownDayNumber(currentDevotional);
+    if (currentDevotional && targetDayNumber) {
+      router.push({
+        pathname: '/(tabs)/(today)/evening-wind-down',
+        params: {
+          devotionalId: currentDevotional.id,
+          dayNumber: String(targetDayNumber),
+        },
+      });
+      return;
+    }
+    router.push('/(tabs)/(today)/evening-wind-down');
+  }, [currentDevotional, gate, router]);
+
+  // Check if midday/evening check-ins already completed for their target day.
+  // Midday follows the currently readable day. Evening follows the day actually
+  // completed today, including the final day where currentDay does not advance.
+  const middayCheckInDay = getMiddayCheckInDayNumber(currentDevotional);
+  const eveningCheckInDay = getEveningWindDownDayNumber(currentDevotional);
+  const todayCheckIn = currentDevotional && middayCheckInDay != null
+    ? getCheckIn(currentDevotional.id, middayCheckInDay, 'midday')
+    : undefined;
+  useMiddayNotificationOpen({
+    focus: routeParams.focus,
+    hasHydrated,
+    isTodayFocused,
+    policy: premiumPolicy,
+    currentDevotionalId: currentDevotional?.id ?? null,
+    hasCompletedMiddayCheckIn: Boolean(todayCheckIn),
+    gate,
+    openCheckIn: openCheckInSheet,
+    clearFocus: clearMiddayNotificationFocus,
+  });
+  const todayEveningCheckIn = currentDevotional && eveningCheckInDay != null
+    ? getCheckIn(currentDevotional.id, eveningCheckInDay, 'evening')
+    : undefined;
+
+  // Time-aware card visibility — cards appear during their window and expire naturally
+  // Midday: 12pm-5pm (afternoon)  |  Evening: 5pm-11:30pm
+  const currentHour = clockNow.getHours();
+  const currentMinute = clockNow.getMinutes();
+  const todayDate = clockNow.toLocaleDateString('en-CA');
+  const hasDismissedMiddayCardToday = dismissedMiddayCardDate === todayDate;
+  const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
+  const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
+
+  // Item 12 (highlights audit H9): the card draws from Bible highlights too.
+  const rememberedPick = useMemo(() => {
+    if (dismissedRememberThisCardDate === todayDate) return null;
+    return pickRememberThis(highlights, bibleHighlights, todayDate);
+  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate]);
+
+  const rememberedSource = useMemo(
+    () => (rememberedPick ? rememberThisSource(rememberedPick, devotionals) : ''),
+    [devotionals, rememberedPick],
+  );
+
+  const handleDay1ReviewOption = useCallback((option: 'love' | 'okay' | 'not-for-me') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setHasSeenDay1Review();
+    // The card promises "one quiet response helps Unfold shape the next few
+    // days" — make that true: persist the answer as a day-1 check-in so it
+    // syncs to the backend and reaches the generation memory for day 2.
+    // timeOfDay 'morning' = right-after-reading; a later real midday/evening
+    // check-in wins the backend's latest-row-per-day query, so this never
+    // masks a genuine mood entry.
+    const pulseDevotional = useUnfoldStore.getState().devotionals.find(
+      (d) => d.id === useUnfoldStore.getState().currentDevotionalId,
+    );
+    if (pulseDevotional) {
+      const pulse = {
+        love: { mood: 4 as const, moodLabel: 'This helped me' },
+        okay: { mood: 3 as const, moodLabel: 'Still settling' },
+        'not-for-me': { mood: 2 as const, moodLabel: 'Not for me' },
+      }[option];
+      addCheckIn({
+        devotionalId: pulseDevotional.id,
+        dayNumber: 1,
+        mood: pulse.mood,
+        moodLabel: pulse.moodLabel,
+        chipAnswer: `day1-pulse:${option}`,
+        timeOfDay: 'morning',
+      });
+    }
+  }, [setHasSeenDay1Review, addCheckIn]);
+
+  const daysCompleted = currentDevotional ? countReadDaysWithinBoundary(currentDevotional) : 0;
+  const totalDays = currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) : 0;
+  const progressPercent = currentDevotional && totalDays > 0 ? (daysCompleted / totalDays) * 100 : 0;
+  const inflightMatchesAuto = Boolean(
+    inflightSeries && autoIntent && inflightSeries.jobId === autoIntent.jobId,
+  );
+  const autoTrialActive = isAutoTrialSeries(currentDevotional) || inflightMatchesAuto;
+  const storedNextPick = currentDevotional?.days?.find((row) => row.dayNumber === totalDays)?.nextPick ?? null;
+  const homeDayData = getHomeDevotionalDayData(currentDevotional, clockNow);
+  const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
+  const setTodayReadingAvailable = useAmbientSoundChrome((state) => state.setTodayReadingAvailable);
+  const ambientPlayerPadding = useAmbientPlayerScrollPadding(100);
+  useEffect(() => {
+    setTodayReadingAvailable(Boolean(currentDevotional && activeCurrentDayData));
+    return () => setTodayReadingAvailable(false);
+  }, [activeCurrentDayData, currentDevotional, setTodayReadingAvailable]);
+  const isCurrentDevotionalComplete = currentDevotional ? totalDays > 0 && daysCompleted === totalDays : false;
+  const currentDayData = !isCurrentDevotionalComplete && hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead
+    ? activeCurrentDayData
+    : homeDayData;
+  const readingDayLabel = getReadingDayLabel(currentDevotional, currentDayData, clockNow);
+
+  const completionAmbienceKey = useMemo(() => {
+    if (!currentDevotional || !hasReadToday) return null;
+    const readDayKey = streakDayKey ?? todayDate;
+    const completedDayMarker = daysCompleted > 0 ? daysCompleted : currentDayData?.dayNumber ?? currentDevotional.currentDay;
+    return `${currentDevotional.id}:${readDayKey}:${completedDayMarker}`;
+  }, [currentDevotional, currentDayData?.dayNumber, daysCompleted, hasReadToday, streakDayKey, todayDate]);
+
+  const handleReflect = useCallback((dayNumber?: number) => {
+    if (!currentDevotional) return;
+    const targetDayNumber = dayNumber ?? currentDayData?.dayNumber ?? currentDevotional.currentDay;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/(tabs)/(today)/journal',
+      params: {
+        devotionalId: currentDevotional.id,
+        dayNumber: String(targetDayNumber),
+      },
+    });
+  }, [currentDevotional, currentDayData?.dayNumber, router]);
+
+  // Free-write draft + reflection status for the inline composer on the
+  // completed card, from the one store-backed derivation the card itself uses.
+  const {
+    freeWriteDraft: currentDayFreeWriteDraft,
+    reflectionStatus: currentDayReflectionStatus,
+  } = useCompletedDayReflection(currentDevotional?.id ?? '', currentDayData);
+
+  // Save mirrors journal.tsx's saveEntry: update the existing entry (including
+  // to empty — the user deleted their text), only create one for real content.
+  const handleSaveFreeWrite = useCallback((dayNumber: number, text: string) => {
+    if (!currentDevotional) return;
+    const store = useUnfoldStore.getState();
+    const entry = store.getJournalEntry(currentDevotional.id, dayNumber);
+    if (entry) {
+      store.updateJournalEntry(entry.id, text);
+    } else if (text.trim()) {
+      store.addJournalEntry({ devotionalId: currentDevotional.id, dayNumber, content: text });
+    }
+  }, [currentDevotional]);
+
+  // The card and the notification are the SAME copy, from the same function,
+  // on the same seed and day — not two paths that happen to agree.
+  //
+  // They used to diverge: the card took only the content-aware path while the
+  // notification preferred the companion nudge and then the carry line. So the
+  // midday card was the one surface that never showed the companion nudge,
+  // which is generated per reader per day and names something real from their
+  // life. Fixed 2026-09-12 at Nick's call.
+  // Stable within a local day, so the memos below actually memoise. The seed
+  // is cached after its first read; dayIndexFor is arithmetic on today's date,
+  // so recomputing it per render is free and it rolls over at local midnight
+  // without needing a remount.
+  const variationDayIndex = dayIndexFor(new Date());
+  const variation = useMemo(
+    () => ({ seed: copySeed(), dayIndex: variationDayIndex }),
+    [variationDayIndex],
+  );
+
+  // Resolved by the SAME helper the scheduler uses — deliberately not from
+  // `currentDayData`. Finishing today's reading advances `currentDay`, so
+  // `currentDayData` points at TOMORROW from that moment on, which is right
+  // for the rest of the home UI and wrong for copy about today. Raised by
+  // Greptile on PR #107.
+  const dayCopyContext = useMemo(
+    () => getTodayDayContext(currentDevotional, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, calendarDayKey],
+  );
+
+  const todayCarryLine = useMemo(
+    () => getTodayCarryLine(devotionals, currentDevotionalId, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [devotionals, currentDevotionalId, calendarDayKey],
+  );
+
+  const middayMessage = useMemo(
+    () => getMiddayCheckInBody(dayCopyContext, todayCarryLine, variation),
+    [dayCopyContext, todayCarryLine, variation],
+  );
+
+  // Evening deliberately still takes the content-aware path only. Its
+  // notification leads with the day's `act` — a task — and that is the right
+  // lead for a banner at 20:30 but not obviously right for a card the reader
+  // is already looking at. Aligning it is a product call, not a cleanup, and
+  // it has not been made. The midday divergence above was a plain defect: a
+  // card named for the companion nudge that never showed it.
+  const eveningMessage = useMemo(
+    () => getContentAwareEveningMessage(dayCopyContext, variation),
+    [dayCopyContext, variation],
+  );
+
+  // --- Derived state for zone components ---
+
+  const isJourneyComplete = isCurrentDevotionalComplete;
+  const isFirstDay = currentDevotional ? currentDevotional.currentDay === 1 && daysCompleted === 0 : false;
+  const isLastDay = currentDevotional ? currentDevotional.currentDay === totalDays : false;
+  const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
+
+  // True when today's reading is done and the card is previewing tomorrow's content
+  const isTomorrow = currentDevotional ? !isJourneyComplete && readingDayLabel === 'Tomorrow' : false;
+
+  // Extract a teaser sentence from tomorrow's bodyText to surface on the home card
+  const homeTomorrowTeaser = useMemo(() => {
+    if (!isTomorrow || !currentDayData?.bodyText) return null;
+    const stripped = currentDayData.bodyText
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+      .replace(/^---$/gm, '')
+      .trim();
+    const firstSentence = stripped.match(/^.+?[.!?]/s);
+    return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
+  }, [isTomorrow, currentDayData?.bodyText]);
+
+  const getCtaText = () => {
+    if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
+    if (isFirstDay) return "Start Today's Reading";
+    if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
+    if (streakCurrent >= 7) return 'Deepen Your Practice';
+    if (streakCurrent >= 3) return 'Stay Rooted';
+    if (streakCurrent >= 1) return 'Keep Going';
+    return 'Continue Reading';
+  };
+
+  const handleReveal = useCallback(() => {
+    if (!currentDevotional || !currentDayData) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/reveal',
+      params: {
+        devotionalId: currentDevotional.id,
+        dayNumber: String(currentDayData.dayNumber),
+        seriesTitle: currentDevotional.title,
+        dayTitle: currentDayData.title,
+        totalDays: String(currentDevotional.totalDays),
+      },
+    });
+  }, [currentDevotional, currentDayData, router]);
+
+  const effectiveBridgeText = qaContextSlot === 'bridge' ? QA_BRIDGE_TEXT : bridgeText;
+  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
+    ? effectiveBridgeText
+    : undefined;
+  const isEveningWindow = (currentHour >= 17 && currentHour < 23) || (currentHour === 23 && currentMinute < 30);
+  const isMiddayWindow = currentHour >= 12 && currentHour < 17;
+  const shouldShowEveningStackCard = !!currentDevotional
+    && isPremium
+    && !hasDismissedEveningCardToday
+    && !todayEveningCheckIn
+    && ((isEveningWindow && hasReadToday) || qaContextSlot === 'evening');
+  const shouldShowMiddayStackCard = !!currentDevotional
+    && isPremium
+    && !hasDismissedMiddayCardToday
+    && !todayCheckIn
+    && (isMiddayWindow || qaContextSlot === 'midday');
+  const shouldShowBridgeStackCard = !!currentDevotional
+    && isPremium
+    && !hasReadToday
+    && !!validBridgeText
+    && (!!bridgeInput || qaContextSlot === 'bridge');
+  const shouldShowBridgeLoadingStackCard = !!currentDevotional
+    && isPremium
+    && !hasReadToday
+    && !validBridgeText
+    && !hasDismissedBridgeCardToday
+    && ((bridgeLoading && !!bridgeInput) || qaContextSlot === 'bridge-loading');
+
+  const handleDismissResumeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    clearResumeContext();
+  }, [clearResumeContext]);
+
+  const handleDismissMiddayCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedMiddayCardDate(todayDate);
+  }, [setDismissedMiddayCardDate, todayDate]);
+
+  const handleDismissEveningCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedEveningCardDate(todayDate);
+  }, [setDismissedEveningCardDate, todayDate]);
+
+  const handleDismissBridgeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedBridgeCardDate(todayDate);
+  }, [setDismissedBridgeCardDate, todayDate]);
+
+  const handleSavedEchoPress = useCallback(() => {
+    if (!rememberedPick) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (rememberedPick.kind === 'bible') {
+      const h = rememberedPick.highlight;
+      router.push({
+        pathname: '/(tabs)/(bible)/reader',
+        params: { bookId: String(h.bookId), chapter: String(h.chapter), verse: String(h.verseStart) },
+      });
+      return;
+    }
+    // A saved line opens as history, like the Saved tab: it never changes
+    // which series Today and the server's generation follow.
+    const h = rememberedPick.highlight;
+    router.push({
+      pathname: '/(tabs)/(today)/reading',
+      params: {
+        devotionalId: h.devotionalId,
+        dayNumber: h.dayNumber.toString(),
+        highlightId: h.id,
+        ...(h.devotionalId !== currentDevotionalId ? { readOnly: '1' } : {}),
+      },
+    });
+  }, [currentDevotionalId, rememberedPick, router]);
+
+  const handleDismissRememberThisCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedRememberThisCardDate(todayDate);
+  }, [setDismissedRememberThisCardDate, todayDate]);
+
+  const handleDismissDay1ReviewCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setHasSeenDay1Review();
+  }, [setHasSeenDay1Review]);
+
+  const handlePremiumNudgeStackAction = useCallback(() => {
+    if (!premiumNudge) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStackPremiumFeature(getTodayPremiumFeature(premiumNudge.premiumFeature));
+  }, [premiumNudge]);
+
+  const handleDismissPremiumNudgeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    nudgeDismiss();
+  }, [nudgeDismiss]);
+
+  const handleStackPremiumSheetClose = useCallback(() => {
+    setStackPremiumFeature(null);
+    animateCardDismiss();
+    nudgeAction();
+  }, [nudgeAction]);
+
+  // Compute resume props for Today card stack
+  const resumeProps = useMemo(() => {
+    if (!shouldShowResumeCard || !resumeContext || !resumeDevotional) return undefined;
+
+    return {
+      onPress: handleResume,
+      label: resumeContext.route === 'journal'
+        ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
+          ? `Add to Day ${resumeContext.dayNumber}`
+          : 'Resume your reflection')
+        : 'Resume where you left off',
+      title: `${resumeDevotional.title} · Day ${resumeContext.dayNumber}${resumeContext.dayTitle ? `: ${resumeContext.dayTitle}` : ''}`,
+      timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
+    };
+  }, [handleResume, resumeContext, resumeDevotional, shouldShowResumeCard]);
+
+  const feedbackProgress = useMemo(() => getFeedbackProgress(devotionals), [devotionals]);
+  const showAppFeedbackCard = hasReadToday && shouldOfferAppFeedback({
+    ...feedbackProgress,
+    lastDate: feedbackLastDate,
+    readingsAtLast: feedbackReadingsAtLast,
+    seriesAtLast: feedbackSeriesAtLast,
+    lastReviewDate,
+  }, clockNow);
+  const dismissAppFeedbackCard = useCallback(() => {
+    recordAppFeedbackPrompt(feedbackProgress.readings, feedbackProgress.series);
+  }, [recordAppFeedbackPrompt, feedbackProgress]);
+  const openAppFeedback = useCallback(() => {
+    dismissAppFeedbackCard();
+    setShowAppFeedback(true);
+  }, [dismissAppFeedbackCard]);
+
+  const todayStackCards = useMemo<TodayCardStackCard[]>(() => {
+    const cards: TodayCardStackCard[] = [];
+
+    if (resumeProps) {
+      const isJournalResume = resumeProps.label.toLowerCase().includes('reflection') || resumeProps.label.toLowerCase().includes('add to day');
+      cards.push({
+        id: 'today-stack-resume',
+        kind: 'resume',
+        priority: 500,
+        eyebrow: resumeProps.label,
+        title: resumeProps.title,
+        body: resumeProps.timeAgo,
+        actionLabel: isJournalResume ? 'Open reflection' : 'Continue reading',
+        onPress: resumeProps.onPress,
+        onDismiss: handleDismissResumeCard,
+        accessibilityLabel: `${resumeProps.label}. ${resumeProps.title}. ${resumeProps.timeAgo}.`,
+        accessibilityHint: isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading',
+        dismissAccessibilityLabel: 'Dismiss resume stack card',
+        dismissAccessibilityHint: 'Clears this saved resume prompt without deleting your reading or reflection',
+        testID: 'today-stack-card-resume',
+      });
+    }
+
+    if (voiceCheckInsEnabled) {
+      cards.push({
+        id: 'today-stack-voice-check-in-prototype',
+        kind: 'voice-check-in',
+        priority: 450,
+        title: 'How’s your day going?',
+        body: 'Record, review, and choose when to send a voice check-in for transcription.',
+        actions: [
+          {
+            label: 'Record',
+            onPress: handleVoiceCheckIn,
+            accessibilityLabel: 'Record a voice check-in',
+            accessibilityHint: 'Starts recording after microphone permission',
+          },
+          {
+            label: 'Saved check-ins',
+            onPress: handleVoiceCheckInHistory,
+            accessibilityLabel: 'Review saved voice check-ins',
+            accessibilityHint: 'Opens saved transcripts without starting the microphone',
+            tone: 'secondary',
+          },
+        ],
+        accessibilityLabel: 'Voice check-in. How is your day going?',
+        accessibilityHint: 'Opens voice recording and saved check-ins',
+        testID: 'today-stack-card-voice-check-in-prototype',
+      });
+    }
+
+    if (shouldShowEveningStackCard) {
+      cards.push({
+        id: 'today-stack-evening',
+        kind: 'evening',
+        priority: 400,
+        title: 'How has your day been?',
+        body: eveningMessage,
+        actions: [
+          { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
+          { label: 'Wind down', onPress: handleEveningWindDown, accessibilityLabel: 'Wind down with today’s reading', accessibilityHint: 'Opens the evening reflection', tone: 'secondary' },
+        ],
+        onDismiss: handleDismissEveningCard,
+        accessibilityLabel: `How has your day been? ${eveningMessage}`,
+        accessibilityHint: 'Share a life update or open the evening reflection',
+        dismissAccessibilityLabel: 'Dismiss evening stack card',
+        dismissAccessibilityHint: 'Hides this evening check-in card for today',
+        testID: 'today-stack-card-evening',
+      });
+    }
+
+    if (shouldShowMiddayStackCard) {
+      cards.push({
+        id: 'today-stack-midday',
+        kind: 'midday',
+        priority: 300,
+        title: 'What’s happening in your life?',
+        body: middayMessage,
+        actions: [
+          { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
+          { label: 'Reflect', onPress: handleCheckIn, accessibilityLabel: 'Reflect on today’s reading', accessibilityHint: 'Opens the midday reflection', tone: 'secondary' },
+        ],
+        onDismiss: handleDismissMiddayCard,
+        accessibilityLabel: `What’s happening in your life? ${middayMessage}`,
+        accessibilityHint: 'Share a life update or reflect on today’s reading',
+        dismissAccessibilityLabel: 'Dismiss midday stack card',
+        dismissAccessibilityHint: 'Hides this midday check-in card for today',
+        testID: 'today-stack-card-midday',
+      });
+    }
+
+    if (shouldShowBridgeStackCard && validBridgeText) {
+      cards.push({
+        id: 'today-stack-bridge',
+        kind: 'bridge',
+        priority: 200,
+        title: 'A thread from yesterday to today',
+        body: validBridgeText,
+        onDismiss: handleDismissBridgeCard,
+        accessibilityLabel: validBridgeText,
+        accessibilityHint: 'A personal bridge into today’s reading',
+        dismissAccessibilityLabel: 'Dismiss bridge stack card',
+        dismissAccessibilityHint: 'Hides this bridge text for today',
+        testID: 'today-stack-card-bridge',
+      });
+    }
+
+    if (shouldShowBridgeLoadingStackCard) {
+      cards.push({
+        id: 'today-stack-bridge-loading',
+        kind: 'bridge-loading',
+        priority: 100,
+        title: 'Preparing today’s thread…',
+        body: 'A quiet bridge from yesterday to today will appear here when it is ready.',
+        onDismiss: handleDismissBridgeCard,
+        accessibilityLabel: 'Preparing today’s thread',
+        accessibilityHint: 'A personal bridge into today’s reading is loading',
+        dismissAccessibilityLabel: 'Dismiss bridge loading stack card',
+        dismissAccessibilityHint: 'Hides this bridge card for today',
+        testID: 'today-stack-card-bridge-loading',
+      });
+    }
+
+    if (rememberedPick) {
+      const quote = stripOuterQuotes(rememberThisQuote(rememberedPick));
+      cards.push({
+        id: `today-stack-remember-this-${rememberedPick.highlight.id}`,
+        kind: 'remember-this',
+        priority: 80,
+        title: 'A line worth carrying',
+        // Quoted highlight is genuinely variable-length — keep a real-overflow
+        // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
+        bodyQuote: { text: quote, color: rememberedPick.highlight.color ?? null },
+        body: rememberedSource,
+        bodyNumberOfLines: 3,
+        actionLabel: 'Open highlight',
+        onPress: handleSavedEchoPress,
+        onDismiss: handleDismissRememberThisCard,
+        accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
+        accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
+        dismissAccessibilityLabel: 'Dismiss saved highlight stack card',
+        dismissAccessibilityHint: 'Hides this saved highlight card for today without deleting the highlight',
+        testID: 'today-stack-card-remember-this',
+      });
+    }
+
+    if (showAppFeedbackCard) {
+      cards.push({
+        id: 'today-app-feedback',
+        kind: 'app-feedback',
+        priority: 65,
+        title: 'Help shape Unfold',
+        body: 'What’s been helpful? What could be better?',
+        actionLabel: 'Share feedback',
+        onPress: openAppFeedback,
+        onDismiss: dismissAppFeedbackCard,
+        accessibilityLabel: 'Help shape Unfold. Share feedback with the team.',
+        dismissAccessibilityLabel: 'Dismiss feedback invitation',
+        dismissAccessibilityHint: 'Waits at least 30 days before another invitation',
+        testID: 'today-stack-card-app-feedback',
+      });
+    }
+
+    if (showDay1Review) {
+      cards.push({
+        id: 'today-stack-day1-review',
+        kind: 'day1-review',
+        priority: 70,
+        title: 'Did today’s reading feel personal?',
+        body: 'One response helps shape the next few days.',
+        actions: [
+          {
+            label: 'This helped me',
+            onPress: () => { void handleDay1ReviewOption('love'); },
+            accessibilityLabel: 'This reading helped me',
+            accessibilityHint: 'Records what helped and shapes future readings',
+            tone: 'primary',
+          },
+          {
+            label: 'Still settling',
+            onPress: () => { void handleDay1ReviewOption('okay'); },
+            accessibilityLabel: 'This reading was still settling',
+            accessibilityHint: 'Records neutral feedback and dismisses this prompt',
+            tone: 'secondary',
+          },
+          {
+            label: 'Not for me',
+            onPress: () => { void handleDay1ReviewOption('not-for-me'); },
+            accessibilityLabel: 'This reading was not for me',
+            accessibilityHint: 'Records that this devotional did not fit and dismisses this prompt',
+            tone: 'secondary',
+          },
+        ],
+        onDismiss: handleDismissDay1ReviewCard,
+        accessibilityLabel: 'Day 1 reflection. Did today’s reading feel personal?',
+        accessibilityHint: 'Choose a response to dismiss this feedback prompt',
+        dismissAccessibilityLabel: 'Dismiss Day 1 review stack card',
+        dismissAccessibilityHint: 'Dismisses this Day 1 feedback prompt',
+        testID: 'today-stack-card-day1-review',
+      });
+    }
+
+    if (premiumNudge) {
+      const premiumTone = getPremiumNudgeCardTone(premiumNudge.type);
+      cards.push({
+        id: `today-stack-premium-${premiumNudge.type}`,
+        kind: 'premium-nudge',
+        priority: 50,
+        eyebrow: premiumTone.kicker,
+        title: premiumTone.title,
+        body: `${premiumNudge.message} ${premiumTone.footnote}`,
+        actionLabel: premiumNudge.cta,
+        onPress: handlePremiumNudgeStackAction,
+        onDismiss: handleDismissPremiumNudgeCard,
+        accessibilityLabel: `${premiumTone.kicker}. ${premiumTone.title}. ${premiumNudge.message}`,
+        accessibilityHint: 'Shows details about this Premium feature',
+        dismissAccessibilityLabel: 'Dismiss premium invitation stack card',
+        dismissAccessibilityHint: 'Hides this premium suggestion',
+        testID: 'today-stack-card-premium-nudge',
+      });
+    }
+
+    return cards;
+  }, [
+    handleLifeUpdate,
+    eveningMessage,
+    handleCheckIn,
+    handleDay1ReviewOption,
+    handleDismissBridgeCard,
+    handleDismissDay1ReviewCard,
+    handleDismissEveningCard,
+    handleDismissMiddayCard,
+    handleDismissPremiumNudgeCard,
+    handleDismissRememberThisCard,
+    handleDismissResumeCard,
+    handleEveningWindDown,
+    handleVoiceCheckIn,
+    handlePremiumNudgeStackAction,
+    handleSavedEchoPress,
+    middayMessage,
+    premiumNudge,
+    rememberedPick,
+    rememberedSource,
+    resumeProps,
+    shouldShowBridgeLoadingStackCard,
+    shouldShowBridgeStackCard,
+    showDay1Review,
+    showAppFeedbackCard,
+    openAppFeedback,
+    dismissAppFeedbackCard,
+    shouldShowEveningStackCard,
+    shouldShowMiddayStackCard,
+    validBridgeText,
+    voiceCheckInsEnabled,
+    handleVoiceCheckInHistory,
+  ]);
+
+  const hasOptionalTodayStack = todayStackCards.length > 0;
+  useEffect(() => {
+    if (!hasOptionalTodayStack) {
+      publishTooltipRect('context', null);
+    }
+  }, [hasOptionalTodayStack, publishTooltipRect]);
+
+  // Compute devotional card state
+  const devotionalState = computeDevotionalState({
+    currentDevotional: currentDevotional ?? null,
+    currentDayData,
+    hasReadToday,
+    dayLabel: readingDayLabel,
+    isJourneyComplete,
+    isPreparing: !hasReadToday && isPreparingCurrentDay,
+    dailyRecovery: isPreparingCurrentDay
+      ? {
+          ...dailyGeneration.state,
+          onCheckAgain: dailyGeneration.checkAgain,
+          onRetry: dailyGeneration.retry,
+        }
+      : null,
+    preparingInflightSeries: isPreparingInflightSeries
+      ? { seriesTitle: resolvePreparingFirstSeriesTitle(generationSessionTitle) }
+      : null,
+    inflightSeriesFailed: isInflightSeriesFailed
+      ? {
+          message: toFriendlyOnboardingGenerationError(generationSessionError ?? ''),
+          onTryAgain: handleRetryInflightSeries,
+          onDismiss: handleDismissInflightSeriesFailure,
+        }
+      : null,
+    pendingInitialResume: pendingInitialResume === 'offer-resume'
+      ? { onResume: handleResumePendingInitial }
+      : null,
+    premiumPolicy,
+    daysCompleted,
+    totalDays,
+    progress: progressPercent,
+    tomorrowTeaser: homeTomorrowTeaser,
+    onContinue: handleContinueReading,
+    onReflect: handleReflect,
+    onCreateNew: handleCreateNew,
+    onOpenBible: handleOpenBible,
+    onRenewPremium: handleRenewPremium,
+    onReveal: handleReveal,
+    ctaText: getCtaText(),
+    reflectionStatus: currentDayReflectionStatus,
+    freeWriteDraft: currentDayFreeWriteDraft,
+    onSaveFreeWrite: handleSaveFreeWrite,
+    autoTrialActive,
+  });
+
+  // During reveal → reading transition, render a centered ripple loader to
+  // smooth over the brief gap while the reading screen mounts and paints.
+  // The reading screen clears this flag ~650ms after mount.
+  const revealTransitioning = useUIState((s) => s.revealTransitioning);
+  if (revealTransitioning) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <RippleLoader size={140} color={colors.accent} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Layer 0: Ambient art — one completed-day ambience owner. The
+          selected option is stable for the completed devotional/day/date. */}
+      <AmbientArtCanvas
+        streakLevel={streakCurrent}
+        hasReadToday={hasReadToday}
+        stateType={devotionalState.type}
+        screenFocused={isTodayFocused}
+        completionAmbienceKey={completionAmbienceKey}
+      />
+
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        <Animated.ScrollView
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={todayFrameStyle}>
+          {/* Zone 1: Greeting */}
+          <GreetingRow
+            userName={user?.name}
+            avatarTestID="home-avatar-button"
+            onAvatarPress={() => router.push('/(tabs)/(you)')}
+            headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
+          />
+
+          <View style={todayColumnsStyle}>
+          {/* Zone 3: Hero Devotional — Today's primary act */}
+          <View ref={readingTargetRef} collapsable={false} onLayout={handleReadingLayout} style={todayHeroColumnStyle}>
+            {/* No entering here — DevotionalCard runs its own FadeIn; two nested fades compounded (audit #5) */}
+            <Animated.View>
+              <DevotionalCard
+                state={devotionalState}
+                seriesId={currentDevotional?.id}
+                progressIdentity={getDeviceId()}
+                screenFocused={isTodayFocused}
+                scrollY={scrollY}
+                isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
+                gateCreation={gate}
+                storedPick={autoTrialActive ? storedNextPick : undefined}
+                nonblockingResume={pendingInitialResume === 'offer-nonblocking-resume'
+                  ? { onResume: handleResumePendingInitial }
+                  : null}
+                ambienceVisible={shouldShowCompletedEmberAmbience({
+                  stateType: devotionalState.type,
+                  hasReadToday,
+                })}
+                relaxHeroMinHeight={todayUsesSplit}
+                availableWidth={todayHeroWidth}
+              />
+            </Animated.View>
+          </View>
+
+          <View style={todayTrailColumnStyle}>
+          {hasOptionalTodayStack && (
+            <View ref={contextTargetRef} collapsable={false} onLayout={handleContextLayout}>
+              <TodayCardStack
+                cards={todayStackCards}
+                colors={colors}
+                style={styles.todayStackWrapper}
+              />
+            </View>
+          )}
+
+          {/* Zone 6: Daily Rhythm */}
+          <View ref={rhythmTargetRef} collapsable={false} onLayout={handleRhythmLayout}>
+            <Animated.View
+              entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
+              style={[
+                styles.streakWrapper,
+                hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero,
+              ]}
+            >
+              <StreakBox
+                streakCount={streakCurrent}
+                hasReadToday={hasReadToday}
+                onPress={() => router.push('/streak-settings')}
+              />
+            </Animated.View>
+          </View>
+
+          {/* Zone 7: Bento Grid */}
+          <View style={styles.bentoWrapper}>
+            <BentoGrid />
+          </View>
+          </View>
+          </View>
+          </View>
+
+        </Animated.ScrollView>
+      </SafeAreaView>
+
+      {/* Drawn with or without a current series: an open check-in stays on
+          screen when a sync deletes the series Today shows. Without it the
+          reader's words would go with no message. */}
+      <CheckInSheet
+        visible={showCheckInSheet}
+        onClose={() => setShowCheckInSheet(false)}
+        onComplete={handleCheckInComplete}
+        // The day read today, fixed at open; never the prepared tomorrow
+        // that currentDayData points at after a morning read.
+        question={openedCheckIn?.question}
+        chips={openedCheckIn?.chips}
+      />
+
+      <AppFeedbackSheet visible={showAppFeedback} onClose={() => setShowAppFeedback(false)} source="reading-milestone" />
+
+      {voiceCheckInsEnabled && (
+        <VoiceCheckInSheet
+          visible={showVoiceCheckInSheet}
+          onClose={() => setShowVoiceCheckInSheet(false)}
+          demoMode={isQaToolsEnabled() && routeParams.voiceCheckInDemo === '1'}
+          initialDemoPhase="recording"
+          autoStart={voiceCheckInAutoStart}
+        />
+      )}
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature="series"
+      />
+
+      <PremiumFeatureSheet
+        visible={stackPremiumFeature !== null}
+        onClose={handleStackPremiumSheetClose}
+        feature={stackPremiumFeature ?? 'general'}
+      />
+
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={dismissOffer}
+        onPurchaseSuccess={handleOfferVerifiedExit}
+        surface="churned_sheet"
+        context="churned"
+      />
+
+      {/* Streak celebration — fires once when today's reading is completed */}
+      {showCelebration && (
+        <StreakCelebration
+          streak={streakCurrent}
+          onComplete={() => setShowCelebration(false)}
+        />
+      )}
+
+      {/* First-time onboarding tooltips — shown once, persisted in store.
+          Keyed by hasSeenHomeTooltips so the debug "Replay Home Tooltips"
+          button (which flips the flag back to false) forces a full remount
+          and clean re-measurement of the target rects. */}
+      <HomeOnboardingTooltips
+        key={String(hasSeenHomeTooltips)}
+        layoutRects={tooltipLayoutRects}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  todayStackWrapper: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.heroToOptionalStack,
+  },
+  streakWrapper: {
+    paddingHorizontal: Spacing['6'],
+  },
+  rhythmAfterHero: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.heroToRhythm,
+  },
+  rhythmAfterOptionalStack: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.optionalStackToRhythm,
+  },
+  bentoWrapper: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.rhythmToBento,
+  },
+  splitColumns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  splitHeroColumn: {
+    minWidth: 0,
+  },
+  splitTrailColumn: {
+    minWidth: 0,
+  },
+  // Only when an asymmetric inset leaves no room for two midline panes.
+  splitEqualColumn: {
+    flex: 1,
+  },
+});
