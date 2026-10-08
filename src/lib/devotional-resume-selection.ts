@@ -6,13 +6,32 @@ import { outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional
 
 export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
-/** The rows held here, plus every pulled row this device does not hold yet. */
-function withUnheldPulledSeries(
+/**
+ * The rows held here, each with a newer resume the pull returned for it, plus
+ * every pulled row this device does not hold yet. A pulled resume can wait for
+ * the full sync before it is saved, but the server already counts it, so it
+ * still blocks an older resume. Only resumes are laid over: a pulled pause
+ * waits for the full sync like any other write, so this can only keep Today
+ * empty, never choose for it. Nothing is saved from these rows.
+ */
+function withPulledSeries(
   next: readonly ResumeSelectionSeries[],
   pulled: readonly ResumeSelectionSeries[] = [],
 ): ResumeSelectionSeries[] {
-  const held = new Set(next.map((series) => series.id));
-  return [...next, ...pulled.filter((series) => !held.has(series.id))];
+  const pulledById = new Map(pulled.map((series) => [series.id, series]));
+  const held = next.map((series) => {
+    const copy = pulledById.get(series.id);
+    if (
+      !copy
+      || copy.archivedAt
+      || !(lifecycleTimestampMs(copy.archivedStateAt) > lifecycleTimestampMs(series.archivedStateAt))
+    ) {
+      return series;
+    }
+    return { ...series, archivedAt: null, archivedStateAt: copy.archivedStateAt };
+  });
+  const heldIds = new Set(next.map((series) => series.id));
+  return [...held, ...pulled.filter((series) => !heldIds.has(series.id))];
 }
 
 /**
@@ -57,7 +76,7 @@ export function selectSyncedCurrentDevotionalId(options: {
     }
   }
   const chosen = options.next.find((series) => series.id === chosenId);
-  return chosen && outranksActiveSiblings(chosen, withUnheldPulledSeries(options.next, options.pulled))
+  return chosen && outranksActiveSiblings(chosen, withPulledSeries(options.next, options.pulled))
     ? chosen.id
     : null;
 }

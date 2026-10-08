@@ -315,4 +315,34 @@ describe('a sync never moves Today to a series the server does not write', () =>
 
     expect(today()).toBe('series-b');
   });
+
+  // Greptile P1 on #207 (review comment 4213886856). Today is empty. Reading's
+  // pull of series-b carries its resume and a later resume of series-c, which
+  // this device holds paused. That clock waits for the full sync, but the
+  // server writes series-c, so the resume of series-b must not take Today.
+  it.each([
+    ['a later', '2026-09-12T16:10:00.000Z', null],
+    ['an earlier', '2026-09-12T15:00:00.000Z', 'series-b'],
+  ])('weighs %s resume of another held series that the same pull carries', (_label, resumedCAt, expected) => {
+    const pausedC = series('series-c', { createdAt: '2026-08-25T00:00:00.000Z', ...ended(PAUSED_AT) });
+    useUnfoldStore.setState({ devotionals: [pausedB, pausedC], currentDevotionalId: null });
+
+    pullOneSeries('series-b', [seriesRow(pausedB, resumed(RESUME_AT)), seriesRow(pausedC, resumed(resumedCAt))]);
+
+    expect(today()).toBe(expected);
+    expect(useUnfoldStore.getState().devotionals.find((item) => item.id === 'series-c'))
+      .toMatchObject(ended(PAUSED_AT));
+  });
+
+  // A pulled pause of a series held live here waits for the full sync, so it
+  // keeps blocking the resume until then: the check only ever empties Today.
+  it('keeps a series held live as a blocker until the full sync saves its pulled pause', () => {
+    // series-c began after series-b's resume, so while it is live it outranks it.
+    const liveC = series('series-c', { createdAt: '2026-09-12T16:30:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [pausedB, liveC], currentDevotionalId: null });
+
+    pullOneSeries('series-b', [seriesRow(pausedB, resumed(RESUME_AT)), seriesRow(liveC, ended('2026-09-12T16:45:00.000Z'))]);
+
+    expect(today()).toBeNull();
+  });
 });
