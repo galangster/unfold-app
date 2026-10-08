@@ -619,7 +619,7 @@ describe('resolveBlockedForwardReason', () => {
     });
 
     expect(resolveBlockedForwardReason(series, 5, 7, false, now)).toBe('daily-pace');
-    expect(BLOCKED_FORWARD_MESSAGES['daily-pace']).toBe("Tomorrow's reading unlocks after midnight");
+    expect(BLOCKED_FORWARD_MESSAGES['daily-pace']).toBe('Tomorrow’s reading unlocks after midnight');
   });
 
   it('says the next day is not ready when nothing read today holds it back', () => {
@@ -639,7 +639,7 @@ describe('resolveBlockedForwardReason', () => {
 
     expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('paused');
     // The day may be on the server, so the toast does not say it was never prepared.
-    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe("This series is paused, and its next day isn't on this device");
+    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe('This series is paused, and its next day isn’t on this device');
   });
 
   it('keeps the daily pace for a paused series whose next day is here', () => {

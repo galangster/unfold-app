@@ -112,10 +112,10 @@ export function resolveBlockedForwardReason(
 
 export const BLOCKED_FORWARD_MESSAGES: Record<BlockedForwardReason, string> = {
   'series-finished': 'This is the last day of this series',
-  paused: "This series is paused, and its next day isn't on this device",
-  'daily-pace': "Tomorrow's reading unlocks after midnight",
+  paused: 'This series is paused, and its next day isn’t on this device',
+  'daily-pace': 'Tomorrow’s reading unlocks after midnight',
   'finish-current': 'Finish this reading to open the next day',
-  'not-ready': "The next day isn't ready yet",
+  'not-ready': 'The next day isn’t ready yet',
 };
 
 /**

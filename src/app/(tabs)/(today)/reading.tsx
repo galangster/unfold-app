@@ -43,6 +43,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -1549,7 +1550,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
       // Announce completion to screen reader
       const announcement = completingLastDay
-        ? 'Congratulations! You\'ve completed this devotional series.'
+        ? 'Congratulations! You’ve completed this devotional series.'
         : `Day ${viewingDay} completed. Great job!`;
       AccessibilityInfo.announceForAccessibility(announcement);
 
@@ -2508,7 +2509,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 ? dailyBody
                 : isRetrying
                 ? 'Preparing the rest of this series.\nThis may take a moment.'
-                : `Day ${viewingDay} isn't ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
+                : `Day ${viewingDay} isn’t ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
             </Text>
 
             {!usesDailyRecovery && isWaitingForConnection && !isRetrying && (
@@ -2521,7 +2522,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   marginTop: 10,
                 }}
               >
-                Waiting for connection… we'll retry automatically when you're back online.
+                Waiting for connection… we’ll retry automatically when you’re back online.
               </Text>
             )}
 
@@ -3044,6 +3045,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   </TouchableOpacity>
                 </View>
 
+                {/* One quiet way on from a finished day: the return the
+                    completion celebration offers, in the reader's link style. */}
+                {isCompleted ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => router.replace(completionDismissTarget)}
+                    testID="reading-completed-return"
+                    accessibilityRole="button"
+                    style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: Spacing['2'] }}
+                  >
+                    <Text style={[Typography.uiMd, { color: colors.accent }]}>{completionReturnLabel}</Text>
+                  </TouchableOpacity>
+                ) : null}
+
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
                   {showIncompleteJourneyRetry && (
                     <View style={{ marginTop: 28, alignItems: 'center', paddingHorizontal: Spacing['5'] }}>
@@ -3069,7 +3084,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                             marginBottom: Spacing['4'],
                           }}
                         >
-                          Waiting for connection… we'll retry automatically when you're back online.
+                          Waiting for connection… we’ll retry automatically when you’re back online.
                         </Text>
                       )}
                       {!isWaitingForConnection && autoRetrySecondsLeft !== null && !isGeneratingMore && (
@@ -3186,6 +3201,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               </Animated.View>
               </View>
             </Animated.ScrollView>
+            {/* A soft edge under the header: text fades as it scrolls under
+                the header instead of being cut off. */}
+            <LinearGradient
+              testID="reader-header-fade"
+              pointerEvents="none"
+              colors={[colors.background, alpha(colors.background, 0)]}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: Spacing['6'] }}
+            />
             </Animated.View>
             </View>
               }

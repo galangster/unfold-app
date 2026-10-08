@@ -16,6 +16,7 @@ const SECOND_QUESTION = 'What would you set down tomorrow?';
 const DRAFT = 'In the walk home, before the phone came out.';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 let mockReducedMotion = true;
 const mockWindow = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLeft: 0, insetRight: 0 };
 
@@ -45,7 +46,7 @@ jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn() },
   useRouter: () => ({
     canGoBack: () => true,
-    replace: jest.fn(),
+    replace: mockReplace,
     push: mockPush,
     back: jest.fn(),
     setParams: jest.fn(),
@@ -618,6 +619,64 @@ describe('reader continuity across a pane change', () => {
       keyboardListeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } });
     });
     expect(isHiddenFromAccessibility(tree.root.findByType(DevotionalContent))).toBe(false);
+    act(() => tree.unmount());
+  });
+});
+
+describe('reader next step after a finished day', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockWindow, PHONE);
+    useUnfoldStore.getState().reset();
+  });
+
+  afterEach(() => {
+    useUnfoldStore.getState().reset();
+  });
+
+  function returnLinks(root: Node) {
+    return root.findAllByProps({ testID: 'reading-completed-return' })
+      .filter((node) => typeof node.props.onPress === 'function');
+  }
+
+  function textOf(node: Node): string {
+    return node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('');
+  }
+
+  it('offers one quiet return to Today under Day Completed', async () => {
+    seedReader({ isRead: true });
+    const tree = await renderAt(PHONE);
+
+    const [link] = returnLinks(tree.root);
+    expect(link.props.accessibilityRole).toBe('button');
+    expect(textOf(link)).toBe('Return to Today');
+    act(() => {
+      (link.props.onPress as () => void)();
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    act(() => tree.unmount());
+  });
+
+  it('returns to Study when the reader was opened there', async () => {
+    seedReader({ isRead: true });
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen hostTab="(study)" />);
+    });
+
+    const [link] = returnLinks(tree!.root);
+    expect(textOf(link)).toBe('Return to Study');
+    act(() => {
+      (link.props.onPress as () => void)();
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(study)');
+    act(() => tree!.unmount());
+  });
+
+  it('shows no return before the day is finished', async () => {
+    seedReader();
+    const tree = await renderAt(PHONE);
+    expect(returnLinks(tree.root)).toHaveLength(0);
     act(() => tree.unmount());
   });
 });
