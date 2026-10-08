@@ -4,6 +4,7 @@
  * opens the screen at one step through ?startAt=.
  */
 import React from 'react';
+import { ScrollView, TextInput } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { pressableAncestor } from '@/lib/__tests__/fixtures/pressable-ancestor';
 
@@ -11,6 +12,7 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 const mockReplace = jest.fn();
+const mockFeatureSummaryCarousel = jest.fn((_props: unknown) => null);
 const mockMmkvStore = new Map<string, string>();
 let mockOnboardingSearchParams: Record<string, string> = { startAt: 'hook' };
 
@@ -189,7 +191,9 @@ jest.mock('@/components/onboarding/ShockStat', () => ({ ShockStat: () => null })
 jest.mock('@/components/onboarding/GrowthGraph', () => ({ GrowthGraph: () => null }));
 jest.mock('@/components/onboarding/MultiSelectPills', () => ({ MultiSelectPills: () => null }));
 jest.mock('@/components/onboarding/VulnerabilityValidation', () => ({ VulnerabilityValidation: () => null }));
-jest.mock('@/components/onboarding/FeatureSummaryCarousel', () => ({ FeatureSummaryCarousel: () => null }));
+jest.mock('@/components/onboarding/FeatureSummaryCarousel', () => ({
+  FeatureSummaryCarousel: (props: unknown) => mockFeatureSummaryCarousel(props),
+}));
 jest.mock('@/components/onboarding/DevotionalSegue', () => ({ DevotionalSegue: () => null }));
 jest.mock('@/components/onboarding/ReadDevotionalStep', () => ({ ReadDevotionalStep: () => null }));
 jest.mock('@/components/onboarding/OnboardingCelebration', () => ({ OnboardingCelebration: () => null }));
@@ -260,5 +264,66 @@ describe('onboarding headline and button semantics', () => {
 
     const control = pressableAncestor(textNodes(screen, 'Continue')[0]) as { props: { accessibilityRole?: string } };
     expect(control.props.accessibilityRole).toBe('button');
+  });
+});
+
+// 1.1.18 release smoke (F06): the confirm buttons started at y=876 on an
+// 874-point screen, under generated text of varying length.
+describe('mirror-back actions', () => {
+  const reflection = 'You keep coming back to the quiet, and it keeps meeting you. '.repeat(12);
+  const mockGenerateMirrorBackText = jest.requireMock('@/lib/devotional-service').generateMirrorBackText as jest.Mock;
+
+  async function openMirrorBack(): Promise<Tree> {
+    mockGenerateMirrorBackText.mockResolvedValue({
+      content: {
+        reflection,
+        verse: 'Be still, and know that I am God.',
+        verseRef: 'Psalm 46:10',
+        anticipation: 'Something is being written for you right now.',
+      },
+    });
+    const screen = await openAt('mirrorBack');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    return screen;
+  }
+
+  function insideScroll(screen: Tree, text: string): boolean {
+    return screen.root
+      .findAll((n: { type?: unknown }) => n.type === ScrollView)
+      .some((scroll: Tree['root']) => scroll.findAll((n: { props?: { children?: unknown } }) => n.props?.children === text).length > 0);
+  }
+
+  it('keeps the confirm actions on screen while the reflection scrolls', async () => {
+    const screen = await openMirrorBack();
+
+    expect(insideScroll(screen, reflection)).toBe(true);
+    expect(textNodes(screen, 'Yes, this feels right').length).toBeGreaterThan(0);
+    expect(insideScroll(screen, 'Yes, this feels right')).toBe(false);
+    expect(insideScroll(screen, 'Let me adjust something')).toBe(false);
+  });
+
+  it('confirms the reflection and moves on to the feature summary', async () => {
+    const screen = await openMirrorBack();
+
+    await act(async () => {
+      await pressableAncestor(textNodes(screen, 'Yes, this feels right')[0]).props.onPress();
+    });
+
+    expect(mockFeatureSummaryCarousel).toHaveBeenCalled();
+  });
+
+  it('opens the correction field in the scroll and drops the pinned actions', async () => {
+    const screen = await openMirrorBack();
+
+    await act(async () => {
+      await pressableAncestor(textNodes(screen, 'Let me adjust something')[0]).props.onPress();
+    });
+
+    expect(textNodes(screen, 'Yes, this feels right')).toHaveLength(0);
+    const field = screen.root.findAll((n: { type?: unknown }) => n.type === TextInput);
+    expect(field).toHaveLength(1);
+    expect(field[0].props.placeholder).toBe('What did we get wrong?');
   });
 });
