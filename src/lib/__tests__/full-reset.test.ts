@@ -167,6 +167,7 @@ import {
   isLocalResetInProgress,
   resetSyncSessionFenceForTesting,
 } from '../sync-session-fence';
+import { USER_PROFILE_CONFLICT_KEY } from '../user-profile-sync';
 import {
   mmkvStorage,
   rotateDeviceId,
@@ -284,6 +285,11 @@ describe('performFullLocalReset', () => {
     expect(FULL_RESET_MMKV_KEYS).toContain('onboarding-completed-reported-v1');
     expect(FULL_RESET_MMKV_KEYS).toContain('sound-effects-enabled');
     expect(FULL_RESET_MMKV_KEYS).toContain('success-cue-ledger');
+  });
+
+  it('forgets the profile snapshot the server refused as older', () => {
+    expect(USER_PROFILE_CONFLICT_KEY).toEqual(expect.any(String));
+    expect(FULL_RESET_MMKV_KEYS).toContain(USER_PROFILE_CONFLICT_KEY);
   });
 
   it('sweeps every rate-limit key by prefix through the live key list and leaves other keys', async () => {
