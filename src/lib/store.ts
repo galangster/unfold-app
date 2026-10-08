@@ -678,6 +678,12 @@ interface UnfoldState {
   // Devotionals
   devotionals: Devotional[];
   currentDevotionalId: string | null;
+  /**
+   * The series Today showed until it ended, while no series has taken its
+   * place. Later syncs hand Today to its successor (selectSyncedToday). Any
+   * current series ends the wait.
+   */
+  awaitingSuccessorOf: string | null;
   addDevotional: (devotional: Devotional) => void;
   removeDevotional: (devotionalId: string) => void;
   retireOnboardingSamples: (opts: { keepId?: string }) => void;
@@ -954,6 +960,7 @@ const initialState = {
   user: null as UserProfile | null,
   devotionals: [],
   currentDevotionalId: null,
+  awaitingSuccessorOf: null as string | null,
   hasEverCreatedDevotional: false,
   journalEntries: [],
   usedScriptures: [] as UsedScripture[],
@@ -1048,6 +1055,50 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
 );
 
 /**
+ * Series rows a pull of one series showed while the series the server writes
+ * was not on this device yet. A full sync sent before that pull can land
+ * without that series, so until the follow-up ends these rows still count.
+ */
+let unheldSeriesPull: { session: number; series: readonly ResumeSelectionSeries[] } | null = null;
+
+/** The series Today waits on once this one ended. Never onboarding's sample reading. */
+function awaitedSeriesId(series: Devotional | undefined): string | null {
+  if (!series || !isDevotionalArchived(series)) return null;
+  return isOnboardingSampleDevotionalId(series.id) || isOnboardingFirstReading(series) ? null : series.id;
+}
+
+/**
+ * Today's series after a pull, and the series Today waits to replace. A pull
+ * that ends the current series without a successor here empties Today and
+ * records that series in awaitingSuccessorOf, which survives a restart. Every
+ * later pull runs the successor rule on it as if it were still current, so
+ * the series that took its place takes Today whenever a pull brings it.
+ * `pulledSeries` is every series row a pull of one series returned; a full
+ * sync passes none.
+ */
+export function selectSyncedToday(
+  state: Pick<UnfoldState, 'devotionals' | 'currentDevotionalId' | 'awaitingSuccessorOf'>,
+  devotionals: Devotional[],
+  pulledSeries?: readonly ResumeSelectionSeries[],
+): Pick<UnfoldState, 'currentDevotionalId' | 'awaitingSuccessorOf'> {
+  const unheldSeen = unheldSeriesPull && isSyncSessionCurrent(unheldSeriesPull.session) ? unheldSeriesPull.series : undefined;
+  const currentDevotionalId = selectSyncedCurrentDevotionalId({
+    previousCurrentId: state.currentDevotionalId,
+    awaitingSuccessorOf: state.awaitingSuccessorOf,
+    previous: state.devotionals,
+    next: devotionals,
+    pulled: pulledSeries ?? unheldSeen,
+  });
+  if (currentDevotionalId) return { currentDevotionalId, awaitingSuccessorOf: null };
+  return {
+    currentDevotionalId,
+    awaitingSuccessorOf: state.currentDevotionalId
+      ? awaitedSeriesId(devotionals.find((series) => series.id === state.currentDevotionalId))
+      : state.awaitingSuccessorOf ?? null,
+  };
+}
+
+/**
  * Reconcile pulled content and its current-series selection. `pulledSeries`
  * is every series row the pull returned, including rows this device does not
  * hold yet.
@@ -1056,60 +1107,56 @@ export function updateSyncedDevotionals(
   updater: (devotionals: Devotional[]) => Devotional[],
   pulledSeries?: readonly ResumeSelectionSeries[],
 ): void {
-  let awaitingFrom = undefined as string | null | undefined;
+  let unheldId = null as string | null;
   useUnfoldStore.setState((state) => {
     const devotionals = updater(state.devotionals);
-    const currentDevotionalId = selectSyncedCurrentDevotionalId({
-      previousCurrentId: state.currentDevotionalId,
-      previous: state.devotionals,
-      next: devotionals,
-      pulled: pulledSeries,
-    });
-    if (currentDevotionalId === null && selectUnheldActiveSeriesId(devotionals, pulledSeries)) {
-      awaitingFrom = state.currentDevotionalId;
-    }
-    return { devotionals, currentDevotionalId };
+    const today = selectSyncedToday(state, devotionals, pulledSeries);
+    unheldId = today.currentDevotionalId === null ? selectUnheldActiveSeriesId(devotionals, pulledSeries) : null;
+    return { devotionals, ...today };
   });
-  if (awaitingFrom !== undefined) followUnheldActiveSeries(awaitingFrom, pulledSeries);
+  if (unheldId) followUnheldActiveSeries(unheldId, pulledSeries ?? []);
 }
 
 /**
  * The pull left Today without a series, and the series the server writes is
  * one this device does not hold yet. Today stays empty rather than follow an
  * older series, which the server would refuse to continue. Pull everything
- * now. Once the new series is here, Today follows it by the same rule as a
- * pull that carries it, unless Today took a series meanwhile. The pulled rows
- * still count, so a full sync that fails or misses the new series leaves
- * Today empty instead of handing it to an older one.
+ * now; the full sync that brings the new series hands Today to it by the
+ * successor rule, unless Today took a series meanwhile. The pulled rows still
+ * count until then, so a full sync that misses the new series never hands
+ * Today to an older one. A full sync already in flight answers this request,
+ * and it can have left before the new series existed: when Today is still
+ * empty and the series still missing after it, pull once more, and only once.
  */
 function followUnheldActiveSeries(
-  pausedId: string | null,
-  pulledSeries: readonly ResumeSelectionSeries[] | undefined,
+  unheldId: string,
+  pulledSeries: readonly ResumeSelectionSeries[],
 ): void {
   const session = captureSyncSession();
-  let fullSync: Promise<void>;
+  const seen = { session, series: pulledSeries };
+  unheldSeriesPull = seen;
+  const stillMissing = () => {
+    const { currentDevotionalId, devotionals } = useUnfoldStore.getState();
+    return isSyncSessionCurrent(session) && currentDevotionalId === null
+      && !devotionals.some((series) => series.id === unheldId);
+  };
+  void requestUnheldSeriesFullSync()
+    .then(() => (stillMissing() ? requestUnheldSeriesFullSync() : undefined))
+    .finally(() => {
+      if (unheldSeriesPull === seen) unheldSeriesPull = null;
+    });
+}
+
+function requestUnheldSeriesFullSync(): Promise<void> {
   try {
     // full-sync-pull imports the store: a static import here would be a cycle.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pull = require('./full-sync-pull') as typeof import('./full-sync-pull');
-    fullSync = pull.triggerUserDataPull('unheld-active-series');
+    return pull.triggerUserDataPull('unheld-active-series');
   } catch (error) {
     logger.warn('[store] Could not request a full sync for a series not on this device:', error);
-    return;
+    return Promise.resolve();
   }
-  void fullSync.then(() => {
-    if (!pausedId || !isSyncSessionCurrent(session)) return;
-    useUnfoldStore.setState((state) => {
-      if (state.currentDevotionalId !== null) return state;
-      const currentDevotionalId = selectSyncedCurrentDevotionalId({
-        previousCurrentId: pausedId,
-        previous: state.devotionals,
-        next: state.devotionals,
-        pulled: pulledSeries,
-      });
-      return currentDevotionalId ? { currentDevotionalId } : state;
-    });
-  });
 }
 
 /**
@@ -1232,13 +1279,14 @@ export const useUnfoldStore = create<UnfoldState>()(
               logRefusedSeriesSelection('archived');
               return state;
             }
-            return { currentDevotionalId: existing.id, hasEverCreatedDevotional: true };
+            return { currentDevotionalId: existing.id, awaitingSuccessorOf: null, hasEverCreatedDevotional: true };
           }
 
           const normalizedDevotional = normalizeDevotionalIdentity(devotional);
           return {
             devotionals: [{ ...normalizedDevotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
             currentDevotionalId: devotional.id,
+            awaitingSuccessorOf: null,
             hasEverCreatedDevotional: true,
           };
         }),
@@ -1430,7 +1478,11 @@ export const useUnfoldStore = create<UnfoldState>()(
             logRefusedSeriesSelection(existing ? 'archived' : 'missing');
             return state;
           }
-          return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
+          return {
+            currentDevotionalId: id,
+            awaitingSuccessorOf: null,
+            scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null,
+          };
         }),
       activateAcknowledgedDevotionalResume: (id, expectedActiveId, previousClock, acknowledgedClock) => {
         let activated = false;
@@ -1463,6 +1515,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d.id === paused?.id ? paused : d)),
             currentDevotionalId: id,
+            awaitingSuccessorOf: null,
             scripturePracticeReturn: null,
           };
         });
@@ -1483,6 +1536,8 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
             currentDevotionalId: null,
+            // A sync can hand Today to the series that replaced it (selectSyncedToday).
+            awaitingSuccessorOf: awaitedSeriesId(archived),
             scripturePracticeReturn: null,
           };
         }),

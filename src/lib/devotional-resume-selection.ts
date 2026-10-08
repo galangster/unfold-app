@@ -13,6 +13,11 @@ export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
 type SyncedSelection = {
   previousCurrentId: string | null | undefined;
+  /**
+   * The series Today showed until it ended, while Today has none. It stands in
+   * for the current series in the successor rule only.
+   */
+  awaitingSuccessorOf?: string | null;
   previous: readonly ResumeSelectionSeries[];
   next: readonly ResumeSelectionSeries[];
   /**
@@ -39,6 +44,8 @@ function withUnheldPulledSeries(
  * or omitted lifecycle rows never become current. Several qualifying resumes
  * resolve to the newest accepted intent clock. A current series paused by a
  * resume elsewhere hands Today to that resume (selectPausedCurrentSuccessor).
+ * While Today waits on a series that ended, the same rule hands Today to the
+ * series that took its place.
  * Today never moves to a series that another live series outranks, held here
  * or only pulled: a pull of one series can carry a newer series started on
  * another device, and the server writes that one.
@@ -67,7 +74,8 @@ export function selectSyncedCurrentDevotionalId(options: SyncedSelection): strin
   }
   const chosen = options.next.find((series) => series.id === chosenId);
   if (chosen && outranksActiveSiblings(chosen, candidates)) return chosen.id;
-  return selected ? selectPausedCurrentSuccessor(selected, options.next, candidates) : null;
+  const paused = selected ?? options.next.find((series) => series.id === options.awaitingSuccessorOf);
+  return paused ? selectPausedCurrentSuccessor(paused, options.next, candidates) : null;
 }
 
 /**

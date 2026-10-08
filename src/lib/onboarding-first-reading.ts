@@ -136,6 +136,7 @@ export function persistOnboardingFirstReading(input: {
       ? state.devotionals.map((row) => (row.id === id ? next : row))
       : [next, ...state.devotionals],
     currentDevotionalId: keepCurrent ? state.currentDevotionalId : id,
+    awaitingSuccessorOf: keepCurrent ? state.awaitingSuccessorOf : null,
     hasEverCreatedDevotional: true,
   }));
 
