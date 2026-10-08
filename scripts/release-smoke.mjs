@@ -18,12 +18,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { EXPECTED_WORKSPACE, inspectBuiltApp } from './release-proof-lib.mjs';
+import { EXPECTED_WORKSPACE, STAMP_PLIST, inspectBuiltApp } from './release-proof-lib.mjs';
 import {
   DRIFT_NORMALIZERS,
   PODFILE_LOCK,
   bundleProblems,
   parseEasEnvList,
+  productionBuildEnv,
   simulatorUdids,
 } from './release-smoke-lib.mjs';
 
@@ -79,19 +80,25 @@ run('git', ['checkout', '--', ...protectedFiles]);
 copyFileSync(PODFILE_LOCK, 'ios/Pods/Manifest.lock');
 
 // 3. Stamp the build profile into Info.plist, as eas-build-post-install does.
+// The stamp is for this run only. Restore the committed file when the script
+// exits, so the next run starts from a clean tree.
+process.on('exit', () => {
+  spawnSync('git', ['checkout', '--', STAMP_PLIST], { stdio: 'ignore' });
+});
 run('node', ['scripts/stamp-build-profile.mjs'], {
   env: { ...process.env, EAS_BUILD_PROFILE: 'production' },
 });
 
 // 4. The production environment in EAS order: the EAS environment, then the
-// profile's env. It stays in the capture's process environment, never on disk.
+// profile's env. The shell's own EXPO_PUBLIC_* values are dropped first. It
+// stays in the capture's process environment, never on disk.
 const profile = JSON.parse(readFileSync('eas.json', 'utf8')).build?.production;
 const backendUrl = profile?.env?.EXPO_PUBLIC_BACKEND_URL;
 if (!backendUrl) stop('eas.json build.production.env has no EXPO_PUBLIC_BACKEND_URL');
 const easVariables = parseEasEnvList(output('eas', [
   'env:list', '--environment', profile.environment ?? 'production', '--format', 'short', '--include-sensitive',
 ]));
-const productionEnv = { ...process.env, ...easVariables, ...profile.env, EAS_BUILD_PROFILE: 'production' };
+const productionEnv = productionBuildEnv(process.env, easVariables, profile.env, { EAS_BUILD_PROFILE: 'production' });
 
 // 5. Capture and gate. The capture makes a fresh build, a launch and the
 // evidence record. It compares this worktree with a pristine candidate worktree

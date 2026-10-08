@@ -21,9 +21,13 @@ export function podVersions(lockfile) {
   return lockfile.slice(lockfile.indexOf('PODS:'), lockfile.indexOf('DEPENDENCIES:'));
 }
 
-/** "UnfoldVerse.swift in Sources" for each PBXBuildFile, without the IDs every install rewrites. */
+/**
+ * "UnfoldVerse.swift in Sources" for each PBXBuildFile, without the IDs every
+ * install rewrites. Phase names can have more than one word, as in
+ * "ExpoWidgetsTarget.appex in Embed Foundation Extensions".
+ */
 export function builtFiles(project) {
-  return [...project.matchAll(/\/\* ([^*]+ in [A-Za-z]+) \*\/ = \{isa = PBXBuildFile/g)]
+  return [...project.matchAll(/\/\* ([^*]+ in [A-Za-z]+(?: [A-Za-z]+)*) \*\/ = \{isa = PBXBuildFile/g)]
     .map((match) => match[1])
     .sort()
     .join('\n');
@@ -47,6 +51,16 @@ export function parseEasEnvList(output) {
     if (match && !match[2].startsWith(MASKED_VALUE)) variables[match[1]] = match[2];
   }
   return variables;
+}
+
+/**
+ * The capture's environment. It keeps this shell's variables except its
+ * EXPO_PUBLIC_* values, which would reach the bundle. Then it adds each
+ * production source in EAS order, so a later source wins.
+ */
+export function productionBuildEnv(shellEnv, ...sources) {
+  const kept = Object.entries(shellEnv).filter(([name]) => !name.startsWith('EXPO_PUBLIC_'));
+  return Object.assign(Object.fromEntries(kept), ...sources);
 }
 
 /** What makes a bundle unfit to ship: no production backend, or a dev or unknown local host. */

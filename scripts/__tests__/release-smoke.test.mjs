@@ -14,6 +14,7 @@ import {
   bundleProblems,
   parseEasEnvList,
   podVersions,
+  productionBuildEnv,
   simulatorUdids,
 } from '../release-smoke-lib.mjs';
 
@@ -35,6 +36,10 @@ const PROJECT_TEXT = `
 		F4AA6B04106CE3B1D8CF4DB1 /* UnfoldVerse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C61D49366EB3439DEBEA1EB /* UnfoldVerse.swift */; };
 		166A1EF854A44FD8B8DB41C0 /* Inter_700Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3DB3EE1D35624179A8E7F79A /* Inter_700Bold.ttf */; };
 `;
+
+// The committed widget entry. Its build phase name has more than one word.
+const WIDGET_ENTRY =
+  '\t\tE63BE6E347E84A3898A30B07 /* ExpoWidgetsTarget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 334F1374FB8F4DD28C362129 /* ExpoWidgetsTarget.appex */; };\n';
 
 const BACKEND = 'https://api.unfoldapp.co';
 
@@ -76,6 +81,12 @@ test('builtFiles sees a file dropped from the build', () => {
   assert.notEqual(builtFiles(dropped), builtFiles(PROJECT_TEXT));
 });
 
+test('builtFiles sees the widget extension dropped from the build', () => {
+  const withWidget = PROJECT_TEXT + WIDGET_ENTRY;
+  assert.match(builtFiles(withWidget), /^ExpoWidgetsTarget\.appex in Embed Foundation Extensions$/m);
+  assert.notEqual(builtFiles(withWidget), builtFiles(PROJECT_TEXT));
+});
+
 test('parseEasEnvList keeps readable values and skips masked secrets and other lines', () => {
   const listing = [
     '★ eas-cli@24.12.0 is now available.',
@@ -84,6 +95,18 @@ test('parseEasEnvList keeps readable values and skips masked secrets and other l
     "SENTRY_AUTH_TOKEN=***** (This is a secret env variable that can only be accessed on EAS builder and can't be read in any UI. Learn more.)",
   ].join('\n');
   assert.deepEqual(parseEasEnvList(listing), { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example' });
+});
+
+test('productionBuildEnv drops EXPO_PUBLIC_* values from the shell and lets later sources win', () => {
+  const shell = { PATH: '/usr/bin', EXPO_PUBLIC_ENABLE_VOICE_CHECK_INS: '1', EXPO_PUBLIC_BACKEND_URL: 'http://localhost:4000' };
+  const easVariables = { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example', EXPO_PUBLIC_BACKEND_URL: 'https://stale.example.com' };
+  const profileEnv = { EXPO_PUBLIC_BACKEND_URL: BACKEND };
+  assert.deepEqual(productionBuildEnv(shell, easVariables, profileEnv, { EAS_BUILD_PROFILE: 'production' }), {
+    PATH: '/usr/bin',
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example',
+    EXPO_PUBLIC_BACKEND_URL: BACKEND,
+    EAS_BUILD_PROFILE: 'production',
+  });
 });
 
 test('bundleProblems passes a production bundle with only the library local URLs', () => {

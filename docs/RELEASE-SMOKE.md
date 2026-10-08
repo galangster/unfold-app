@@ -10,8 +10,8 @@ signed build, which a simulator cannot run.
 
 | The smoke proves | The IPA check proves |
 |---|---|
-| The release commit builds in Release with the production environment, launches and passes `verify:release` | The signed IPA has the JS bundle, the version, the build number and the profile stamp |
-| Onboarding through a real first devotional, reading, tabs and profile | App Store signing, the production push entitlement and the widget's App Group |
+| The release commit builds in Release with the production environment, launches and passes `verify:release` | The signed IPA has the JS bundle, the bundle ID, the version, the build number and the profile stamp |
+| Onboarding through a real first devotional, reading, tabs and profile | App Store signing, the production push entitlement, and the widget with its bundle ID and App Group |
 | The QA routes stay closed, and the paywall shows the right prices | Sentry holds the source map and the dSYM for this build |
 
 Lock Screen widget editing, push delivery and purchases need a physical device.
