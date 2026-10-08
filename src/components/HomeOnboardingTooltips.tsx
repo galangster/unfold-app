@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { settleAnnouncementsForNewReader } from '@/lib/feature-announcements';
 import { buildBubblePath } from '@/lib/bubble-path';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
@@ -174,6 +175,9 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
+    // A reader who meets the tour is new to this version, so this version's
+    // "what's new" never opens for them. Settle it before the flag flips.
+    settleAnnouncementsForNewReader();
     setHasSeenHomeTooltips(true);
   }, [setHasSeenHomeTooltips]);
 

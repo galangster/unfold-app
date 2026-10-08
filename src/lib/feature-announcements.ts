@@ -64,6 +64,11 @@ export type FeatureAnnouncementRecord = {
 };
 
 export type FeatureAnnouncementGateInput = {
+  /**
+   * True once the reader has finished the Today tour. "What's new" is for
+   * readers who used an earlier version. A fresh install meets the tour first.
+   */
+  returningReader: boolean;
   isTodayHome: boolean;
   todayReadingAvailable: boolean;
   soundOff: boolean;
@@ -130,9 +135,19 @@ export function dismissAnnouncementPages(ids: readonly string[]): void {
   }
 }
 
+/**
+ * A reader who meets the Today tour is new to this version. Records every
+ * current page as settled without showing it, so only pages added in a later
+ * version can announce to this reader.
+ */
+export function settleAnnouncementsForNewReader(): void {
+  dismissAnnouncementPages(FEATURE_ANNOUNCEMENT_CATALOG.map((page) => page.id));
+}
+
 export function canAnnounceFeatures(input: FeatureAnnouncementGateInput): boolean {
   return (
-    input.todayReadingAvailable
+    input.returningReader
+    && input.todayReadingAvailable
     && input.isTodayHome
     && input.soundOff
     && input.timerIdle
