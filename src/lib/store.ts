@@ -213,9 +213,10 @@ export interface UserProfile {
   /** ISO time the backend last confirmed it holds this device's push token. */
   pushRegisteredAt?: string;
   /**
-   * Whether a local daily reminder is currently in the OS queue. Mirrored to
-   * the backend so it never double-notifies the morning slot and only takes
-   * it over when the client has handed it off.
+   * Whether the local queue holds the morning the next day opens. Mirrored
+   * to the backend, which skips its ready push only then, so that morning
+   * never gets two banners. A handed-off morning keeps later local mornings
+   * queued; those do not count.
    */
   localDailyReminderScheduled?: boolean;
   /** A reminder-time suggestion the reader turned down ("h:mm AM"). */
