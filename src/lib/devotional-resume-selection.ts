@@ -35,6 +35,21 @@ function withPulledSeries(
 }
 
 /**
+ * Reading may make a series it just pulled current while Today is empty only
+ * when no other live series outranks it, held here or only pulled: the same
+ * check an explicit resume passes. Otherwise Today stays empty and the series
+ * stays open in Reading.
+ */
+export function canPulledSeriesTakeEmptyToday(
+  id: string,
+  held: readonly ResumeSelectionSeries[],
+  pulled?: readonly ResumeSelectionSeries[],
+): boolean {
+  const target = held.find((series) => series.id === id);
+  return Boolean(target && !isDevotionalArchived(target) && outranksActiveSiblings(target, withPulledSeries(held, pulled)));
+}
+
+/**
  * After a pull applies archive/resume clocks, keep a still-valid current
  * series. Restore Today only from a newer accepted explicit resume
  * (archivedAt null plus a newer archivedStateAt). Stale, rejected, archived,

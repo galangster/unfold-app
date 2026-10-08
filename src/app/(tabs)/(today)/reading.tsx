@@ -59,6 +59,7 @@ import {
   type SyncCheckCooldown,
 } from '@/lib/sync-pull-backoff';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { canPulledSeriesTakeEmptyToday } from '@/lib/devotional-resume-selection';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
@@ -2064,7 +2065,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         if (missingDevotionalHydrationOwnerRef.current === devotionalId
           && effectiveDevotionalIdRef.current === devotionalId
           && params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
-          && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
+          && canPulledSeriesTakeEmptyToday(devotionalId, useUnfoldStore.getState().devotionals, pulled.canonicalSeries)) {
           setCurrentDevotional(devotionalId);
         }
 

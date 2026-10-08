@@ -46,6 +46,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { isStrictActiveSeriesWinner } from '../devotional-active-selection';
+import { canPulledSeriesTakeEmptyToday } from '../devotional-resume-selection';
 import { applyPulledDevotionalContent } from '../devotional-pulled-content';
 import type { PulledDevotionalContent } from '../devotional-sync-pull';
 import { resetUserDataPullForTesting, triggerUserDataPull } from '../full-sync-pull';
@@ -334,6 +335,18 @@ describe('a sync never moves Today to a series the server does not write', () =>
       .toMatchObject(ended(PAUSED_AT));
   });
 
+  // "Continue this series" elsewhere resumed series-b and paused series-c on
+  // the same clock. A pulled pause is never laid over as live, so its tied
+  // clock does not block the resume.
+  it('moves an empty Today to series-b when the same pull carries the pause of a held paused series on the same clock', () => {
+    const pausedC = series('series-c', { createdAt: '2026-08-25T00:00:00.000Z', ...ended(PAUSED_AT) });
+    useUnfoldStore.setState({ devotionals: [pausedB, pausedC], currentDevotionalId: null });
+
+    pullOneSeries('series-b', [seriesRow(pausedB, resumed(RESUME_AT)), seriesRow(pausedC, ended(RESUME_AT))]);
+
+    expect(today()).toBe('series-b');
+  });
+
   // A pulled pause of a series held live here waits for the full sync, so it
   // keeps blocking the resume until then: the check only ever empties Today.
   it('keeps a series held live as a blocker until the full sync saves its pulled pause', () => {
@@ -344,5 +357,37 @@ describe('a sync never moves Today to a series the server does not write', () =>
     pullOneSeries('series-b', [seriesRow(pausedB, resumed(RESUME_AT)), seriesRow(liveC, ended('2026-09-12T16:45:00.000Z'))]);
 
     expect(today()).toBeNull();
+  });
+});
+
+// Reading hydrates a series this device does not hold and may make it
+// current while Today is empty. It passes the same check.
+describe('canPulledSeriesTakeEmptyToday', () => {
+  const pulledB = series('series-b', { createdAt: '2026-09-12T15:00:00.000Z' });
+  const pausedC = series('series-c', { createdAt: '2026-08-25T00:00:00.000Z', ...ended(PAUSED_AT) });
+
+  it('lets a pulled series take an empty Today when nothing outranks it', () => {
+    expect(canPulledSeriesTakeEmptyToday('series-b', [pulledB, pausedC], [seriesRow(pulledB)])).toBe(true);
+  });
+
+  it('refuses when the same pull carries a later resume of a held series', () => {
+    expect(canPulledSeriesTakeEmptyToday('series-b', [pulledB, pausedC], [
+      seriesRow(pulledB),
+      seriesRow(pausedC, resumed('2026-09-12T16:10:00.000Z')),
+    ])).toBe(false);
+  });
+
+  it('refuses when a series held live here outranks it', () => {
+    const liveC = series('series-c', { createdAt: '2026-09-12T16:30:00.000Z' });
+    expect(canPulledSeriesTakeEmptyToday('series-b', [pulledB, liveC], [seriesRow(pulledB)])).toBe(false);
+  });
+
+  it('refuses when the pull carries a newer series this device does not hold', () => {
+    expect(canPulledSeriesTakeEmptyToday('series-b', [pulledB], [seriesRow(pulledB), seriesRow(newN)])).toBe(false);
+  });
+
+  it('refuses an archived or missing series', () => {
+    expect(canPulledSeriesTakeEmptyToday('series-c', [pausedC], [])).toBe(false);
+    expect(canPulledSeriesTakeEmptyToday('series-missing', [pulledB], [])).toBe(false);
   });
 });
