@@ -128,16 +128,29 @@ describe('pull of the current series when it was paused elsewhere', () => {
     expect(peekSyncOutbox()).toEqual([]);
   });
 
-  // Once the resume was applied it no longer reads as newer, so the pull that
-  // lands the pause leaves Today empty, as before this release.
-  it('leaves Today empty when the resume and the pause arrive in separate pulls', () => {
+  // While series-x stays live, the pull leaves series-b's resume for the full
+  // sync, as before this release. Applied now, the resume would no longer
+  // read as newer once the pause lands, and Today would stay empty for good.
+  it('leaves the resume for the full sync when the pause arrives in a later pull', () => {
     applyCurrentSeriesPull('series-x', [row(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT })]);
     // The pause has not reached the server yet: series-x stays current.
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-x');
+    expect(useUnfoldStore.getState().devotionals).toEqual([liveX, pausedB]);
 
     applyCurrentSeriesPull('series-x', [row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT })]);
-
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+
+    applyPulledUserData({
+      timestamp: RESUME_AT,
+      changes: {
+        devotionals: [
+          fullPullLifecycleOf(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
+          fullPullLifecycleOf(pausedB, { archivedAt: null, archivedStateAt: RESUME_AT }),
+        ],
+      },
+    });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-b');
     expect(peekSyncOutbox()).toEqual([]);
   });
 
@@ -150,24 +163,34 @@ describe('pull of the current series when it was paused elsewhere', () => {
     useUnfoldStore.setState({ devotionals: [liveX, archivedLocally, queuedOnly], currentDevotionalId: 'series-x' });
     replaceSyncOutbox([queued]);
 
+    // The pull ends series-x, so the other rows' clocks apply with it.
     applyCurrentSeriesPull('series-x', [
+      row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
       row(archivedLocally, { archivedAt: null, archivedStateAt: RESUME_AT }),
       row(queuedOnly, { archivedAt: null, archivedStateAt: RESUME_AT }),
     ]);
 
     const state = useUnfoldStore.getState();
-    expect(state.devotionals).toEqual([liveX, archivedLocally, queuedOnly]);
-    expect(state.currentDevotionalId).toBe('series-x');
+    expect(state.devotionals).toEqual([
+      expect.objectContaining({ id: 'series-x', archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
+      archivedLocally,
+      queuedOnly,
+    ]);
+    expect(state.currentDevotionalId).toBeNull();
     expect(peekSyncOutbox()).toEqual([queued]);
   });
 
   it('does not add a series this device does not hold', () => {
     const elsewhere = series('series-elsewhere');
-    applyCurrentSeriesPull('series-x', [row(elsewhere, { archivedAt: null, archivedStateAt: RESUME_AT })]);
+    applyCurrentSeriesPull('series-x', [
+      row(liveX, { archivedAt: RESUME_AT, archivedStateAt: RESUME_AT }),
+      row(elsewhere, { archivedAt: null, archivedStateAt: RESUME_AT }),
+    ]);
 
     const state = useUnfoldStore.getState();
-    expect(state.devotionals).toEqual([liveX, pausedB]);
-    expect(state.currentDevotionalId).toBe('series-x');
+    expect(state.devotionals.map((item) => item.id)).toEqual(['series-x', 'series-b']);
+    expect(state.devotionals.find((item) => item.id === 'series-b')).toEqual(pausedB);
+    expect(state.currentDevotionalId).toBeNull();
   });
 });
 

@@ -1043,16 +1043,16 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
 );
 
 /**
- * Reconcile pulled content and its current-series selection. `pulledSeries`
- * is every series row the pull returned, including rows this device does not
- * hold yet.
+ * Reconcile pulled content and its current-series selection. The updater
+ * gets the current series id. `pulledSeries` is every series row the pull
+ * returned, including rows this device does not hold yet.
  */
 export function updateSyncedDevotionals(
-  updater: (devotionals: Devotional[]) => Devotional[],
+  updater: (devotionals: Devotional[], currentDevotionalId: string | null) => Devotional[],
   pulledSeries?: readonly ResumeSelectionSeries[],
 ): void {
   useUnfoldStore.setState((state) => {
-    const devotionals = updater(state.devotionals);
+    const devotionals = updater(state.devotionals, state.currentDevotionalId);
     return {
       devotionals,
       currentDevotionalId: selectSyncedCurrentDevotionalId({

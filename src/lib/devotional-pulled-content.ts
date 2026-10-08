@@ -4,6 +4,7 @@ import type { ActiveSeriesCandidate } from './devotional-active-selection';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import {
   didDevotionalLifecycleChange,
+  isDevotionalArchived,
   mergeDevotionalLifecycle,
   parseLifecycleTimestamp,
 } from './devotional-lifecycle';
@@ -144,13 +145,9 @@ function pendingLifecycleClocksById(): Map<string, string> {
 }
 
 /**
- * A pull of one series returns every series row that changed. "Continue this
- * series" on another device resumes one series and pauses the current one on
- * the same clock, so applying the current row alone archives it while the
- * resumed series stays paused here, and Today is left with no series. Apply
- * the other rows' archive and resume clocks too, with the same
- * compare-and-set as the full sync. Their content and progress, and rows this
- * device does not hold, wait for the full sync.
+ * The other rows' archive and resume clocks, with the same compare-and-set
+ * as the full sync. Their content and progress, and rows this device does not
+ * hold, wait for the full sync.
  */
 function applyPulledSeriesLifecycleToDevotionals(
   devotionals: Devotional[],
@@ -179,20 +176,53 @@ function applyPulledSeriesLifecycleToDevotionals(
   return didChange ? nextDevotionals : devotionals;
 }
 
-export function applyPulledDevotionalContentToDevotionals(
+function applyPulledRequestedSeries(
   devotionals: Devotional[],
   devotionalId: string,
   pulled: PulledDevotionalContent,
 ): Devotional[] {
-  assertBoundPulledSession(pulled);
-  const withLifecycle = applyPulledSeriesLifecycleToDevotionals(devotionals, devotionalId, pulled);
-  const existing = withLifecycle.some((devotional) => devotional.id === devotionalId);
+  const existing = devotionals.some((devotional) => devotional.id === devotionalId);
   if (existing) {
-    return applyPulledDevotionalMetadataToDevotionals(withLifecycle, devotionalId, pulled);
+    return applyPulledDevotionalMetadataToDevotionals(devotionals, devotionalId, pulled);
   }
 
   const shell = buildPulledDevotionalShell(devotionalId, pulled);
-  return shell ? [shell, ...withLifecycle] : withLifecycle;
+  return shell ? [shell, ...devotionals] : devotionals;
+}
+
+function endsCurrentSeries(
+  before: readonly Devotional[],
+  after: readonly Devotional[],
+  currentDevotionalId: string | null | undefined,
+): boolean {
+  if (!currentDevotionalId) return false;
+  const current = before.find((devotional) => devotional.id === currentDevotionalId);
+  if (!current || isDevotionalArchived(current)) return false;
+  return isDevotionalArchived(after.find((devotional) => devotional.id === currentDevotionalId));
+}
+
+/**
+ * A pull of one series returns every series row that changed. "Continue this
+ * series" on another device resumes one series and pauses the current one on
+ * the same clock. When this pull ends the series Today shows, apply the other
+ * rows' archive and resume clocks with it, so the resume it carries can
+ * still take Today. Otherwise leave them for the full sync, as before this
+ * release: a resume applied while the current series stays live no longer
+ * reads as newer once the pause lands, and Today would stay empty for good.
+ */
+export function applyPulledDevotionalContentToDevotionals(
+  devotionals: Devotional[],
+  devotionalId: string,
+  pulled: PulledDevotionalContent,
+  currentDevotionalId?: string | null,
+): Devotional[] {
+  assertBoundPulledSession(pulled);
+  const withLifecycle = applyPulledSeriesLifecycleToDevotionals(devotionals, devotionalId, pulled);
+  if (withLifecycle !== devotionals) {
+    const withSeriesLifecycle = applyPulledRequestedSeries(withLifecycle, devotionalId, pulled);
+    if (endsCurrentSeries(devotionals, withSeriesLifecycle, currentDevotionalId)) return withSeriesLifecycle;
+  }
+  return applyPulledRequestedSeries(devotionals, devotionalId, pulled);
 }
 
 export function applyPulledDevotionalContent({
@@ -205,19 +235,26 @@ export function applyPulledDevotionalContent({
   pulled: PulledDevotionalContent;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   /**
-   * Applies the updater and selects the current series. It receives every
-   * pulled series row too: a row this device does not hold can still be the
-   * series the server writes, and Today must not follow an older one.
+   * Applies the updater and selects the current series. The updater needs
+   * the current series id: only a pull that ends it applies the other rows'
+   * lifecycle clocks. It receives every pulled series row too: a row this
+   * device does not hold can still be the series the server writes, and
+   * Today must not follow an older one.
    */
   updateDevotionals: (
-    updater: (devotionals: Devotional[]) => Devotional[],
+    updater: (devotionals: Devotional[], currentDevotionalId?: string | null) => Devotional[],
     pulledSeries?: readonly ActiveSeriesCandidate[],
   ) => void;
 }): void {
   assertBoundPulledSession(pulled);
   if (pulled.devotional || pulled.days.length > 0 || pulledSeriesBesides(pulled, devotionalId).length > 0) {
     updateDevotionals(
-      (devotionals) => applyPulledDevotionalContentToDevotionals(devotionals, devotionalId, pulled),
+      (devotionals, currentDevotionalId) => applyPulledDevotionalContentToDevotionals(
+        devotionals,
+        devotionalId,
+        pulled,
+        currentDevotionalId,
+      ),
       pulled.canonicalSeries,
     );
   }

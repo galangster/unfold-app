@@ -94,6 +94,7 @@ const resumed = (at: string): Lifecycle => ({ archivedAt: null, archivedStateAt:
 const liveX = series('series-x');
 const pausedB = series('series-b', { createdAt: '2026-09-01T00:00:00.000Z', ...ended(PAUSED_AT) });
 const newN = series('series-n', { createdAt: STARTED_AT, seriesStartDate: STARTED_AT });
+const pausedZ = series('series-z', { createdAt: '2026-08-20T00:00:00.000Z', ...ended(PAUSED_AT) });
 
 // The server's copy of a series row, as a pull of one series returns it.
 function seriesRow(local: Devotional, lifecycle: Lifecycle | Record<string, never> = {}) {
@@ -282,16 +283,31 @@ describe('a sync never moves Today to a series the server does not write', () =>
   });
 
   // The pause of series-x reaches the server after series-b's resume, and
-  // this device pulls the two separately. Once the resume was applied it no
-  // longer reads as newer, so the pull that lands the pause leaves Today
-  // empty, as before this release. It never guesses a successor.
-  it('leaves Today empty when the pause of the current series arrives in a later pull', () => {
-    pullOneSeries('series-x', [seriesRow(pausedB, resumed(RESUME_AT))]);
+  // this device pulls the two separately. While series-x stays current and
+  // live, a pull leaves series-b's resume for the full sync, as on main. The
+  // pull that lands the pause leaves Today empty, and the next full sync
+  // moves Today to series-b, the series the server writes. The third case is
+  // a pull of a paused series that is not on Today: only the end of the
+  // current series opens the other rows' clocks.
+  it.each([
+    ['carries only the resume', 'series-x', [seriesRow(pausedB, resumed(RESUME_AT))]],
+    ['carries the resume with series-x still live', 'series-x', [seriesRow(liveX), seriesRow(pausedB, resumed(RESUME_AT))]],
+    ['of another paused series carries the resume', 'series-z', [seriesRow(pausedZ, ended(PAUSED_AT)), seriesRow(pausedB, resumed(RESUME_AT))]],
+  ])('moves Today to series-b at the next full sync when a pull %s and the pause lands later', async (_label, requestedId, firstRows) => {
+    useUnfoldStore.setState({ devotionals: [liveX, pausedB, pausedZ], currentDevotionalId: 'series-x' });
+
+    pullOneSeries(requestedId, firstRows);
     expect(today()).toBe('series-x');
+    expect(useUnfoldStore.getState().devotionals.find((item) => item.id === 'series-b'))
+      .toMatchObject(ended(PAUSED_AT));
 
     pullOneSeries('series-x', [seriesRow(liveX, ended(RESUME_AT))]);
-
     expect(today()).toBeNull();
+
+    await runFullSync(fullSyncReply([liveX, ended(RESUME_AT)], [pausedB, resumed(RESUME_AT)]));
+
+    expect(isStrictActiveSeriesWinner('series-b', useUnfoldStore.getState().devotionals)).toBe(true);
+    expect(today()).toBe('series-b');
   });
 
   it('moves Today to the resumed series when one pull carries the resume and the pause', () => {
