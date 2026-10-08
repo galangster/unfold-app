@@ -11,13 +11,28 @@ const { act } = renderer;
 
 const mockSupport = {
   id: 'anon_11111111-1111-4111-8111-111111111111' as string | null,
-  copy: jest.fn(async (_value: string) => undefined),
+  // expo-clipboard resolves true when the clipboard took the text.
+  copy: jest.fn(async (_value: string) => true),
 };
 
 jest.mock('@/components/AppFeedbackSheet', () => ({ AppFeedbackSheet: () => null }));
 jest.mock('react-native-gesture-handler', () => {
   const { TouchableOpacity } = jest.requireActual('react-native');
   return { TouchableOpacity };
+});
+
+jest.mock('react-native-reanimated', () => {
+  const { View } = jest.requireActual('react-native');
+  const transition = { duration: () => transition, easing: () => transition };
+  const curve = () => undefined;
+  return {
+    __esModule: true,
+    default: { View },
+    Easing: { cubic: undefined, in: curve, inOut: curve, out: curve },
+    FadeIn: transition,
+    FadeOut: transition,
+    useReducedMotion: () => true,
+  };
 });
 
 jest.mock('expo-haptics', () => ({
@@ -80,8 +95,18 @@ jest.mock('@/lib/api-config', () => ({
 
 jest.mock('@/lib/device-credential');
 
+const mockIdentityListeners = new Set<() => void>();
+function mockSubscribeIdentity(listener: () => void) {
+  mockIdentityListeners.add(listener);
+  return () => {
+    mockIdentityListeners.delete(listener);
+  };
+}
+
 jest.mock('@/lib/revenuecatClient', () => ({
   getRevenueCatSupportId: () => mockSupport.id,
+  subscribeRevenueCatIdentityVerified: mockSubscribeIdentity,
+  subscribeRevenueCatIdentityEpoch: mockSubscribeIdentity,
 }));
 
 jest.mock('../SettingsSectionHeader', () => ({
@@ -89,13 +114,29 @@ jest.mock('../SettingsSectionHeader', () => ({
   getSettingsCardStyle: () => ({}),
 }));
 
+const mountedSections: { unmount: () => void }[] = [];
+
 function createSection() {
   let tree: { root: any; unmount: () => void };
   act(() => {
     tree = renderer.create(<SupportSection />);
   });
+  mountedSections.push(tree!);
   return tree!;
 }
+
+function sectionText(node: any): string {
+  return node.children
+    .map((child: any) => (typeof child === 'string' ? child : sectionText(child)))
+    .join(' ');
+}
+
+afterEach(() => {
+  // Unmounting ends the Copied confirmation and its timer.
+  act(() => {
+    mountedSections.splice(0).forEach((tree) => tree.unmount());
+  });
+});
 
 describe('SupportSection Support ID', () => {
   let alertSpy: jest.SpyInstance;
@@ -103,7 +144,7 @@ describe('SupportSection Support ID', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSupport.id = 'anon_11111111-1111-4111-8111-111111111111';
-    mockSupport.copy.mockResolvedValue(undefined);
+    mockSupport.copy.mockResolvedValue(true);
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
@@ -124,7 +165,32 @@ describe('SupportSection Support ID', () => {
     });
 
     expect(mockSupport.copy).toHaveBeenCalledWith('anon_11111111-1111-4111-8111-111111111111');
-    expect(alertSpy).toHaveBeenCalledWith('Support ID copied', 'You can now paste it into your support conversation.');
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(tree.root.findAllByProps({ testID: 'support-id-copied-toast' }).length).toBeGreaterThan(0);
+    expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('Copied');
+  });
+
+  it('shows a shortened Support ID inline and keeps the full ID for the clipboard', () => {
+    const tree = createSection();
+    const rowText = sectionText(tree.root.findByProps({ testID: 'support-id-row' }));
+
+    expect(rowText).toContain('Support ID');
+    expect(rowText).toContain('anon_11111…111111');
+    expect(rowText).not.toContain('anon_11111111-1111-4111-8111-111111111111');
+    expect(tree.root.findAllByProps({ testID: 'support-id-copied-toast' })).toHaveLength(0);
+  });
+
+  it('shows the Support ID when the account verifies after Settings opens', () => {
+    mockSupport.id = null;
+    const tree = createSection();
+    expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('For help with your account');
+
+    mockSupport.id = 'anon_22222222-2222-4222-8222-222222222222';
+    act(() => {
+      mockIdentityListeners.forEach((listener) => listener());
+    });
+
+    expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('anon_22222…222222');
   });
 
   it('explains when a trusted Support ID is unavailable without touching the clipboard', async () => {
@@ -151,7 +217,7 @@ describe('SupportSection Support ID', () => {
     });
 
     expect(alertSpy).toHaveBeenCalledWith("Couldn't copy Support ID", 'Please try again.');
-    expect(alertSpy).not.toHaveBeenCalledWith('Support ID copied', expect.any(String));
+    expect(tree.root.findAllByProps({ testID: 'support-id-copied-toast' })).toHaveLength(0);
   });
 });
 
