@@ -180,6 +180,12 @@ export default function GeneratingScreen() {
   const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canRetryJob, setCanRetry] = useState(true);
+  // Whether the error on screen is the server's verdict on the job (failed,
+  // an unopenable result, an unknown status, no such job) rather than a
+  // request that never got an answer. Set beside each of this screen's own
+  // setError calls so a later client-side failure cannot inherit an earlier
+  // verdict; the auto-trial handoff never sets it.
+  const [errorIsServerVerdict, setErrorIsServerVerdict] = useState(false);
 
   // Job polling state
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
@@ -191,6 +197,10 @@ export default function GeneratingScreen() {
   // instead of re-arming a second timer chain next to the current one.
   const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
+  // The request id this screen sent and the server answered with a job. A
+  // resumed record or a failure push names a job, not the request behind it,
+  // so a verdict on such a job cannot retire a newer request id.
+  const answeredRequestIdRef = useRef<string | null>(null);
   // Set by "Go home — we'll keep writing". A job that resolves after the
   // reader left (a submission, a retry, an adopted job) persists its record
   // already marked for Today and does not start a poll loop on a screen
@@ -572,6 +582,8 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(message);
+      // Every caller but the network give-up is a verdict.
+      setErrorIsServerVerdict(!options.keepInflight);
       setCanRetry(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
@@ -637,6 +649,7 @@ export default function GeneratingScreen() {
             setIsGenerating(false);
             setIsReconnecting(false);
             setError(errorMsg);
+            setErrorIsServerVerdict(true);
             setCanRetry(outcome.canRetry);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             return;
@@ -707,6 +720,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError('We couldn’t load your details. Please try again.');
+        setErrorIsServerVerdict(false);
         setCanRetry(true);
       }, NO_USER_GRACE_MS);
       return () => clearTimeout(graceTimer);
@@ -789,6 +803,7 @@ export default function GeneratingScreen() {
         });
 
         if (!isSyncSessionCurrent(origin)) return;
+        answeredRequestIdRef.current = requestId;
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
 
@@ -813,6 +828,7 @@ export default function GeneratingScreen() {
           // The server already has a job for this user/day. Adopt it instead of
           // dead-ending on an error that would resubmit from scratch on retry.
           const existingJobId = failure.jobId;
+          answeredRequestIdRef.current = readInitialGenerationRequestId();
           logger.log('[generating] Submission reports an existing job; adopting it:', existingJobId);
           void logBugEvent('generation', 'generation-adopt-existing-job', { existingJobId });
           const sessionDevotionalId = useUnfoldStore.getState().generationSession.devotionalId;
@@ -864,6 +880,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError(errorMessage);
+        setErrorIsServerVerdict(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     };
@@ -885,7 +902,10 @@ export default function GeneratingScreen() {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.replace('/(tabs)/(today)/reading');
+    // Name the series that landed; without it Reading opens whatever is current.
+    router.replace(landedRevealId
+      ? { pathname: '/(tabs)/(today)/reading', params: { devotionalId: landedRevealId } }
+      : '/(tabs)/(today)/reading');
   };
 
   const legacyTryAgain = async () => {
@@ -943,8 +963,9 @@ export default function GeneratingScreen() {
           // Same builder as the primary path — a retried generation must not
           // silently lose the personalization fields (review finding: this
           // branch was missed in the buildInitialArcUserContext refactor).
+          const requestId = ensureInitialGenerationRequestId();
           const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
-            requestId: ensureInitialGenerationRequestId(),
+            requestId,
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: buildInitialArcUserContext(user),
@@ -952,6 +973,7 @@ export default function GeneratingScreen() {
           });
 
           if (!isSyncSessionCurrent(origin)) return;
+          answeredRequestIdRef.current = requestId;
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
@@ -973,6 +995,7 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(errorMessage);
+      setErrorIsServerVerdict(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -1000,6 +1023,15 @@ export default function GeneratingScreen() {
     if (cleanup === 'clear') {
       clearInflightGenerationJob();
       clearGenerationSession();
+      // The server has ruled on this request, and resubmitting its id only
+      // returns the same job, so Today's create and resume taps looped back
+      // here. A request that never got an answer keeps its id: the POST may
+      // have created a job, and the same id finds it instead of a second one.
+      // A verdict retires only the id this screen's submission was answered
+      // under; an older push's job says nothing about a newer request.
+      if (errorIsServerVerdict && answeredRequestIdRef.current === readInitialGenerationRequestId()) {
+        clearInitialGenerationRequestId();
+      }
     } else {
       // We only lost contact with the server; it may still own this job.
       // Keep the record, marked for Today so it watches the job from there
@@ -1054,7 +1086,11 @@ export default function GeneratingScreen() {
 
   if (error) {
     const displayError = toFriendlyOnboardingGenerationError(error);
-    const isConnectionError = displayError.toLowerCase().includes('connection');
+    // A server verdict is never a lost connection, whatever its text says. A
+    // provider timeout reads like one, and hiding Start over for it left Go
+    // home as the only way out once the retries were spent.
+    const isConnectionError = !errorIsServerVerdict
+      && displayError.toLowerCase().includes('connection');
     return (
       <View style={genStyles.transparentFlex}>
         <SafeAreaView style={genStyles.errorSafeArea}>

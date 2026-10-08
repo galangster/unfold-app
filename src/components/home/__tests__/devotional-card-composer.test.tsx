@@ -1117,6 +1117,32 @@ describe('DevotionalCard daily recovery', () => {
     expect(tree.root.findAll((node: any) => textContent(node).includes('Try this reading again'))).toHaveLength(0);
   });
 
+  it('says when a day the server will not retry is tried again, and keeps Check Again to find it', () => {
+    const onCheckAgain = jest.fn(async () => undefined);
+    const tree = renderInAct(
+      <DevotionalCard
+        state={{
+          ...baseState,
+          recovery: {
+            status: 'failed',
+            jobId: 'job-1',
+            canRetry: false,
+            failureKind: 'job',
+            retriesExhausted: true,
+            onCheckAgain,
+            onRetry: jest.fn(async () => undefined),
+          },
+        }}
+      />,
+    );
+
+    expect(tree.root.findAll((node: any) => textContent(node).includes('We couldn’t prepare Day 2.')).length).toBeGreaterThan(0);
+    expect(tree.root.findAll((node: any) => textContent(node).includes('We’ll try this reading again tomorrow.')).length)
+      .toBeGreaterThan(0);
+    act(() => findByLabel(tree, 'Check Again')[0].props.onPress());
+    expect(onCheckAgain).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps Check Again visible with disabled and busy feedback while checking', () => {
     const tree = renderInAct(
       <DevotionalCard
@@ -1162,6 +1188,10 @@ describe('DevotionalCard daily recovery', () => {
     {
       recovery: { status: 'blocked' as const, reason: 'day-not-ready' as const },
       title: 'Day 2 isn’t available yet.',
+    },
+    {
+      recovery: { status: 'blocked' as const, reason: 'read-sync-pending' as const },
+      title: 'Saving your last reading.',
     },
     {
       recovery: { status: 'service-error' as const },

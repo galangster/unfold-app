@@ -14,6 +14,7 @@ import {
   getTodayReaderDayNumber,
   type DevotionalReadingProgress,
 } from './devotional-day-access';
+import { isStrictActiveSeriesWinner, type ActiveSeriesCandidate } from './devotional-active-selection';
 
 export type RouteParam = string | string[] | undefined;
 
@@ -103,4 +104,19 @@ export function resolveRevealOutcome(
       totalDays: declaredTotal > 0 ? declaredTotal : maxDay,
     },
   };
+}
+
+/**
+ * A ready push can outlive the series it names: Notification Center keeps it
+ * after the reader moves on. Only the current series, or a live series that is
+ * already the strict active winner (one that just landed), may become current
+ * from the reveal. Any other target opens as a paused, read-only view, since
+ * switching to it would move the series the server generates.
+ */
+export function canRevealActivateSeries(
+  devotionalId: string,
+  currentDevotionalId: string | null,
+  devotionals: readonly ActiveSeriesCandidate[],
+): boolean {
+  return devotionalId === currentDevotionalId || isStrictActiveSeriesWinner(devotionalId, devotionals);
 }

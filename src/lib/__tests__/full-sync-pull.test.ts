@@ -982,6 +982,44 @@ describe('J6 full-sync day mapper', () => {
     expect(emptyLine?.shapedByCheckIn).toBeUndefined();
     expect(emptyLine?.nextPick).toBeUndefined();
   });
+
+  it('keeps the local act answer when a newer pulled row replaces a read day', () => {
+    seedMappedDevotional();
+    const readAt = '2026-07-01T08:00:00.000Z';
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((devotional) => ({
+        ...devotional,
+        days: [{
+          id: 'day-devotional-1-2',
+          devotionalId: 'devotional-1',
+          dayNumber: 2,
+          title: 'Day 2',
+          scriptureReference: 'John 1:1',
+          scriptureText: 'Text',
+          bodyText: 'Body',
+          quotableLine: 'Line',
+          isRead: true,
+          readAt,
+          actOutcome: 'done' as const,
+          updatedAt: '2026-07-01T09:00:00.000Z',
+        }],
+      })),
+    }));
+
+    // The server row changed after the answer (another device read the day,
+    // or the read push landed late). It never carries the act answer.
+    const row = pulledDay({});
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: { devotional_days: [{ ...row, data: { ...row.data, isRead: true, readAt } }] },
+    });
+
+    expect(useUnfoldStore.getState().devotionals[0]?.days[0]).toMatchObject({
+      isRead: true,
+      updatedAt: '2026-07-01T12:00:00.000Z',
+      actOutcome: 'done',
+    });
+  });
 });
 
 describe('pulled series lifecycle', () => {
@@ -1260,5 +1298,47 @@ describe('pulled series lifecycle', () => {
     const state = useUnfoldStore.getState();
     expect(state.currentDevotionalId).toBe('series-2');
     expect(state.devotionals.find((item) => item.id === 'series-2')?.archivedAt).toBeUndefined();
+  });
+
+  // "Continue this series" on another device resumes series-1 at once and
+  // pauses series-2 on the same clock through its outbox, which can drain
+  // later. One pull carrying both moves Today to series-1. In separate pulls
+  // the resume no longer reads as newer once the pause lands, so Today stays
+  // empty, as before this release.
+  it.each([
+    ['separate pulls', null],
+    ['one pull', 'series-1'],
+  ] as const)('follows a series resumed elsewhere only when the pause arrives in one pull with it: %s', (order, landsOn) => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', title: 'Other', createdAt: '2026-09-05T00:00:00.000Z' }),
+      ],
+      currentDevotionalId: 'series-2',
+    });
+    const resume = {
+      id: 'series-1', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: null, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+    const pause = {
+      id: 'series-2', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+
+    if (order === 'separate pulls') {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume] } });
+      // The pause has not reached the server yet: series-2 is still live here.
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
+      applyPulledUserData({ timestamp: '2026-09-12T16:05:00.000Z', changes: { devotionals: [pause] } });
+    } else {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume, pause] } });
+    }
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe(landsOn);
+    expect(state.devotionals.find((item) => item.id === 'series-2')).toMatchObject({
+      archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, currentDay: 4,
+    });
+    expect(state.devotionals.find((item) => item.id === 'series-1')?.days[0]).toMatchObject({ isRead: true });
   });
 });

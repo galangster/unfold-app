@@ -23,6 +23,7 @@ import {
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 import { newId } from './sync-ids';
+import { recordReplacedSeries } from './series-replacement';
 import { allocateBibleReadingId } from './bible-reading-ids';
 import { canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
@@ -31,15 +32,21 @@ import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-he
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
-import { enqueueSyncChanges } from './sync-outbox';
-import type { SyncTable } from './sync-types';
+import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
-import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from './devotional-lifecycle';
-import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
-import { isStrictActiveSeriesWinner } from './devotional-active-selection';
+import {
+  applyArchiveIntent,
+  applyArchiveLifecycle,
+  devotionalLifecycleSyncFields,
+  isDevotionalArchived,
+  lifecycleTimestampMs,
+} from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId, type ResumeSelectionSeries } from './devotional-resume-selection';
+import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
   bibleHighlightSyncData,
@@ -206,9 +213,10 @@ export interface UserProfile {
   /** ISO time the backend last confirmed it holds this device's push token. */
   pushRegisteredAt?: string;
   /**
-   * Whether a local daily reminder is currently in the OS queue. Mirrored to
-   * the backend so it never double-notifies the morning slot and only takes
-   * it over when the client has handed it off.
+   * Whether the local queue holds the morning the next day opens. Mirrored
+   * to the backend, which skips its ready push only then, so that morning
+   * never gets two banners. A handed-off morning keeps later local mornings
+   * queued; those do not count.
    */
   localDailyReminderScheduled?: boolean;
   /** A reminder-time suggestion the reader turned down ("h:mm AM"). */
@@ -673,7 +681,18 @@ interface UnfoldState {
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   activateAcknowledgedDevotionalResume: (id: string, expectedActiveId: string | null, previousClock: string | undefined, acknowledgedClock: string) => boolean;
+  /**
+   * "Start a new series": records the current series as the one the new
+   * series replaces. It stays current, and the server keeps writing it, until
+   * the new series lands (series-replacement.ts).
+   */
   archiveCurrentDevotional: () => void;
+  /**
+   * Ends a replaced series once its replacement has landed. Never a series
+   * already ended. When it was current, a replacement already in the store
+   * (a sync pull landed it first) takes its place on Today.
+   */
+  archiveReplacedDevotional: (id: string, replacementId?: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
@@ -1036,19 +1055,42 @@ const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
 
-/** Reconcile pulled content and its current-series selection. */
-export function updateSyncedDevotionals(updater: (devotionals: Devotional[]) => Devotional[]): void {
+/**
+ * Reconcile pulled content and its current-series selection. The updater
+ * gets the current series id. `pulledSeries` is every series row the pull
+ * returned, including rows this device does not hold yet.
+ */
+export function updateSyncedDevotionals(
+  updater: (devotionals: Devotional[], currentDevotionalId: string | null) => Devotional[],
+  pulledSeries?: readonly ResumeSelectionSeries[],
+): void {
   useUnfoldStore.setState((state) => {
-    const devotionals = updater(state.devotionals);
+    const devotionals = updater(state.devotionals, state.currentDevotionalId);
     return {
       devotionals,
       currentDevotionalId: selectSyncedCurrentDevotionalId({
         previousCurrentId: state.currentDevotionalId,
         previous: state.devotionals,
         next: devotionals,
+        pulled: pulledSeries,
       }),
     };
   });
+}
+
+/**
+ * Selection never changes a series' lifecycle. An archived series comes back
+ * only through the confirmed continuation (createPausedSeriesResume), so an
+ * incidental open cannot outrank the reader's live series on the server. A
+ * missing id would leave Today pointing at nothing.
+ */
+function logRefusedSeriesSelection(reason: 'archived' | 'missing'): void {
+  void logBugEvent(
+    'store-set-current-devotional-refused',
+    'Refused to make an archived or missing series current',
+    { reason },
+    'warn',
+  );
 }
 
 function enqueueDevotionalRow(devotional: Devotional): void {
@@ -1059,6 +1101,26 @@ function enqueueDevotionalRow(devotional: Devotional): void {
   enqueueSyncChanges([
     buildPersonalDataSyncChange('devotionals', devotional.id, devotionalSyncData(devotional), clientUpdatedAt),
   ]);
+}
+
+/**
+ * Queues an archive or resume decision without promoting the row's content.
+ * The server sets archivedStateAt by compare-and-set, apart from content
+ * last-write-wins, so the change keeps the content clock and newer progress
+ * from another device stays newer. The outbox holds one change per row and
+ * drops an older one, so a write still waiting for this row carries the
+ * decision on its own clock. Returns the queued change, or null when a delete
+ * still waiting for this row stays as it is.
+ */
+function enqueueDevotionalLifecycle(devotional: Devotional): SyncPushChange | null {
+  const lifecycle = devotionalLifecycleSyncFields(devotional);
+  const pending = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === devotional.id);
+  if (pending?.deleted) return null;
+  const change = pending
+    ? { ...pending, data: { ...pending.data, ...lifecycle } }
+    : buildPersonalDataSyncChange('devotionals', devotional.id, lifecycle, devotional.updatedAt ?? devotional.createdAt);
+  enqueueSyncChanges([change]);
+  return change;
 }
 
 /**
@@ -1132,16 +1194,11 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === devotional.id);
           if (existing) {
-            if (!isDevotionalArchived(existing)) {
-              return { currentDevotionalId: existing.id, hasEverCreatedDevotional: true };
+            if (isDevotionalArchived(existing)) {
+              logRefusedSeriesSelection('archived');
+              return state;
             }
-            const resumed = applyUnarchiveIntent(existing, new Date().toISOString());
-            enqueueDevotionalRow(resumed);
-            return {
-              devotionals: state.devotionals.map((d) => (d.id === existing.id ? resumed : d)),
-              currentDevotionalId: existing.id,
-              hasEverCreatedDevotional: true,
-            };
+            return { currentDevotionalId: existing.id, hasEverCreatedDevotional: true };
           }
 
           const normalizedDevotional = normalizeDevotionalIdentity(devotional);
@@ -1294,6 +1351,8 @@ export const useUnfoldStore = create<UnfoldState>()(
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
                   isRevealed: (existingDay.isRevealed ?? false) || (incomingDay.isRevealed ?? false),
+                  // Local-only: a pulled row never carries the reader's act answer.
+                  actOutcome: existingDay.actOutcome ?? incomingDay.actOutcome,
                   updatedAt: now,
                 });
               }
@@ -1333,19 +1392,15 @@ export const useUnfoldStore = create<UnfoldState>()(
       setCurrentDevotional: (id) =>
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
-          if (!existing || !isDevotionalArchived(existing)) {
-            return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
+          if (!existing || isDevotionalArchived(existing)) {
+            logRefusedSeriesSelection(existing ? 'archived' : 'missing');
+            return state;
           }
-          const resumed = applyUnarchiveIntent(existing, new Date().toISOString());
-          enqueueDevotionalRow(resumed);
-          return {
-            devotionals: state.devotionals.map((d) => (d.id === existing.id ? resumed : d)),
-            currentDevotionalId: id,
-            scripturePracticeReturn: null,
-          };
+          return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
         }),
       activateAcknowledgedDevotionalResume: (id, expectedActiveId, previousClock, acknowledgedClock) => {
         let activated = false;
+        let pause = null as SyncPushChange | null;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           const exactApplied = existing?.archivedAt === null && existing.archivedStateAt === acknowledgedClock;
@@ -1361,26 +1416,50 @@ export const useUnfoldStore = create<UnfoldState>()(
           };
           if (!isStrictActiveSeriesWinner(id, state.devotionals.map((series) => series.id === id ? resumed : series))) return state;
           activated = true;
+          // The reader confirmed that the previous series "will be paused".
+          // Archive it on the same clock: left unarchived it stays a live
+          // server candidate and takes generation back when this one ends.
+          const previous = expectedActiveId && expectedActiveId !== id
+            ? state.devotionals.find((d) => d.id === expectedActiveId)
+            : undefined;
+          const paused = previous && !isDevotionalArchived(previous) && isProgressiveSeriesCandidate(previous)
+            ? applyArchiveLifecycle(previous, acknowledgedClock)
+            : null;
+          if (paused) pause = enqueueDevotionalLifecycle(paused);
           return {
-            devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d)),
+            devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d.id === paused?.id ? paused : d)),
             currentDevotionalId: id,
             scripturePracticeReturn: null,
           };
         });
+        // The resume already reached the server. A pause left for the next
+        // launch, reconnect or Today focus lets a second device keep this
+        // series until then, so send it now. The outbox keeps it on failure.
+        if (pause) void drainSyncChange(pause);
         return activated;
       },
-      archiveCurrentDevotional: () =>
+      archiveCurrentDevotional: () => {
+        const { currentDevotionalId: currentId, devotionals } = get();
+        if (!currentId) return;
+        if (!devotionals.some((d) => d.id === currentId)) {
+          set({ currentDevotionalId: null, scripturePracticeReturn: null });
+          return;
+        }
+        recordReplacedSeries(currentId);
+      },
+      archiveReplacedDevotional: (id, replacementId) =>
         set((state) => {
-          const currentId = state.currentDevotionalId;
-          if (!currentId) return state;
-          const existing = state.devotionals.find((d) => d.id === currentId);
-          if (!existing) return { currentDevotionalId: null, scripturePracticeReturn: null };
+          const existing = state.devotionals.find((d) => d.id === id);
+          if (!existing || isDevotionalArchived(existing)) return state;
           const archived = applyArchiveIntent(existing, new Date().toISOString());
           enqueueDevotionalRow(archived);
+          // A replacement already ended on another device stays off Today.
+          const replacement = state.devotionals.find((d) => d.id === replacementId && !isDevotionalArchived(d));
           return {
             devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
-            currentDevotionalId: null,
-            scripturePracticeReturn: null,
+            ...(state.currentDevotionalId === id
+              ? { currentDevotionalId: replacement?.id ?? null, scripturePracticeReturn: null }
+              : {}),
           };
         }),
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,

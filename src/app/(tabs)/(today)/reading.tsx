@@ -59,6 +59,7 @@ import {
   type SyncCheckCooldown,
 } from '@/lib/sync-pull-backoff';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { canPulledSeriesTakeEmptyToday } from '@/lib/devotional-resume-selection';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
@@ -79,6 +80,7 @@ import {
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
+import { localDayKey } from '@/lib/home-devotional-state';
 import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
 import { createPausedSeriesResume, type PausedSeriesResume } from '@/lib/paused-series-resume';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
@@ -285,6 +287,7 @@ type SyncCheckOutcome = 'found' | 'missing' | 'failed' | 'rate-limited' | 'skipp
 
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
   const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
   const isReadingFocused = useIsFocused();
@@ -1933,9 +1936,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       viewingDay: day.dayNumber,
     });
   }, [updateDevotionalDays, seriesTitle]);
+  // Re-asked when the local day turns, so a missing day left open overnight
+  // is watched once it is due without a store write.
   const shouldWatchViewingDay = useMemo(
-    () => shouldWatchForGeneratedDay(currentDevotional, viewingDay),
-    [currentDevotional, viewingDay],
+    () => shouldWatchForGeneratedDay(currentDevotional, viewingDay, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, viewingDay, calendarDayKey],
   );
   const dailyRecoveryKey = currentDevotional ? `${currentDevotional.id}:${viewingDay}` : null;
   const dailyGeneration = useGeneratedDayWatch({
@@ -2059,7 +2065,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         if (missingDevotionalHydrationOwnerRef.current === devotionalId
           && effectiveDevotionalIdRef.current === devotionalId
           && params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
-          && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
+          && canPulledSeriesTakeEmptyToday(devotionalId, useUnfoldStore.getState().devotionals, pulled.canonicalSeries)) {
           setCurrentDevotional(devotionalId);
         }
 

@@ -22,13 +22,18 @@ export function activeSeriesRank(series: ActiveSeriesCandidate): number {
   return Math.max(lifecycleTimestampMs(series.createdAt), lifecycleTimestampMs(series.archivedStateAt));
 }
 
+/** No other live series ranks with or above the target. */
+export function outranksActiveSiblings(target: ActiveSeriesCandidate, series: readonly ActiveSeriesCandidate[]): boolean {
+  const rank = activeSeriesRank(target);
+  // Incomplete sibling metadata may block proof, but cannot prove target eligibility.
+  return series.every((candidate) => candidate.id === target.id
+    || !isActiveSeriesCandidate({ ...candidate, generationMode: candidate.generationMode ?? 'progressive' })
+    || activeSeriesRank(candidate) < rank);
+}
+
 /** Pull order is unspecified; only a strict winner proves backend selection. */
 export function isStrictActiveSeriesWinner(id: string, series: readonly ActiveSeriesCandidate[]): boolean {
   const target = series.find((candidate) => candidate.id === id);
   if (!target || !isActiveSeriesCandidate(target)) return false;
-  const rank = activeSeriesRank(target);
-  // Incomplete sibling metadata may block proof, but cannot prove target eligibility.
-  return series.every((candidate) => candidate.id === id
-    || !isActiveSeriesCandidate({ ...candidate, generationMode: candidate.generationMode ?? 'progressive' })
-    || activeSeriesRank(candidate) < rank);
+  return outranksActiveSiblings(target, series);
 }

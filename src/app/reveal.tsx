@@ -27,7 +27,7 @@ import { useUIState } from '@/lib/ui-state';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
-import { resolveRevealOutcome } from '@/lib/reveal-params';
+import { canRevealActivateSeries, resolveRevealOutcome } from '@/lib/reveal-params';
 import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
 import { Typography } from '@/constants/typography';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -205,20 +205,24 @@ export default function RevealScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Mark this day as revealed — teaser card won't show again
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
-    setCurrentDevotional(revealTarget.devotionalId);
-    setResumeContext({
-      route: 'reading',
-      devotionalId: revealTarget.devotionalId,
-      dayNumber: revealTarget.dayNumber,
-      devotionalTitle: revealTarget.seriesTitle,
-      // Only what resolved against the local devotional: the raw param is
-      // attacker-controlled (bounded to 200 chars by the native allowlist,
-      // unbounded on web, which has no native-intent hook) and this value is
-      // persisted and rendered on the Today resume card. null when the day
-      // has no locally generated title yet — the card omits it.
-      dayTitle: revealTarget.dayTitle,
-      touchedAt: new Date().toISOString(),
-    });
+    const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
+    const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, latestDevotionals);
+    if (activatesSeries) {
+      setCurrentDevotional(revealTarget.devotionalId);
+      setResumeContext({
+        route: 'reading',
+        devotionalId: revealTarget.devotionalId,
+        dayNumber: revealTarget.dayNumber,
+        devotionalTitle: revealTarget.seriesTitle,
+        // Only what resolved against the local devotional: the raw param is
+        // attacker-controlled (bounded to 200 chars by the native allowlist,
+        // unbounded on web, which has no native-intent hook) and this value is
+        // persisted and rendered on the Today resume card. null when the day
+        // has no locally generated title yet — the card omits it.
+        dayTitle: revealTarget.dayTitle,
+        touchedAt: new Date().toISOString(),
+      });
+    }
     // Flag the transition so the home screen renders blank during the brief
     // moment React Navigation renders the tab index before the reading screen.
     useUIState.getState().setRevealTransitioning(true);
@@ -235,12 +239,12 @@ export default function RevealScreen() {
     // `dismissTo` can briefly pop through the tab index on this root-stack →
     // nested-tab handoff, which is exactly the blank/stranded path the reveal
     // transition guard is trying to avoid.
-    router.replace(
-      buildReadingRouteFromRevealParams({
-        devotionalId: revealTarget.devotionalId,
-        dayNumber: String(revealTarget.dayNumber),
-      }),
-    );
+    const readingRoute = buildReadingRouteFromRevealParams({
+      devotionalId: revealTarget.devotionalId,
+      dayNumber: String(revealTarget.dayNumber),
+    });
+    // A series the reveal may not activate opens paused, like the library.
+    router.replace(activatesSeries ? readingRoute : { ...readingRoute, params: { ...readingRoute.params, readOnly: '1' } });
   }, [revealTarget, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {

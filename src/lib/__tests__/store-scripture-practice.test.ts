@@ -116,6 +116,8 @@ describe('store scripture practice', () => {
     useUnfoldStore.getState().markDayAsRead(context.target.devotionalId, context.target.dayNumber);
     expect(useUnfoldStore.getState().scripturePracticeReturn).toBeNull();
     useUnfoldStore.getState().setScripturePracticeReturn(context);
+    // setCurrentDevotional refuses a series that is not on this device.
+    useUnfoldStore.setState((state) => ({ devotionals: [...state.devotionals, series({ id: 'different-series' })] }));
     useUnfoldStore.getState().setCurrentDevotional('different-series');
     expect(useUnfoldStore.getState().scripturePracticeReturn).toBeNull();
   });

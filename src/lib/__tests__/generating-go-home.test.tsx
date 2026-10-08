@@ -174,9 +174,10 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
-import { createAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
+import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
+import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
 
 const GO_HOME_LABEL = 'Go to Today';
@@ -626,6 +627,190 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
   });
 });
 
+describe('Go home after the server ruled on the first series', () => {
+  // How the worker stores a provider abort. The friendly copy reads it as a
+  // lost connection, but it is the server's verdict on the job.
+  const PROVIDER_TIMEOUT = 'The operation timed out.';
+
+  function hasPressable(tree: Tree, label: string): boolean {
+    return tree.root.findAll(
+      (n) => n.props?.accessibilityLabel === label && typeof n.props?.onPress === 'function',
+    ).length > 0;
+  }
+
+  function showsError(tree: Tree): boolean {
+    const json = JSON.stringify(tree.toJSON());
+    return json.includes('Something went') || json.includes('Lost connection');
+  }
+
+  // Polls run on timers; walk them until the screen shows its error state.
+  async function settleOnError(tree: Tree) {
+    for (let step = 0; step < 6 && !showsError(tree); step++) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        jest.advanceTimersByTime(3_000);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await flush();
+    }
+    expect(showsError(tree)).toBe(true);
+  }
+
+  // The question Today's "Start a new series" asks before it opens
+  // new-series setup, built as Today's handleCreateNew builds it. The reader
+  // has no series yet.
+  function todayCreateNewAction() {
+    return resolveCreateNewDuringPendingInitial({
+      inflight: readInflightGenerationJob(),
+      requestId: readInitialGenerationRequestId(),
+      generationSessionStatus: useUnfoldStore.getState().generationSession.status,
+      hasReadableCurrentSeries: false,
+      autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+    });
+  }
+
+  async function renderSubmittedJob(): Promise<Tree> {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(tree);
+    return tree;
+  }
+
+  it('offers Start over when a failed verdict with no retries left reads like a lost connection', async () => {
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+
+    const tree = await renderSubmittedJob();
+
+    expect(hasPressable(tree, 'Try again')).toBe(false);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('Lost connection');
+  });
+
+  it('retires the request id so Today opens new-series setup instead of the failed job', async () => {
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+
+    const tree = await renderSubmittedJob();
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Go home');
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(readInflightGenerationJob()).toBeNull();
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it.each([
+    ['an unopenable result', () => mockPollJobStatus.mockResolvedValue({ status: 'complete' })],
+    ['an unknown status', () => mockPollJobStatus.mockResolvedValue({ status: 'archived' })],
+    ['no such job', () => mockPollJobStatus.mockRejectedValue(Object.assign(new Error('Job not found'), { status: 404 }))],
+  ])('retires the request id after %s', async (_verdict, arrangePoll) => {
+    arrangePoll();
+
+    const tree = await renderSubmittedJob();
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('retires the request id after a verdict on the job its submission adopted', async () => {
+    mockSubmitGenerationJob.mockRejectedValue(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-existing', expect.any(Number));
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('keeps the request id when the submission never got an answer', async () => {
+    // The POST may have reached the server. The same id is what lets the next
+    // submit find that job instead of writing a second series.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    const requestId = readInitialGenerationRequestId();
+    expect(requestId).not.toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(false);
+
+    await press(tree, 'Go home');
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+    expect(todayCreateNewAction()).toBe('resume-existing');
+  });
+
+  it('keeps the request id when the resubmit after a gone job never got an answer', async () => {
+    mockPollJobStatus.mockRejectedValue(Object.assign(new Error('Job not found'), { status: 404 }));
+    const tree = await renderSubmittedJob();
+    const requestId = readInitialGenerationRequestId();
+
+    // Try again submits fresh under the same request id, and that POST is
+    // lost. The earlier verdict says nothing about what it created.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+    await press(tree, 'Try again');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(requestId);
+    expect(showsError(tree)).toBe(true);
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+  });
+
+  it('keeps a newer unanswered request id when an older failure push is opened and left', async () => {
+    // A new series' POST is lost and the reader goes home. The kept id is
+    // the only thing that can find a job the server may have made.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+    const first = await renderScreen();
+    const requestId = readInitialGenerationRequestId();
+    expect(requestId).not.toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+    await press(first, 'Go home');
+    await act(async () => {
+      first.unmount();
+    });
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+
+    // iOS kept "We hit a snag" for an older series. Opening it polls that
+    // job, which the server failed. Its verdict says nothing about the newer
+    // request.
+    mockSearchParams.jobId = 'job-old';
+    mockSearchParams.devotionalId = 'devo-old';
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: 'The writer stumbled', canRetry: false });
+    const second = await renderScreen();
+    mounted.push(second);
+    await settleOnError(second);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-old', expect.any(Number));
+
+    await press(second, 'Go home');
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+    expect(todayCreateNewAction()).toBe('resume-existing');
+  });
+});
+
 describe('H10 generating auto-trial handoff', () => {
   it('routes a declined auto claim to series setup instead of the error card', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
@@ -770,5 +955,65 @@ describe('H10 generating auto-trial handoff', () => {
     expect(labels.length).toBeGreaterThan(0);
     expect(tree.root.findAll((node) => joined(node.props?.children) === 'Your 7-day series')).toHaveLength(0);
     expect(mockRevealBackdrop).toHaveBeenLastCalledWith({ variant: 'prism' });
+  });
+});
+
+describe('a series the sync pull landed before /generating resumed its job', () => {
+  // A cold relaunch after the job finished: the app-start pull put the series
+  // and day 1 in the store before this screen resumed the record.
+  async function renderPullFirstCompletion(): Promise<Tree> {
+    const createdAt = '2026-09-04T08:05:00.000Z';
+    const day = {
+      id: 'devo-1:1',
+      devotionalId: 'devo-1',
+      dayNumber: 1,
+      title: 'Trust before understanding',
+      scriptureReference: 'Psalm 56:3-4',
+      scriptureText: 'When I am afraid, I put my trust in you.',
+      bodyText: 'Body',
+      quotableLine: 'Line',
+      isRead: false,
+    };
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1',
+        title: 'Learning to Trust Again',
+        totalDays: 3,
+        currentDay: 1,
+        days: [day],
+        createdAt,
+        seriesStartDate: createdAt,
+        userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+        generationMode: 'progressive',
+      } as Devotional],
+      currentDevotionalId: null,
+    });
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
+    mockPollJobStatus.mockResolvedValue({
+      status: 'complete',
+      result: { devotionalId: 'devo-1', seriesTitle: 'Learning to Trust Again', totalDays: 3, devotionalDay: day },
+    });
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(useUnfoldStore.getState().generationSession.status).toBe('complete');
+    return tree;
+  }
+
+  it('makes the landed series current', async () => {
+    await renderPullFirstCompletion();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+  });
+
+  it('opens the landed series from Begin Day 1', async () => {
+    const tree = await renderPullFirstCompletion();
+
+    await press(tree, 'Begin Day 1');
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(tabs)/(today)/reading',
+      params: { devotionalId: 'devo-1' },
+    });
   });
 });

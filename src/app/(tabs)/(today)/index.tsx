@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, AppState } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
@@ -57,13 +57,13 @@ import {
   type TodayInflightDecision,
 } from '@/lib/inflight-generation-job';
 import {
+  abandonPurchasedIntentBeforeNewSeries,
   readAutoTrialIntent,
   reconcileAutoTrialIntentOnLaunch,
   settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
   type AutoTrialIntentV1,
   type AutoTrialLaunchAction,
-  type IntentStorage,
 } from '@/lib/auto-trial-intent';
 import { isAutoTrialSeries, isOnboardingFirstReading } from '@/lib/auto-trial-series';
 import { getDeviceId } from '@/lib/mmkv-storage';
@@ -79,6 +79,7 @@ import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { readReplacedSeries } from '@/lib/series-replacement';
 import {
   isReadableCurrentSeries,
   resolveCreateNewDuringPendingInitial,
@@ -92,6 +93,7 @@ import {
   getTodayCarryLine,
   getTodayDayContext,
   hasReadDevotionalToday,
+  localDayKey,
   shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
 import {
@@ -103,6 +105,7 @@ import { getReadingDayLabel } from '@/lib/devotional-day-access';
 import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { logBugEvent } from '@/lib/bug-logger';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
@@ -158,6 +161,9 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
+// Repeated foregrounds refresh Today at most once per cooldown, like the
+// day watch's own foreground discovery.
+const TODAY_FOREGROUND_REFRESH_COOLDOWN_MS = 10_000;
 
 function generatingRoute(autoTrialIntentId?: string | null): {
   pathname: '/generating';
@@ -257,26 +263,6 @@ export function applyTodayAutoTrialFocus(i: {
   };
 }
 
-/** Abandons purchased or failed auto-trial intents before the user starts a new series. */
-export function abandonPurchasedIntentBeforeNewSeries(i: {
-  nowMs: number;
-  storage?: IntentStorage;
-}): void {
-  const current = readAutoTrialIntent(i.storage);
-  const reason = current?.status === 'purchased'
-    ? 'superseded_by_user_series'
-    : current?.status === 'failed'
-      ? 'user_setup_fallback'
-      : null;
-  if (!reason) return;
-  transitionAutoTrialIntent(
-    'abandoned',
-    { abandonReason: reason },
-    { nowMs: i.nowMs },
-    i.storage,
-  );
-}
-
 export default function HomeScreen() {
   const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
@@ -319,7 +305,6 @@ export default function HomeScreen() {
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -467,6 +452,18 @@ export default function HomeScreen() {
   const isTodayFocused = useIsFocused();
 
   const [clockNow, setClockNow] = useState(() => new Date());
+  // The local day for day-dependent memos. Unlike clockNow it also moves at
+  // local midnight and on foreground, so a Today left mounted and focused
+  // overnight re-asks them the moment the app resumes. They key on the day,
+  // not the Date, so a foreground on the same day does not recompute them.
+  const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
+  // The minute clock follows the calendar clock, so on resume and at
+  // midnight the card's date decisions (read today, the day shown) move with
+  // the watch instead of up to a minute later.
+  useEffect(() => {
+    setClockNow(new Date());
+  }, [calendarNow]);
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   // The check-in keeps the series and day it opened on, with that day's
   // question and chips, until it closes, and the answer saves there. Neither a
@@ -701,44 +698,66 @@ export default function HomeScreen() {
   // Refresh the current devotional from server sync when Today gains focus.
   // Reading already has a missing-day fallback, but Home needs the same pull
   // because the hero card is where users expect to discover Day 2+.
-  useFocusEffect(
-    useCallback(() => {
-      // Drain any queued offline completions before pulling new content
-      void drainSyncOutbox();
+  const refreshCurrentDevotional = useCallback(() => {
+    // Drain any queued offline completions before pulling new content
+    void drainSyncOutbox();
 
-      const devotionalId = currentDevotionalId;
-      if (!devotionalId || readBudgetBlocked) return;
+    const devotionalId = currentDevotionalId;
+    if (!devotionalId || readBudgetBlocked) return;
 
-      let cancelled = false;
-      void (async () => {
-        try {
-          const session = captureSyncSession();
-          const pulled = await pullDevotionalContent(devotionalId);
-          if (cancelled || !isSyncSessionCurrent(session)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = captureSyncSession();
+        const pulled = await pullDevotionalContent(devotionalId);
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
-          applyPulledDevotionalContent({
-            devotionalId,
-            pulled,
-            updateDevotionalDays,
-            updateDevotionals: updateSyncedDevotionals,
-          });
-          // Only after the content is in the store — a cancelled focus above
-          // discards the response, and must not advance the cursor.
-          commitDevotionalPullCursor(pulled);
-        } catch (err) {
-          if (err instanceof SyncPullRateLimitedError) {
-            void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
-              retryAfterSeconds: err.retryAfterSeconds,
-            }, 'warn');
-            return;
-          }
-          logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+        applyPulledDevotionalContent({
+          devotionalId,
+          pulled,
+          updateDevotionalDays,
+          updateDevotionals: updateSyncedDevotionals,
+        });
+        // Only after the content is in the store — a cancelled focus above
+        // discards the response, and must not advance the cursor.
+        commitDevotionalPullCursor(pulled);
+      } catch (err) {
+        if (err instanceof SyncPullRateLimitedError) {
+          void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
+            retryAfterSeconds: err.retryAfterSeconds,
+          }, 'warn');
+          return;
         }
-      })();
+        logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+      }
+    })();
 
-      return () => { cancelled = true; };
-    }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays])
-  );
+    return () => { cancelled = true; };
+  }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays]);
+  useFocusEffect(refreshCurrentDevotional);
+
+  // A warm resume is not a focus: iOS keeps Today mounted and focused while
+  // the app is suspended, so the refresh above would not run again until the
+  // reader left and came back. Run the same refresh on foreground too, so a
+  // day the server wrote overnight lands on the open screen.
+  const lastForegroundRefreshAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    let cancelForegroundRefresh: (() => void) | undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const now = Date.now();
+      const lastRefreshAt = lastForegroundRefreshAtRef.current;
+      if (lastRefreshAt !== null && now - lastRefreshAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastForegroundRefreshAtRef.current = now;
+      cancelForegroundRefresh?.();
+      cancelForegroundRefresh = refreshCurrentDevotional();
+    });
+    return () => {
+      subscription.remove();
+      cancelForegroundRefresh?.();
+    };
+  }, [isTodayFocused, refreshCurrentDevotional]);
 
   // Check if today's reading has been completed — drives ember visibility.
   // clockNow in deps + passed as `now`: recomputes each minute so "today"
@@ -790,9 +809,13 @@ export default function HomeScreen() {
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
   // tomorrow's content and shouldn't trigger auto-generation.
+  // The local day is an input: after an evening read currentDay is ahead of
+  // the calendar, so this is false until midnight and must turn true then
+  // without any store write, or the watch below never asks for the new day.
   const isPreparingCurrentDay = useMemo(() => (
-    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
-  ), [currentDevotional, premiumPolicy]);
+    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy, calendarNow)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+  ), [currentDevotional, premiumPolicy, calendarDayKey]);
 
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
@@ -816,12 +839,18 @@ export default function HomeScreen() {
     enabled: inflightSeries != null && isTodayFocused,
     onSettled: onInflightSeriesSettled,
   });
+  // "Start a new series" keeps the series it replaces current until the new
+  // one lands. That series is the old reading, never the series in flight:
+  // not by id (a session it left behind) and not as the current series.
+  const replacedSeriesId = readReplacedSeries();
+  const landedSeries = replacedSeriesId ? devotionals.filter((row) => row.id !== replacedSeriesId) : devotionals;
+  const hasLandedCurrentSeries = !!currentDevotional && currentDevotional.id !== replacedSeriesId;
   const isPreparingInflightSeries = inflightSeries != null
-    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
   const isInflightSeriesFailed = inflightSeries == null
     && generationSessionStatus === 'error'
-    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
@@ -888,10 +917,13 @@ export default function HomeScreen() {
     retry: 1,
   });
 
+  // Only the current series resumes from Today. A saved pointer to any other
+  // series (written before this rule, or before a series change) is ignored:
+  // following it would switch the series the server generates.
   const resumeDevotional = useMemo(() => {
-    if (!resumeContext?.devotionalId) return null;
+    if (!resumeContext?.devotionalId || resumeContext.devotionalId !== currentDevotionalId) return null;
     return devotionals.find((d) => d.id === resumeContext.devotionalId) ?? null;
-  }, [resumeContext?.devotionalId, devotionals]);
+  }, [resumeContext?.devotionalId, currentDevotionalId, devotionals]);
 
   const shouldShowResumeCard = useMemo(() => {
     if (!resumeContext || !resumeDevotional) return false;
@@ -928,7 +960,6 @@ export default function HomeScreen() {
     if (!resumeContext || !resumeDevotional) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCurrentDevotional(resumeContext.devotionalId);
 
     if (resumeContext.route === 'journal') {
       router.push({
@@ -947,7 +978,7 @@ export default function HomeScreen() {
         dayNumber: String(resumeContext.dayNumber),
       },
     });
-  }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
+  }, [resumeContext, resumeDevotional, router]);
 
   const openNewSeriesDiscovery = () => {
     abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
@@ -960,13 +991,13 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
-    const pending = resolvePendingInitialArcResume({
+    const pending = {
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus,
       hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
       autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
-    });
+    };
     if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
       handleResumePendingInitial();
       return;
@@ -1264,13 +1295,15 @@ export default function HomeScreen() {
   // for the rest of the home UI and wrong for copy about today. Raised by
   // Greptile on PR #107.
   const dayCopyContext = useMemo(
-    () => getTodayDayContext(currentDevotional),
-    [currentDevotional],
+    () => getTodayDayContext(currentDevotional, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, calendarDayKey],
   );
 
   const todayCarryLine = useMemo(
-    () => getTodayCarryLine(devotionals, currentDevotionalId),
-    [devotionals, currentDevotionalId],
+    () => getTodayCarryLine(devotionals, currentDevotionalId, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [devotionals, currentDevotionalId, calendarDayKey],
   );
 
   const middayMessage = useMemo(
@@ -1398,17 +1431,19 @@ export default function HomeScreen() {
       });
       return;
     }
+    // A saved line opens as history, like the Saved tab: it never changes
+    // which series Today and the server's generation follow.
     const h = rememberedPick.highlight;
-    setCurrentDevotional(h.devotionalId);
     router.push({
       pathname: '/(tabs)/(today)/reading',
       params: {
         devotionalId: h.devotionalId,
         dayNumber: h.dayNumber.toString(),
         highlightId: h.id,
+        ...(h.devotionalId !== currentDevotionalId ? { readOnly: '1' } : {}),
       },
     });
-  }, [rememberedPick, router, setCurrentDevotional]);
+  }, [currentDevotionalId, rememberedPick, router]);
 
   const handleDismissRememberThisCard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
