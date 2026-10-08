@@ -17,7 +17,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
-const { drainSyncOutbox, peekSyncOutbox, resetDrainStateForTesting, OUTBOX_KEY } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
+const { drainSyncOutbox, enqueueSyncChanges, peekSyncOutbox, resetDrainStateForTesting, OUTBOX_KEY } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
 const {
   beginLocalResetSession,
   endLocalResetSession,
@@ -254,7 +254,7 @@ describe('syncDevotionalDayRead', () => {
     endLocalResetSession(resetToken);
   });
 
-  it('does not enqueue a delayed read-sync failure after the captured session is reset', async () => {
+  it('does not queue the read again when its push fails after the session was reset', async () => {
     let rejectPush!: (reason: Error) => void;
     global.fetch = jest.fn(
       () => new Promise<never>((_resolve, reject) => {
@@ -269,11 +269,81 @@ describe('syncDevotionalDayRead', () => {
     }).catch(() => undefined);
     await new Promise<void>((resolve) => setImmediate(resolve));
 
+    // The full reset clears the outbox inside its fence.
     const resetToken = beginLocalResetSession();
+    mmkvStorage.removeItem(OUTBOX_KEY);
     endLocalResetSession(resetToken);
     rejectPush(new Error('offline'));
     await pending;
 
     expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  it('queues the read before its push, so a push that never answers leaves it queued', async () => {
+    global.fetch = jest.fn(() => new Promise<never>(() => undefined)) as unknown as typeof fetch;
+    const readAt = '2026-04-25T12:00:00.000Z';
+
+    void syncDevotionalDayRead({ devotional, day, readAt, isOnline: true });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(peekSyncOutbox()).toEqual(buildDevotionalReadSyncChanges({ devotional, day, readAt }));
+  });
+
+  it('clears the queued read once the server accepts it', async () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const changes = buildDevotionalReadSyncChanges({ devotional, day, readAt });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: changes.map(({ table, id }) => ({ table, id, status: 'accepted', serverUpdatedAt: readAt })),
+      }),
+    }) as unknown as typeof fetch;
+
+    await expect(syncDevotionalDayRead({ devotional, day, readAt, isOnline: true })).resolves.toBe('synced');
+    expect(peekSyncOutbox()).toEqual([]);
+  });
+
+  it('keeps a newer change queued for the same row while the read is in flight', async () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const changes = buildDevotionalReadSyncChanges({ devotional, day, readAt });
+    let answerPush!: () => void;
+    global.fetch = jest.fn(() => new Promise((resolve) => {
+      answerPush = () => resolve({
+        ok: true,
+        json: async () => ({
+          results: changes.map(({ table, id }) => ({ table, id, status: 'accepted', serverUpdatedAt: readAt })),
+        }),
+      });
+    })) as unknown as typeof fetch;
+
+    const pending = syncDevotionalDayRead({ devotional, day, readAt, isOnline: true });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const newer = { ...changes[1], clientUpdatedAt: '2026-04-25T12:05:00.000Z', data: { ...changes[1].data, title: 'Renamed' } };
+    enqueueSyncChanges([newer]);
+    answerPush();
+
+    await expect(pending).resolves.toBe('synced');
+    expect(peekSyncOutbox()).toEqual([newer]);
+  });
+
+  it('leaves a conflicted read queued for the drain, which applies the server row', async () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const changes = buildDevotionalReadSyncChanges({ devotional, day, readAt });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: changes.map(({ table, id }) => ({
+          table,
+          id,
+          status: 'conflict',
+          serverUpdatedAt: '2026-04-25T13:00:00.000Z',
+          serverData: { isRead: true },
+        })),
+      }),
+    }) as unknown as typeof fetch;
+
+    await syncDevotionalDayRead({ devotional, day, readAt, isOnline: true });
+    expect(peekSyncOutbox()).toEqual(changes);
   });
 });
