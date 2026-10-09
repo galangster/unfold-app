@@ -13,7 +13,13 @@ import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
+import {
+  flushUnfoldStorePersistAsync,
+  updateSyncedDevotionals,
+  useUnfoldStore,
+  useHasHydrated,
+  type MoodLevel,
+} from '@/lib/store';
 import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
 import { useQuery } from '@tanstack/react-query';
@@ -718,8 +724,13 @@ export default function HomeScreen() {
           updateDevotionalDays,
           updateDevotionals: updateSyncedDevotionals,
         });
-        // Only after the content is in the store — a cancelled focus above
-        // discards the response, and must not advance the cursor.
+        // Only after the content is on disk — a cancelled focus above
+        // discards the response, and must not advance the cursor. The
+        // store's writes wait up to a few seconds; a kill in that window
+        // with the cursor saved would skip these rows until the next full
+        // refresh.
+        await flushUnfoldStorePersistAsync();
+        if (cancelled || !isSyncSessionCurrent(session)) return;
         commitDevotionalPullCursor(pulled);
       } catch (err) {
         if (err instanceof SyncPullRateLimitedError) {
