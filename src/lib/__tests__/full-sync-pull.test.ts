@@ -33,7 +33,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { useUnfoldStore } from '../store';
-import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
+import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData, resetUserDataPullForTesting, triggerUserDataPull, triggerUserDataPullAfterInFlight } from '../full-sync-pull';
 import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
 import { flushCompanionChatPersist, useCompanionChatStore } from '../companion-chat-store';
@@ -242,6 +242,22 @@ describe('full user-data sync', () => {
     await pullAllUserData({ full: true });
 
     expect(useUnfoldStore.getState().notes.find((note) => note.id === noteId)).toBeUndefined();
+  });
+
+  // 2026-10-09 release audit sweep: a delete handed to the full sync joined a
+  // pull already out, whose reply could predate the delete.
+  it('runs a pull after the one already out when a change must be seen', async () => {
+    resetUserDataPullForTesting();
+    let pulls = 0;
+    serveSync({ pull: () => { pulls += 1; return { timestamp: '2026-07-01T12:00:00.000Z', changes: {} }; } });
+
+    const first = triggerUserDataPull('app-start');
+    const joined = triggerUserDataPull('app-start');
+    const fresh = triggerUserDataPullAfterInFlight('series-deleted');
+    await Promise.all([first, joined, fresh]);
+
+    expect(pulls).toBe(2);
+    resetUserDataPullForTesting();
   });
 
   it('sends the persisted lastPulledAt cursor and advances it after apply', async () => {

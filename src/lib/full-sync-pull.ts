@@ -1151,6 +1151,16 @@ export function triggerUserDataPull(reason: string, options: PullAllUserDataOpti
   return promise;
 }
 
+/**
+ * A pull that must see what changed after any pull already out, such as a
+ * delete another device made. Joining that pull is not enough: its reply can
+ * predate the change. This one starts once the pull already out settles.
+ */
+export function triggerUserDataPullAfterInFlight(reason: string): Promise<void> {
+  const inFlight = pullInFlight && pullInFlight.session === captureSyncSession() ? pullInFlight.promise : null;
+  return inFlight ? inFlight.then(() => triggerUserDataPull(reason)) : triggerUserDataPull(reason);
+}
+
 export function resetUserDataPullForTesting(): void {
   pullInFlight = null;
 }

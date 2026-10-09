@@ -8,7 +8,7 @@ import type { Devotional, DevotionalDay } from '@/lib/store';
 import { replaceSyncOutbox } from '@/lib/sync-outbox';
 import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '@/lib/deleted-series';
 
-jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPull: jest.fn(async () => undefined) }));
+jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPullAfterInFlight: jest.fn(async () => undefined) }));
 
 const dayTwo: DevotionalDay = {
   id: 'day-devotional-1-2',
@@ -85,8 +85,8 @@ describe('pulled devotional content application', () => {
   it('leaves a series another device deleted to the full sync, which applies the delete', () => {
     const updateDevotionalDays = jest.fn();
     const updateDevotionals = jest.fn();
-    const { triggerUserDataPull } = jest.requireMock('@/lib/full-sync-pull') as { triggerUserDataPull: jest.Mock };
-    triggerUserDataPull.mockClear();
+    const { triggerUserDataPullAfterInFlight } = jest.requireMock('@/lib/full-sync-pull') as { triggerUserDataPullAfterInFlight: jest.Mock };
+    triggerUserDataPullAfterInFlight.mockClear();
 
     applyPulledDevotionalContent({
       devotionalId: 'devotional-1',
@@ -97,7 +97,7 @@ describe('pulled devotional content application', () => {
 
     expect(updateDevotionals).not.toHaveBeenCalled();
     expect(updateDevotionalDays).not.toHaveBeenCalled();
-    expect(triggerUserDataPull).toHaveBeenCalledWith('series-deleted');
+    expect(triggerUserDataPullAfterInFlight).toHaveBeenCalledWith('series-deleted');
   });
 
   // Round 7 again: a delete that lost to a newer server row left the series

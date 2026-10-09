@@ -137,7 +137,7 @@ function requestFullSyncForDelete(): void {
   // network stack, which every screen that applies a pull would load too.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pull = require('./full-sync-pull') as typeof import('./full-sync-pull');
-  void pull.triggerUserDataPull('series-deleted');
+  void pull.triggerUserDataPullAfterInFlight('series-deleted');
 }
 
 /** Lifecycle clocks still waiting in the outbox count as local, as in the full sync. */
