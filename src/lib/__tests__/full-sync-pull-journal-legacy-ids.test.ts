@@ -513,6 +513,45 @@ describe('pushing the writing a pull folded together', () => {
     expect(useUnfoldStore.getState().journalEntries.some((item) => item.id === 'journal_one')).toBe(false);
   });
 
+  // 2026-10-09 release audit: a device's first sync gets the day the reader
+  // cleared after an earlier fold, together with the legacy rows that fold
+  // read. A repair would push their old text back over the cleared day.
+  it('does not push old text over a day the reader cleared, when a first sync folds the legacy rows back', () => {
+    const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [
+          { ...legacyRow(canonical, '', '2026-09-05T00:00:00.000Z'), id: canonical },
+          legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z'),
+          legacyRow('journal_two', 'Tablet.', '2026-09-01T09:30:00.000Z'),
+        ],
+      },
+      timestamp: '2026-09-05T00:00:01.000Z',
+    } as never);
+
+    expect(queuedJournal()).toEqual([]);
+  });
+
+  it('still pushes a fold that brings writing newer than the day\'s own row', () => {
+    const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [
+          { ...legacyRow(canonical, '', '2026-09-01T08:00:00.000Z'), id: canonical },
+          legacyRow('journal_one', 'Written later on the old device.', '2026-09-05T00:00:00.000Z'),
+        ],
+      },
+      timestamp: '2026-09-05T00:00:01.000Z',
+    } as never);
+
+    const queued = queuedJournal();
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ id: canonical, deleted: false });
+    expect(queued[0].data.content).toContain('Written later on the old device.');
+  });
+
   it('deletes a write queued without its row along with its series, and does not restore it', () => {
     seedSeries();
     // Dated ahead of this phone, so the delete must be stamped past it.
@@ -586,6 +625,20 @@ describe('pushing the writing a pull folded together', () => {
 
     expect(queuedJournal()).toEqual([
       expect.objectContaining({ id: canonical, deleted: true, clientUpdatedAt: '2099-06-01T00:00:00.002Z' }),
+    ]);
+  });
+
+  // 2026-10-09 release audit: the row is on disk, but a clock-ahead repair for
+  // it reached the outbox and the store's copy of it did not.
+  it('stamps a series delete past a queued repair newer than the row the store kept', () => {
+    seedSeries();
+    const canonical = seedCanonicalEntry('Saved before the crash.', '2026-09-06T00:00:00.000Z');
+    queueWriteLostFromStore('Repaired just before the crash.', '2099-06-01T00:00:00.000Z');
+
+    useUnfoldStore.getState().removeDevotional(DEVOTIONAL);
+
+    expect(queuedJournal()).toEqual([
+      expect.objectContaining({ id: canonical, deleted: true, clientUpdatedAt: '2099-06-01T00:00:00.001Z' }),
     ]);
   });
 

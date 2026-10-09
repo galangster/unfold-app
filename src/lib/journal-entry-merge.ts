@@ -97,6 +97,11 @@ function pairPrayers(existing: PrayerRequest[], incoming: PrayerRequest[]): Map<
   return pairs;
 }
 
+/** When this copy last decided its answer: the reader's toggle, else the answer's own time. */
+function answerDecidedAt(prayer: PrayerRequest): string | undefined {
+  return prayer.answerChangedAt ?? (prayer.isAnswered ? prayer.answeredAt : undefined);
+}
+
 function mergePrayerRequests(
   existing: PrayerRequest[] | undefined,
   incoming: PrayerRequest[] | undefined,
@@ -104,11 +109,34 @@ function mergePrayerRequests(
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
   const pairs = pairPrayers(existing, incoming);
-  // The newer list already holds every older prayer: keep it as it is.
-  if (pairs.size === existing.length) return incoming;
-  // A prayer in both keeps the newer entry's copy, so an answer marked later
-  // stays marked.
-  const merged = existing.map((prayer) => pairs.get(prayer) ?? prayer);
+  // A prayer in both keeps the newer entry's copy. The newer entry is not
+  // always the newer decision about the prayer: a text repair carries the
+  // prayer as it last saw it. So when the two copies disagree, the later
+  // decision wins: a reader's toggle, or the answer itself. A copy with no
+  // decision never undoes an answer, and a later "not answered" stands.
+  const olderByNewer = new Map([...pairs].map(([older, newer]) => [newer, older] as const));
+  const keepAnswer = (newer: PrayerRequest): PrayerRequest => {
+    const older = olderByNewer.get(newer);
+    if (!older || older.isAnswered === newer.isAnswered) return newer;
+    const olderDecidedAt = answerDecidedAt(older);
+    const newerDecidedAt = answerDecidedAt(newer);
+    if (!olderDecidedAt || (newerDecidedAt && newerDecidedAt >= olderDecidedAt)) return newer;
+    return {
+      ...newer,
+      isAnswered: older.isAnswered,
+      answeredAt: older.answeredAt,
+      answerChangedAt: older.answerChangedAt,
+    };
+  };
+  // The newer list already holds every older prayer: keep it, answers kept.
+  if (pairs.size === existing.length) {
+    const kept = incoming.map(keepAnswer);
+    return kept.every((prayer, index) => prayer === incoming[index]) ? incoming : kept;
+  }
+  const merged = existing.map((prayer) => {
+    const newer = pairs.get(prayer);
+    return newer ? keepAnswer(newer) : prayer;
+  });
   const paired = new Set(pairs.values());
   for (const prayer of incoming) if (!paired.has(prayer)) merged.push(prayer);
   return merged;
@@ -136,8 +164,13 @@ function mergeStringList(
  * merged text, so nothing is dropped.
  */
 export function rebaseJournalDraft(base: string, merged: string, draft: string): string {
+  // The merged text already is the draft, as when the editor's own save comes back.
+  if (merged === draft) return draft;
   if (merged === base) return draft;
   if (draft === base) return merged;
+  // The merge already holds the draft's additions, as when another device
+  // saved the same words and more. Rebasing again would repeat them.
+  if (base.trim() && draft.includes(base) && merged.includes(draft)) return merged;
   const at = base.trim() ? merged.indexOf(base) : -1;
   if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
   if (!merged.trim()) return draft;
@@ -161,6 +194,33 @@ function mergePair(base: JournalEntry, incoming: JournalEntry): JournalEntry {
 }
 
 const TEXT_FIELDS = ['content', 'soapResponses', 'questionResponses'] as const;
+
+const isBlank = (text: string | undefined | null) => !(text ?? '').trim();
+
+/**
+ * True when `merged` differs from `own` only by filling what `own` holds
+ * empty: its text, a SOAP field, an answer, or its prayer or prompt lists.
+ */
+export function onlyFillsEmptyFields(own: JournalEntry, merged: JournalEntry): boolean {
+  if (merged.journalMode !== own.journalMode) return false;
+  if ((merged.content ?? '') !== (own.content ?? '') && !isBlank(own.content)) return false;
+  const ownSoap = normalizeSoapResponses(own.soapResponses);
+  const mergedSoap = normalizeSoapResponses(merged.soapResponses);
+  for (const field of SOAP_FIELDS) {
+    if ((mergedSoap?.[field] ?? '') !== (ownSoap?.[field] ?? '') && !isBlank(ownSoap?.[field])) return false;
+  }
+  for (const answer of merged.questionResponses ?? []) {
+    const ownAnswer = own.questionResponses?.find((qr) => qr.question === answer.question)?.response;
+    if (answer.response !== (ownAnswer ?? '') && !isBlank(ownAnswer)) return false;
+  }
+  for (const [ownList, mergedList] of [
+    [own.prayerRequests, merged.prayerRequests],
+    [own.deeperQuestions, merged.deeperQuestions],
+  ] as const) {
+    if (ownList?.length && JSON.stringify(ownList) !== JSON.stringify(mergedList ?? [])) return false;
+  }
+  return true;
+}
 
 function addsNoTextTo(base: JournalEntry, incoming: JournalEntry): boolean {
   const merged = mergePair(base, incoming);
