@@ -263,6 +263,41 @@ describe('push notification helpers', () => {
       ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
     });
 
+    // 2026-10-09 release audit sweep: a landed trial still diverted every ready
+    // push to /generating, so a day 2 push showed "Begin Day 1" instead of that
+    // day's reveal.
+    it('opens the reveal for a later-day ready push once the trial series has landed', () => {
+      const landed = {
+        intentId: 'intent-1',
+        status: 'landed',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      } as never;
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 2 },
+          landed,
+        ),
+      ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'dev-auto', dayNumber: '2' } });
+    });
+
+    // 2026-10-09 release audit sweep: the later-day reveal must not take the
+    // day 1 push away from /generating, where the reader begins Day 1.
+    it('still sends a day 1 ready push to generating once the trial series has landed', () => {
+      const landed = {
+        intentId: 'intent-1',
+        status: 'landed',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      } as never;
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 1 },
+          landed,
+        ),
+      ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
+    });
+
     it('H11 keeps today routes when there is no intent or the intent is terminal', () => {
       expect(
         buildNotificationNavigationRoute({ type: 'generation_failed', jobType: 'initial_arc', jobId: 'j', devotionalId: 'd' }),

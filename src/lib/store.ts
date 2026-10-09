@@ -33,6 +33,7 @@ import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { rememberDeletedSeries } from './deleted-series';
 import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
@@ -692,9 +693,10 @@ interface UnfoldState {
   /**
    * Ends a replaced series once its replacement has landed. Never a series
    * already ended. When it was current, a replacement already in the store
-   * (a sync pull landed it first) takes its place on Today.
+   * (a sync pull landed it first) takes its place on Today. `endedAt` dates
+   * the end; it defaults to now.
    */
-  archiveReplacedDevotional: (id: string, replacementId?: string) => void;
+  archiveReplacedDevotional: (id: string, replacementId?: string, endedAt?: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
@@ -1238,6 +1240,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           // journal text under it.
           const devotional = state.devotionals.find((d) => d.id === devotionalId);
           const now = new Date().toISOString();
+          rememberDeletedSeries(devotionalId, now);
           // A delete carries no data: buildPersonalDataSyncChange drops it for
           // tombstones, so the sibling pattern of passing *SyncData(row) here
           // would only be discarded.
@@ -1499,15 +1502,16 @@ export const useUnfoldStore = create<UnfoldState>()(
         const current = devotionals.find((d) => d.id === currentId);
         recordReplacedSeries(currentId, current?.archivedStateAt ?? '');
       },
-      archiveReplacedDevotional: (id, replacementId) =>
+      archiveReplacedDevotional: (id, replacementId, endedAt) => {
+        let ended = null as SyncPushChange | null;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || isDevotionalArchived(existing)) return state;
           // Only the archive clock moves: this device's copy can hold older
           // progress than another device saved, and a full row with a fresh
           // content clock would win over it.
-          const archived = applyArchiveLifecycle(existing, new Date().toISOString());
-          enqueueDevotionalLifecycle(archived);
+          const archived = applyArchiveLifecycle(existing, endedAt ?? new Date().toISOString());
+          ended = enqueueDevotionalLifecycle(archived);
           const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
           // The replacement becomes current only as the strict active winner,
           // the series the server writes. Beside a newer live series (one
@@ -1523,7 +1527,12 @@ export const useUnfoldStore = create<UnfoldState>()(
               ? { currentDevotionalId: nextCurrentId, scripturePracticeReturn: null }
               : {}),
           };
-        }),
+        });
+        // A change left for the next launch, reconnect or Today focus lets a
+        // second device keep showing the replaced series until then, so send
+        // it now. The outbox keeps it on failure.
+        if (ended) void drainSyncChange(ended);
+      },
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber, readAt) =>

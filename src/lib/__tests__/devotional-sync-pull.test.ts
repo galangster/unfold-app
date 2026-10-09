@@ -369,6 +369,23 @@ describe('devotional sync pull recovery', () => {
     });
   });
 
+  // 2026-10-09 release audit sweep: the mappers dropped this series'
+  // tombstone, so a phone kept a series another device deleted.
+  it('flags the pulled series when the pull returns its tombstone', () => {
+    const deleted = extractPulledDevotionalContent({
+      timestamp: '2026-04-25T12:00:00.000Z',
+      changes: { devotionals: [{ id: 'devotional-1', updatedAt: '2026-04-25T11:00:00.000Z', deleted: true, data: {} }] },
+    }, 'devotional-1');
+    expect(deleted.seriesDeleted).toBe(true);
+    expect(deleted.devotional).toBeUndefined();
+
+    const other = extractPulledDevotionalContent({
+      timestamp: '2026-04-25T12:00:00.000Z',
+      changes: { devotionals: [{ id: 'devotional-2', updatedAt: '2026-04-25T11:00:00.000Z', deleted: true, data: {} }] },
+    }, 'devotional-1');
+    expect(other).not.toHaveProperty('seriesDeleted');
+  });
+
   it('maps archive clocks from a pulled series row', () => {
     const result = extractPulledDevotionalContent({
       timestamp: '2026-09-12T16:00:00.000Z',

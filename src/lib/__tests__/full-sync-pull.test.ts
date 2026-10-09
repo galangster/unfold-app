@@ -1,3 +1,5 @@
+import { resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -31,7 +33,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { useUnfoldStore } from '../store';
-import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
+import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData, resetUserDataPullForTesting, triggerUserDataPull, triggerUserDataPullAfterInFlight } from '../full-sync-pull';
 import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
 import { flushCompanionChatPersist, useCompanionChatStore } from '../companion-chat-store';
@@ -240,6 +242,22 @@ describe('full user-data sync', () => {
     await pullAllUserData({ full: true });
 
     expect(useUnfoldStore.getState().notes.find((note) => note.id === noteId)).toBeUndefined();
+  });
+
+  // 2026-10-09 release audit sweep: a delete handed to the full sync joined a
+  // pull already out, whose reply could predate the delete.
+  it('runs a pull after the one already out when a change must be seen', async () => {
+    resetUserDataPullForTesting();
+    let pulls = 0;
+    serveSync({ pull: () => { pulls += 1; return { timestamp: '2026-07-01T12:00:00.000Z', changes: {} }; } });
+
+    const first = triggerUserDataPull('app-start');
+    const joined = triggerUserDataPull('app-start');
+    const fresh = triggerUserDataPullAfterInFlight('series-deleted');
+    await Promise.all([first, joined, fresh]);
+
+    expect(pulls).toBe(2);
+    resetUserDataPullForTesting();
   });
 
   it('sends the persisted lastPulledAt cursor and advances it after apply', async () => {
@@ -1296,6 +1314,60 @@ describe('pulled series lifecycle', () => {
     });
 
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  it('remembers a series another device deleted, so a pull already out cannot restore it', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T19:00:00.000Z',
+      changes: {
+        devotionals: [{ id: 'series-1', updatedAt: '2026-09-12T18:00:00.000Z', deleted: true, data: {} }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().devotionals).toEqual([]);
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 7 too: once the server acknowledged a delete made here, nothing on
+  // this phone said the series was deleted.
+  it('remembers a series deleted here after its delete leaves the outbox', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    useUnfoldStore.getState().removeDevotional('series-1');
+    replaceSyncOutbox([]);
+
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    expect(wasSeriesDeleted('series-2')).toBe(false);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 7 again: a full sync that was out when the delete applied answered
+  // with the older live row, and inserted it.
+  it('inserts no row older than a delete applied here, and a newer one again', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+    useUnfoldStore.getState().removeDevotional('series-1');
+    const deletedAtMs = Date.parse(peekSyncOutbox().find((change) => change.deleted && change.id === 'series-1')?.clientUpdatedAt ?? '');
+    replaceSyncOutbox([]);
+    const at = (offsetMs: number) => new Date(deletedAtMs + offsetMs).toISOString();
+    const liveRow = (updatedAt: string) => ({
+      id: 'series-1',
+      updatedAt,
+      deleted: false,
+      data: { title: 'Stillness', totalDays: 14, currentDay: 4, createdAt: '2026-09-01T00:00:00.000Z', generationMode: 'progressive', clientUpdatedAt: updatedAt },
+    });
+
+    applyPulledUserData({ timestamp: at(1_000), changes: { devotionals: [liveRow(at(-60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(false);
+
+    applyPulledUserData({ timestamp: at(120_000), changes: { devotionals: [liveRow(at(60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
   });
 
   it('does not restore a stale remote resume or steal a different live selection', () => {

@@ -40,6 +40,7 @@ jest.mock('../mmkv-storage', () => {
 import {
   createAutoTrialIntent,
   readAutoTrialIntent,
+  settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
 } from '../auto-trial-intent';
 import { withOnboardingFirstReadingArc } from '../auto-trial-series';
@@ -361,6 +362,28 @@ describe('applyInitialArcResult', () => {
       expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
     });
 
+    // 2026-10-09 release audit round 7: the end was dated when the new series
+    // landed, which beat a resume the reader made elsewhere after the choice.
+    it('dates the end from the reader\'s choice', () => {
+      useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', '', '2026-10-09T09:00:00.000Z');
+      bindForStoredRequest('devo-1');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedStateAt).toBe('2026-10-09T09:00:00.000Z');
+      expect(peekSyncOutbox().find((c) => c.table === 'devotionals' && c.id === 'old-series')?.data.archivedStateAt).toBe('2026-10-09T09:00:00.000Z');
+    });
+
+    it('dates the end just past a lifecycle clock that runs ahead of this phone', () => {
+      const aheadAt = '2099-01-01T00:00:00.000Z';
+      useUnfoldStore.setState({ devotionals: [replaced({ archivedAt: null, archivedStateAt: aheadAt } as Partial<Devotional>)], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', aheadAt, '2026-10-09T09:00:00.000Z');
+      bindForStoredRequest('devo-1');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedStateAt).toBe('2099-01-01T00:00:00.001Z');
+    });
+
     it('keeps it when the replacement was already paused', () => {
       const paused = { ...replaced({ id: 'devo-1', title: 'New', currentDay: 1 }), archivedAt: '2026-10-09T09:00:00.000Z', archivedStateAt: '2026-10-09T09:00:00.000Z' } as Devotional;
       useUnfoldStore.setState({ devotionals: [replaced(), paused], currentDevotionalId: 'old-series' });
@@ -529,6 +552,33 @@ describe('settleInflightInitialArcWatch', () => {
     bindReplacementSeries('devo-1');
     writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId });
     clearInitialGenerationRequestId();
+
+    settleInflightInitialArcWatch(
+      { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+
+    expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
+  // 2026-10-09 release audit sweep: a failed replacement's verdict retired its
+  // request, and a Try again from the failure push then landed the same
+  // series without ending the one it replaces.
+  it('ends a waiting replaced series when its bound series lands after its request retired', () => {
+    replaceSyncOutbox([]);
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+    });
+    recordReplacedSeries('old-series', '');
+    ensureInitialGenerationRequestId(() => '88888888-8888-4888-8888-888888888888');
+    bindReplacementSeries('devo-1');
+    clearInitialGenerationRequestId();
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000 });
 
     settleInflightInitialArcWatch(
       { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
@@ -873,6 +923,69 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     );
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
     expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
+  // 2026-10-09 release audit round 7: the trial step made its series current
+  // after the landing had kept Today on a newer live series.
+  it('leaves Today on a newer live series when an older trial lands', () => {
+    seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'newer-series', title: 'Newer', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-09T08:00:00.000Z',
+        updatedAt: '2026-10-09T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'newer-series',
+    });
+    applyInitialArcResult(
+      { ...result, seriesStartDate: '2026-09-08T17:00:00.000Z', arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('newer-series');
+  });
+
+  // Round 7 again: retiring the current sample handed Today to the trial
+  // before the winner check ran.
+  it('leaves Today empty when an older trial retires the current sample beside a newer live series', () => {
+    const intent = seedSubmittedIntent();
+    const row = (id: string, createdAt: string, days: DevotionalDay[] = []) => ({
+      id, title: id, totalDays: 3, currentDay: 1, days, createdAt, updatedAt: createdAt, generationMode: 'progressive',
+    } as unknown as Devotional);
+    useUnfoldStore.setState({
+      devotionals: [
+        row('onboarding-sample-1', '2026-09-08T16:00:00.000Z'),
+        row('devo-1', '2026-09-08T17:00:00.000Z', [{ ...day1, devotionalId: 'devo-1', id: 'devo-1:1' }]),
+        row('newer-series', '2026-10-09T08:00:00.000Z'),
+      ],
+      currentDevotionalId: 'onboarding-sample-1',
+    });
+
+    settleLandedAutoTrialSeries(intent, 'devo-1');
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  // Round 7 again: the check ran before retirement, so a saved first reading
+  // dated after the trial outranked it and Today went empty.
+  it('gives Today to the trial once retirement archives a saved first reading dated after it', () => {
+    const intent = seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [
+        {
+          id: 'first-reading-1', title: 'First reading', totalDays: 1, currentDay: 1, days: [], createdAt: '2026-09-08T18:00:00.000Z',
+          updatedAt: '2026-09-08T18:00:00.000Z', generationMode: 'progressive',
+          seriesArc: withOnboardingFirstReadingArc(undefined, '2026-09-08T18:00:00.000Z'),
+        } as unknown as Devotional,
+        {
+          id: 'devo-1', title: 'Trial', totalDays: 3, currentDay: 1, days: [{ ...day1, devotionalId: 'devo-1', id: 'devo-1:1' }],
+          createdAt: '2026-09-08T17:00:00.000Z', updatedAt: '2026-09-08T17:00:00.000Z', generationMode: 'progressive',
+        } as unknown as Devotional,
+      ],
+      currentDevotionalId: 'first-reading-1',
+    });
+
+    settleLandedAutoTrialSeries(intent, 'devo-1');
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
   });
 
   it('settles the matching id in the else branch', () => {

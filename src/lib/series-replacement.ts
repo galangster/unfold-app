@@ -26,6 +26,12 @@ export const REPLACED_SERIES_KEY = 'replaced-series-v1';
  * has none.
  */
 export const REPLACED_SERIES_STATE_KEY = 'replaced-series-state-v1';
+/**
+ * When the reader chose to replace the series. The end that lands later is
+ * dated from then, so a resume the reader makes elsewhere after the choice
+ * still wins on the server. A record an older build wrote has none.
+ */
+export const REPLACED_SERIES_CHOSEN_AT_KEY = 'replaced-series-chosen-at-v1';
 
 /**
  * The new series that replaces it: the first one the server names for the
@@ -47,9 +53,10 @@ interface ReplacementBinding {
   devotionalId: string;
 }
 
-export function recordReplacedSeries(devotionalId: string, seenStateAt = ''): void {
+export function recordReplacedSeries(devotionalId: string, seenStateAt = '', chosenAt = new Date().toISOString()): void {
   mmkvStorage.setItem(REPLACED_SERIES_KEY, devotionalId);
   mmkvStorage.setItem(REPLACED_SERIES_STATE_KEY, seenStateAt);
+  mmkvStorage.setItem(REPLACED_SERIES_CHOSEN_AT_KEY, chosenAt);
   mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
 }
 
@@ -63,15 +70,27 @@ export function bindReplacementSeries(replacementId: string): void {
 
 /** The bound replacement, while the request it was bound for is on its way. */
 export function readReplacementSeries(): string | null {
+  const binding = readBinding();
+  return binding?.requestId && binding.devotionalId && isPendingRequest(binding.requestId) ? binding.devotionalId : null;
+}
+
+/**
+ * The series the choice is bound to, even after its request retired. Its
+ * result still ends the replaced series: a Try again from a failure push
+ * lands the same series. A new request rebinds, and then only its series does.
+ */
+export function readBoundReplacementSeries(): string | null {
+  return readBinding()?.devotionalId || null;
+}
+
+function readBinding(): Partial<ReplacementBinding> | null {
   const stored = mmkvStorage.getItem(REPLACEMENT_SERIES_KEY) as string | null;
   if (!stored) return null;
-  let binding: Partial<ReplacementBinding>;
   try {
-    binding = JSON.parse(stored) as Partial<ReplacementBinding>;
+    return JSON.parse(stored) as Partial<ReplacementBinding>;
   } catch {
     return null;
   }
-  return binding.requestId && binding.devotionalId && isPendingRequest(binding.requestId) ? binding.devotionalId : null;
 }
 
 /**
@@ -88,6 +107,12 @@ export function readReplacedSeriesState(): string | null {
   return stored ?? null;
 }
 
+/** When the reader chose to replace the series, or null for an older build's record. */
+export function readReplacedSeriesChosenAt(): string | null {
+  const stored = mmkvStorage.getItem(REPLACED_SERIES_CHOSEN_AT_KEY) as string | null;
+  return stored || null;
+}
+
 export function readReplacedSeries(): string | null {
   const stored = mmkvStorage.getItem(REPLACED_SERIES_KEY) as string | null;
   return stored || null;
@@ -96,6 +121,7 @@ export function readReplacedSeries(): string | null {
 export function clearReplacedSeries(): void {
   mmkvStorage.removeItem(REPLACED_SERIES_KEY);
   mmkvStorage.removeItem(REPLACED_SERIES_STATE_KEY);
+  mmkvStorage.removeItem(REPLACED_SERIES_CHOSEN_AT_KEY);
   mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
 }
 
