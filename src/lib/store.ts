@@ -25,7 +25,7 @@ import {
 import { newId } from './sync-ids';
 import { recordReplacedSeries } from './series-replacement';
 import { allocateBibleReadingId } from './bible-reading-ids';
-import { answerDecidedAt, canonicalJournalEntryId } from './journal-entry-merge';
+import { answerDecidedAt, canonicalJournalEntryId, withQueuedJournalWriting } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
@@ -1108,14 +1108,7 @@ function laterDecisionTime(previous: string | undefined, now: string): string {
 }
 
 function journalWriteClock(entry: JournalEntry, now: string): string {
-  // A change the outbox still holds can be ahead of the entry on disk: a
-  // clock-ahead repair queued before a crash kept the store from saving it.
-  // An edit stamped below it would lose to it in the queue.
-  const queued = entry.id
-    ? peekSyncOutbox().find((change) => change.table === 'journal_entries' && change.id === entry.id)?.clientUpdatedAt
-    : undefined;
-  const latest = [entry.updatedAt, queued].filter((clock): clock is string => !!clock).sort().pop();
-  const after = latest ? Date.parse(latest) + 1 : Number.NaN;
+  const after = entry.updatedAt ? Date.parse(entry.updatedAt) + 1 : Number.NaN;
   if (!Number.isFinite(after)) return now;
   const next = new Date(after).toISOString();
   return next > now ? next : now;
@@ -2627,6 +2620,14 @@ export const useUnfoldStore = create<UnfoldState>()(
                 repairedKeys,
                 stateKeys: Object.keys(state),
               });
+            }
+
+            // A crash can leave the outbox ahead of the stored journal: it is
+            // written at once, the store on a delay. Each entry takes the
+            // newer queued writing, so the next edit builds on it and its
+            // write clock passes the queued change.
+            if (Array.isArray(state.journalEntries)) {
+              state.journalEntries = withQueuedJournalWriting(state.journalEntries, peekSyncOutbox());
             }
 
             // Reset session-scoped state on app launch (not persisted across sessions)

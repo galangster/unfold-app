@@ -331,6 +331,35 @@ describe('the journal editor when a merge moves its entry', () => {
     act(() => tree.unmount());
   });
 
+  it('does not repeat a first draft the arriving entry already holds', () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const input = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+
+    act(() => { input.props.onChangeText('My prayer'); });
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        journalEntries: [...state.journalEntries, {
+          id: canonicalJournalEntryId('dev-1', 1),
+          devotionalId: 'dev-1',
+          dayNumber: 1,
+          content: 'My prayer, continued',
+          journalMode: 'freewrite',
+          createdAt: '2026-10-09T08:00:00.000Z',
+          updatedAt: '2026-10-09T08:00:00.000Z',
+        }],
+      }));
+    });
+    act(() => { jest.advanceTimersByTime(2_000); });
+
+    const day = useUnfoldStore.getState().journalEntries
+      .find((entry) => entry.devotionalId === 'dev-1' && entry.dayNumber === 1);
+    expect(day?.content).toBe('My prayer, continued');
+    act(() => tree.unmount());
+  });
+
   // 2026-10-09 release audit: ids are day-derived, so a pull can fold another
   // device's writing in without moving the entry.
   it('saves typing still pending when a pull folds writing into the same entry, and keeps that writing', () => {

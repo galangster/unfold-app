@@ -41,9 +41,9 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { applyPulledUserData } from '../full-sync-pull';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields, rebaseJournalDraft } from '../journal-entry-merge';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields, rebaseJournalDraft, withQueuedJournalWriting } from '../journal-entry-merge';
 import { mmkvStorage } from '../mmkv-storage';
-import { useUnfoldStore, type JournalEntry } from '../store';
+import { flushUnfoldStorePersist, useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
 import { OUTBOX_KEY, peekSyncOutbox } from '../sync-outbox';
 
@@ -410,36 +410,50 @@ describe('prayer answers', () => {
   });
 });
 
-describe('journal edit clock', () => {
-  it('stamps an edit past a repair the outbox holds ahead of the entry', () => {
+describe('journal writing a crash left in the outbox', () => {
+  it('loads the newer queued writing into the entry, so partial edits and toggles build on it', async () => {
     const store = useUnfoldStore.getState();
     const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'Before.', journalMode: 'freewrite' });
-    // A crash left a clock-ahead repair queued while the entry on disk kept its older clock.
+    store.addPrayerRequest(id, 'Healing');
+    flushUnfoldStorePersist();
+    const prayer = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
+    // A clock-ahead repair reached the outbox, and the app crashed before the
+    // store's delayed write.
     const ahead = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     mmkvStorage.setItem(OUTBOX_KEY, JSON.stringify([{
       table: 'journal_entries',
       id,
-      data: { id, devotionalId: 'dev-1', dayNumber: 1, content: 'Before.\n\nRepair.' },
+      data: {
+        devotionalId: 'dev-1',
+        dayNumber: 1,
+        content: 'Before.\n\nRepair.',
+        journalMode: 'freewrite',
+        prayerRequests: [{ ...prayer, isAnswered: true, answeredAt: ahead, answerChangedAt: ahead }],
+      },
       clientUpdatedAt: ahead,
       deleted: false,
     }]));
 
-    useUnfoldStore.getState().updateJournalEntry(id, 'Edited offline.');
+    await useUnfoldStore.persist.rehydrate();
 
-    const queued = peekSyncOutbox().find((change) => change.table === 'journal_entries' && change.id === id);
-    expect(queued?.data).toEqual(expect.objectContaining({ content: 'Edited offline.' }));
-    expect(queued!.clientUpdatedAt > ahead).toBe(true);
+    const loaded = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!;
+    expect(loaded).toMatchObject({ content: 'Before.\n\nRepair.', updatedAt: ahead });
+    useUnfoldStore.getState().updateJournalMode(id, 'soap');
+    useUnfoldStore.getState().togglePrayerAnswered(id, prayer.id);
+    const queued = peekSyncOutbox().find((change) => change.table === 'journal_entries' && change.id === id)!;
+    expect(queued.data).toEqual(expect.objectContaining({ content: 'Before.\n\nRepair.', journalMode: 'soap' }));
+    expect(queued.clientUpdatedAt > ahead).toBe(true);
+    const toggled = (queued.data.prayerRequests as Array<{ isAnswered: boolean; answerChangedAt: string }>)[0];
+    expect(toggled.isAnswered).toBe(false);
+    expect(toggled.answerChangedAt > ahead).toBe(true);
   });
-});
 
-describe('onlyFillsEmptyFields', () => {
-  it('is false when the fold changes the journal mode', () => {
-    const own: JournalEntry = {
-      id: DAY_ID, devotionalId: 'dev-1', dayNumber: 1, content: 'Text.', journalMode: 'soap',
-      createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
-    };
-    expect(onlyFillsEmptyFields(own, { ...own, journalMode: 'freewrite' })).toBe(false);
-    expect(onlyFillsEmptyFields(own, { ...own })).toBe(true);
+  it('leaves an entry as it is when the outbox holds nothing newer for it', () => {
+    const entry = { id: 'e', devotionalId: 'dev-1', dayNumber: 1, content: 'Mine.', createdAt: 'x', updatedAt: '2026-09-02T10:00:00.000Z' };
+    const entries = [entry];
+    expect(withQueuedJournalWriting(entries, [{
+      table: 'journal_entries', id: 'e', data: { content: 'Older.' }, clientUpdatedAt: '2026-09-01T10:00:00.000Z', deleted: false,
+    }])).toBe(entries);
   });
 });
 
@@ -480,6 +494,10 @@ describe('rebaseJournalDraft', () => {
 
   it('takes the merged text when it already holds the draft, without repeating words', () => {
     expect(rebaseJournalDraft('Hope', 'Hope grows daily', 'Hope grows')).toBe('Hope grows daily');
+  });
+
+  it('takes the merged text when a draft started on an empty field is already in it', () => {
+    expect(rebaseJournalDraft('', 'My prayer, continued', 'My prayer')).toBe('My prayer, continued');
   });
 
   it('still keeps a deletion when the merge added words after it', () => {
