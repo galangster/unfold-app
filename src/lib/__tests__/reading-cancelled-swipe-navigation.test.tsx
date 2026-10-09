@@ -69,7 +69,7 @@ const mockPanGesture = {
   onEnd: null as null | ((event: { translationX: number }, success: boolean) => void),
   onFinalize: null as null | ((event: { translationX: number }, success: boolean) => void),
 };
-const routeParams: { devotionalId: string; dayNumber?: string; readOnly?: string } = {
+const routeParams: { devotionalId: string; dayNumber?: string; dayRequest?: string; readOnly?: string } = {
   devotionalId: DEVOTIONAL_ID,
   dayNumber: '3',
 };
@@ -652,6 +652,7 @@ describe('reader swipe cancellation', () => {
     jest.requireMock('../api-config').getAuthHeaders.mockReset().mockResolvedValue({ 'Content-Type': 'application/json' });
     routeParams.devotionalId = DEVOTIONAL_ID;
     routeParams.dayNumber = '3';
+    delete routeParams.dayRequest;
     delete routeParams.readOnly;
     mockFocused = true;
     mockPanGesture.enabledValues.length = 0;
@@ -710,6 +711,27 @@ describe('reader swipe cancellation', () => {
     });
     return tree!;
   }
+
+  it('opens the day the day menu picks again after a swipe moved away from it', async () => {
+    seedReader();
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+    });
+    const dayShown = (day: number) => tree!.root.findAllByProps({ accessibilityLabel: `Day ${day} of 7` }).length > 0;
+    expect(dayShown(3)).toBe(true);
+
+    act(() => { mockPanGesture.onEnd?.({ translationX: 100 }, true); });
+    expect(dayShown(2)).toBe(true);
+
+    // The menu picks Day 3, which the route already names: only the request is new.
+    routeParams.dayRequest = '1';
+    await act(async () => {
+      tree!.update(<ReadingScreen />);
+    });
+    expect(dayShown(3)).toBe(true);
+    expect(dayShown(2)).toBe(false);
+  });
 
   it('places an open selection bar again after a scroll the reader ran itself, not after a fling', async () => {
     const tree = await renderWithDayFour();

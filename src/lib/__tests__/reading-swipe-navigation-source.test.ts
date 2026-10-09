@@ -7,6 +7,13 @@ const readingSource = readFileSync(
 );
 
 describe('reading swipe navigation source contract', () => {
+  it('applies a day menu choice even when the route already names that day', () => {
+    expect(readingSource).toContain(
+      "const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}:${params.dayRequest ?? ''}`;",
+    );
+    expect(readingSource).toContain('}, [currentDevotional, effectiveDevotionalId, requestedDayNumber, params.dayRequest]);');
+  });
+
   it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
     const scriptureTapBlock = readingSource.match(
       /onScriptureTap=\{\(ref, savedPassage\) => \{[\s\S]{0,700}?\}\}/,

@@ -292,7 +292,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
+  const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; dayRequest?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
   const { handleBack: navigateReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -1078,9 +1078,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // Respect deep-linked day number (used by Resume card), but never let a
   // stale route reopen tomorrow after today's reading has already completed.
   // Apply each route dayNumber once; after that, manual swipes own viewingDay.
+  // The day menu sends a new request with each choice, so picking the day the
+  // route already names opens it even after a swipe.
   useEffect(() => {
     if (!currentDevotional || !requestedDayNumber) return;
-    const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}`;
+    const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}:${params.dayRequest ?? ''}`;
     if (lastResolvedRouteKeyRef.current === routeKey) return;
     lastResolvedRouteKeyRef.current = routeKey;
 
@@ -1089,7 +1091,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       requestedDayNumber,
     );
     setViewingDay((current) => (current === resolvedDay ? current : resolvedDay));
-  }, [currentDevotional, effectiveDevotionalId, requestedDayNumber]);
+  }, [currentDevotional, effectiveDevotionalId, requestedDayNumber, params.dayRequest]);
 
   // If currentDay advances to tomorrow while this screen is mounted, keep the
   // reader anchored to today's completed reading instead of exposing tomorrow.
