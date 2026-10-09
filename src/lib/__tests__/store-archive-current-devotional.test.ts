@@ -164,16 +164,14 @@ describe('store archive and resume lifecycle', () => {
 
     const queued = peekSyncOutbox().filter((change) => change.table === 'devotionals');
     expect(queued).toHaveLength(1);
+    // Only the archive clock moves. The change keeps the row's content clock
+    // and carries no progress, so newer progress from another device stays.
     expect(queued[0]).toMatchObject({
       id: CURRENT_ID,
       deleted: false,
-      clientUpdatedAt: CLOCK,
-      data: {
-        archivedAt: CLOCK,
-        archivedStateAt: CLOCK,
-        currentDay: 3,
-      },
+      clientUpdatedAt: '2026-09-11T12:00:00.000Z',
     });
+    expect(queued[0].data).toEqual({ archivedAt: CLOCK, archivedStateAt: CLOCK });
   });
 
   it('makes the replacement current when it is the series the server writes', () => {

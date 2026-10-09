@@ -1502,8 +1502,11 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || isDevotionalArchived(existing)) return state;
-          const archived = applyArchiveIntent(existing, new Date().toISOString());
-          enqueueDevotionalRow(archived);
+          // Only the archive clock moves: this device's copy can hold older
+          // progress than another device saved, and a full row with a fresh
+          // content clock would win over it.
+          const archived = applyArchiveLifecycle(existing, new Date().toISOString());
+          enqueueDevotionalLifecycle(archived);
           const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
           // The replacement becomes current only as the strict active winner,
           // the series the server writes. Beside a newer live series (one

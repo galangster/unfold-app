@@ -4,7 +4,7 @@
  * wait there instead: same devotional shell, same scripture bookkeeping, same
  * session bookkeeping, whichever screen sees the job finish.
  */
-import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
+import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
 import { isSeriesComplete } from '@/lib/book-of-seasons';
@@ -128,9 +128,8 @@ export function applyInitialArcResult(
   // First, so Today moves off the old series: to this one when a sync pull
   // already landed it, otherwise to the shell added below.
   const replacedId = readReplacedSeries();
-  if (replacedId) {
-    clearReplacedSeries();
-    if (replacedId !== devotionalId) useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
+  if (replacedId && replacedId !== devotionalId) {
+    useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
   }
 
   const store = useUnfoldStore.getState();
@@ -191,10 +190,16 @@ export function applyInitialArcResult(
     }]);
   }
 
-  // Generation succeeded — nothing is in flight any more.
+  // Generation succeeded — nothing is in flight any more. The new series and
+  // the replaced one's end reach disk before their recovery records go: the
+  // outbox already holds that end, and a crash before the store's delayed
+  // write would otherwise leave no new series and no way to land it again.
+  // Landing the same result twice is safe.
+  store.completeGenerationSession({ title: seriesTitle });
+  flushUnfoldStorePersist();
+  if (replacedId) clearReplacedSeries();
   clearInflightGenerationJob();
   clearInitialGenerationRequestId();
-  store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
 }
