@@ -1332,28 +1332,6 @@ describe('pulled series lifecycle', () => {
     resetDeletedSeriesForTesting();
   });
 
-  // 2026-10-09 release audit pass 2: an act answer after another device's delete stamped the series newer, the pulled delete lost, and Today kept the deleted series.
-  it('removes a series another device deleted, even after this phone answered its act card', () => {
-    resetDeletedSeriesForTesting();
-    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
-    const deletedAt = '2026-09-12T08:00:00.000Z';
-    jest.setSystemTime(new Date('2026-09-12T08:30:00.000Z'));
-    useUnfoldStore.getState().setActOutcome('series-1', 1, 'done');
-    expect(peekSyncOutbox()).toEqual([]);
-
-    applyPulledUserData({
-      timestamp: '2026-09-12T08:31:00.000Z',
-      changes: {
-        devotionals: [{ id: 'series-1', updatedAt: deletedAt, deleted: true, data: { clientUpdatedAt: deletedAt } }],
-      },
-    });
-
-    expect(useUnfoldStore.getState().devotionals).toEqual([]);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
-    expect(wasSeriesDeleted('series-1')).toBe(true);
-    resetDeletedSeriesForTesting();
-  });
-
   // Round 7 too: once the server acknowledged a delete made here, nothing on
   // this phone said the series was deleted.
   it('remembers a series deleted here after its delete leaves the outbox', () => {

@@ -414,6 +414,44 @@ describe('push conflict → server version', () => {
     resetDeletedSeriesForTesting();
   });
 
+  // Round 2 review: the delete was remembered at the server's older clock, so
+  // a server write that landed while the retry was out could restore it.
+  it('remembers a requeued series delete at the retry\'s own clock', async () => {
+    resetDeletedSeriesForTesting();
+    try {
+      useUnfoldStore.setState({
+        devotionals: [{
+          id: 'series-1', title: 'Stillness', totalDays: 14, currentDay: 4, days: [],
+          createdAt: at(0), updatedAt: at(0), generationMode: 'progressive',
+        } as never],
+        currentDevotionalId: 'series-1',
+      });
+      useUnfoldStore.getState().removeDevotional('series-1');
+      // This phone runs ahead of the server's clock on the series row.
+      jest.setSystemTime(new Date(T0.getTime() + 120_000));
+      const serverAt = at(60_000);
+      (globalThis as any).fetch = jest.fn(async (_url: string, init: RequestInit) => {
+        const { changes } = JSON.parse(String(init.body)) as { changes: SyncPushChange[] };
+        return {
+          ok: true,
+          json: async () => ({
+            results: changes.map((change) => (change.table === 'devotionals'
+              ? { table: change.table, id: change.id, status: 'conflict', serverUpdatedAt: serverAt, serverData: serverSeriesRow(change.id, serverAt) }
+              : { table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: serverAt })),
+          }),
+        };
+      });
+
+      await drainSyncOutbox();
+      removeSyncChangesForRecords([{ table: 'devotionals', id: 'series-1' }]);
+
+      // A live row written while the retry was out, after the conflict.
+      expect(wasSeriesDeleted('series-1', at(90_000))).toBe(true);
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
   it('retains a conflict without serverData and does not apply it', async () => {
     const id = addNote('<p>mine</p>');
     mockPushResponse(() => [

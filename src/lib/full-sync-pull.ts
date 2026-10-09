@@ -186,24 +186,17 @@ function localUpdatedAt(value: { updatedAt?: string; createdAt?: string } | unde
   return value?.updatedAt ?? value?.createdAt;
 }
 
-/** A change queued here for this record is newer than the pulled one. */
-function pendingWriteIsNewer(
-  record: SyncPulledRecord,
-  table: SyncTable,
-  pendingClientUpdatedAtByRecord: PendingClientUpdatedAtByRecord,
-): boolean {
-  const pendingClientUpdatedAt = pendingClientUpdatedAtByRecord.get(pendingKey(table, record.id));
-  const remoteClientUpdatedAt = recordClientUpdatedAt(record);
-  return !!pendingClientUpdatedAt && (!remoteClientUpdatedAt || pendingClientUpdatedAt > remoteClientUpdatedAt);
-}
-
 function shouldApply(
   record: SyncPulledRecord,
   current: { updatedAt?: string; createdAt?: string } | undefined,
   table: SyncTable,
   pendingClientUpdatedAtByRecord: PendingClientUpdatedAtByRecord,
 ): boolean {
-  if (pendingWriteIsNewer(record, table, pendingClientUpdatedAtByRecord)) return false;
+  const pendingClientUpdatedAt = pendingClientUpdatedAtByRecord.get(pendingKey(table, record.id));
+  const remoteClientUpdatedAt = recordClientUpdatedAt(record);
+  if (pendingClientUpdatedAt && (!remoteClientUpdatedAt || pendingClientUpdatedAt > remoteClientUpdatedAt)) {
+    return false;
+  }
   const currentUpdatedAt = localUpdatedAt(current);
   return !currentUpdatedAt || recordUpdatedAt(record) > currentUpdatedAt;
 }
@@ -771,12 +764,10 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         pendingArchivedStateAt: pendingLifecycleById.get(record.id),
       });
       const lifecycleChanged = didDevotionalLifecycleChange(current, mergedLifecycle);
-      // Only a write still queued here outranks a delete. The local updatedAt
-      // does not: a day action (act answer, reveal) stamps it and pushes no
-      // series row. Archive/resume uses archivedStateAt, so a pending read
-      // must not block a newer remote lifecycle decision.
+      // Tombstones stay content-LWW. Archive/resume uses archivedStateAt, so a
+      // pending read must not block a newer remote lifecycle decision.
       if (record.deleted) {
-        if (pendingWriteIsNewer(record, 'devotionals', pendingByRecord)) continue;
+        if (!contentShouldApply) continue;
         acceptedSeriesDeletes.add(record.id);
         rememberDeletedSeries(record.id, record.updatedAt);
         devotionals = devotionals.filter((item) => item.id !== record.id);

@@ -238,11 +238,11 @@ function serverRowClock(result: SyncPushResult): number {
   return clocks.length > 0 ? Math.max(...clocks) : Date.now();
 }
 
-function rememberLostSeriesDelete(id: string, serverClock: number): void {
+function rememberLostSeriesDelete(id: string, deletedAt: string): void {
   // deleted-series reads this queue, so a static import here would be a cycle.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const deleted = require('./deleted-series') as typeof import('./deleted-series');
-  deleted.rememberDeletedSeries(id, new Date(serverClock).toISOString());
+  deleted.rememberDeletedSeries(id, deletedAt);
 }
 
 // Single-flight guard — concurrent drains collapse into one POST
@@ -374,9 +374,12 @@ export function drainSyncOutbox(): Promise<void> {
         // requeued delete keeps it out of conflictsToApply below.
         for (const pair of resolving.filter(isLostSeriesDelete)) {
           if (remaining.some((entry) => entry.table === pair.change.table && entry.id === pair.change.id)) continue;
-          const serverClock = serverRowClock(pair.result);
-          remaining.push({ ...pair.change, clientUpdatedAt: new Date(Math.max(serverClock, Date.now()) + 1).toISOString() });
-          rememberLostSeriesDelete(pair.change.id, serverClock);
+          const retriedAt = new Date(Math.max(serverRowClock(pair.result), Date.now()) + 1).toISOString();
+          remaining.push({ ...pair.change, clientUpdatedAt: retriedAt });
+          // Remembered at the retry's own clock: a server write that lands
+          // while the retry is out is older than it, so its row cannot
+          // restore the series once the retry leaves the outbox.
+          rememberLostSeriesDelete(pair.change.id, retriedAt);
         }
         writeOutbox(remaining);
         const conflictsToApply = resolving
