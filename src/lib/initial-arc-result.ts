@@ -4,7 +4,7 @@
  * wait there instead: same devotional shell, same scripture bookkeeping, same
  * session bookkeeping, whichever screen sees the job finish.
  */
-import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
+import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
 import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
 import { isSeriesComplete } from '@/lib/book-of-seasons';
@@ -16,7 +16,6 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { clearReplacedSeries, readReplacedSeries } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -123,15 +122,6 @@ export function applyInitialArcResult(
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
   const day1 = result.devotionalDay;
-
-  // The series "Start a new series" replaces ends now that this one exists.
-  // First, so Today moves off the old series: to this one when a sync pull
-  // already landed it, otherwise to the shell added below.
-  const replacedId = readReplacedSeries();
-  if (replacedId && replacedId !== devotionalId) {
-    useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
-  }
-
   const store = useUnfoldStore.getState();
 
   const existingDevotional = store.devotionals.find((d) => d.id === devotionalId);
@@ -190,16 +180,10 @@ export function applyInitialArcResult(
     }]);
   }
 
-  // Generation succeeded — nothing is in flight any more. The new series and
-  // the replaced one's end reach disk before their recovery records go: the
-  // outbox already holds that end, and a crash before the store's delayed
-  // write would otherwise leave no new series and no way to land it again.
-  // Landing the same result twice is safe.
-  store.completeGenerationSession({ title: seriesTitle });
-  flushUnfoldStorePersist();
-  if (replacedId) clearReplacedSeries();
+  // Generation succeeded — nothing is in flight any more.
   clearInflightGenerationJob();
   clearInitialGenerationRequestId();
+  store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
 }
