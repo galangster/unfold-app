@@ -80,6 +80,30 @@ export function getLockedTodayDayNumber(
   return currentDayIsTomorrowCandidate ? latestReadToday : null;
 }
 
+export type BlockedForwardReason = 'series-finished' | 'daily-pace' | 'not-ready';
+
+/**
+ * Why a forward swipe from `viewingDay` went nowhere: the series has no
+ * later day, today's reading already set the daily pace, or the next day is
+ * not on this device yet (still being prepared, missing, or paused).
+ */
+export function resolveBlockedForwardReason(
+  devotional: DevotionalReadingProgress | null | undefined,
+  viewingDay: number,
+  totalDays: number,
+  now = new Date(),
+): BlockedForwardReason {
+  if (viewingDay >= totalDays) return 'series-finished';
+  if (getLockedTodayDayNumber(devotional, now) != null) return 'daily-pace';
+  return 'not-ready';
+}
+
+export const BLOCKED_FORWARD_MESSAGES: Record<BlockedForwardReason, string> = {
+  'series-finished': 'This is the last day of this series',
+  'daily-pace': "Tomorrow's reading unlocks after midnight",
+  'not-ready': "The next day isn't ready yet",
+};
+
 export function getTodayReaderDayNumber(
   devotional: DevotionalReadingProgress | null | undefined,
   now = new Date(),

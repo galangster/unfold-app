@@ -35,11 +35,13 @@ describe('reading swipe navigation source contract', () => {
     expect(onEndBlock).toContain('event.translationX < -80 && viewingDay >= availableDays');
     expect(onEndBlock).toContain('setLockedDayToast');
 
-    expect(readingSource).toContain("Tomorrow's reading unlocks after midnight");
-
     // Reuses the existing message-toast pattern (styles.toastContainer /
     // styles.toastText), not a bespoke component.
-    const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,600}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
+    const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,900}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
+    // The message names why: series finished, daily pace, or day not ready.
+    expect(lockedToastBlock).toContain(
+      'BLOCKED_FORWARD_MESSAGES[resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, calendarNow)]',
+    );
     expect(lockedToastBlock).toContain('styles.toastContainer');
     expect(lockedToastBlock).toContain('styles.toastText');
   });

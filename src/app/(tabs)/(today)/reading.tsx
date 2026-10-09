@@ -73,10 +73,12 @@ import {
   summarizeRenderableDevotionalDays,
 } from '@/lib/devotional-canonical-days';
 import {
+  BLOCKED_FORWARD_MESSAGES,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   isDevotionalDaySelectable,
+  resolveBlockedForwardReason,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
@@ -3197,7 +3199,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
           ]}
         >
-          <Text style={styles.toastText}>Tomorrow's reading unlocks after midnight</Text>
+          <Text style={styles.toastText}>
+            {BLOCKED_FORWARD_MESSAGES[resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, calendarNow)]}
+          </Text>
         </Animated.View>
       )}
 

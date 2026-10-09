@@ -4,6 +4,7 @@ import {
   getReadingDayLabel,
   getDayMenuPresentation,
   getLatestReadDayNumberToday,
+  BLOCKED_FORWARD_MESSAGES,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -11,6 +12,7 @@ import {
   isDevotionalDaySelectable,
   isPausedSeries,
   isPausedSeriesUnpreparedDay,
+  resolveBlockedForwardReason,
   resolveInitialReadingDayNumber,
 } from '../devotional-day-access';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
@@ -592,5 +594,39 @@ describe('read days with only a local copy', () => {
     expect(getLockedTodayDayNumber(heldToday, now)).toBe(2);
     expect(resolveInitialReadingDayNumber(heldToday, 3, now)).toBe(2);
     expect(canOpenDevotionalDay(heldToday, 3, now)).toBe(false);
+  });
+});
+
+describe('resolveBlockedForwardReason', () => {
+  it('says the series is finished on its last day, even with today read', () => {
+    const series = devotional({
+      currentDay: 7,
+      days: [day({ dayNumber: 7, isRead: true, readAt: todayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 7, 7, now)).toBe('series-finished');
+    expect(BLOCKED_FORWARD_MESSAGES['series-finished']).toBe('This is the last day of this series');
+  });
+
+  it('names the daily pace when today\'s reading holds the next day until midnight', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [
+        day({ dayNumber: 5, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 6, isRead: false }),
+      ],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, now)).toBe('daily-pace');
+    expect(BLOCKED_FORWARD_MESSAGES['daily-pace']).toBe("Tomorrow's reading unlocks after midnight");
+  });
+
+  it('says the next day is not ready when nothing read today holds it back', () => {
+    const series = devotional({
+      currentDay: 5,
+      days: [day({ dayNumber: 5, isRead: true, readAt: yesterdayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, now)).toBe('not-ready');
   });
 });
