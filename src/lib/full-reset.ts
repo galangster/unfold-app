@@ -87,7 +87,7 @@ import { AUTO_TRIAL_INTENT_KEY } from '@/lib/auto-trial-intent';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { INITIAL_GENERATION_REQUEST_ID_KEY } from '@/lib/initial-generation-request';
 import { REPLACED_SERIES_CHOSEN_AT_KEY, REPLACED_SERIES_KEY, REPLACED_SERIES_STATE_KEY, REPLACEMENT_SERIES_KEY } from '@/lib/series-replacement';
-import { DELETED_SERIES_KEY } from '@/lib/deleted-series';
+import { clearDeletedSeriesCache, DELETED_SERIES_KEY } from '@/lib/deleted-series';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
 import {
   beginLocalResetSession,
@@ -341,6 +341,7 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   clearExamenCache();
   clearScriptureExplainCache();
   clearVerseCache();
+  clearDeletedSeriesCache();
 
   // 5. Trial-notification mirror (the OS notification itself went in step 1)
   clearTrialNotificationMirror();

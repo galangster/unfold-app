@@ -5,7 +5,7 @@ import {
   withOnboardingFirstReadingArc,
 } from '@/lib/auto-trial-series';
 import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
-import { applyUnarchiveIntent, isDevotionalArchived } from '@/lib/devotional-lifecycle';
+import { applyUnarchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
 import { enqueuePersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity } from '@/lib/generation-reconciliation';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
@@ -29,9 +29,14 @@ function preservedTitle(existing: Devotional | undefined, day: DevotionalDay): s
   return day.title?.trim() || current || '';
 }
 
-function clockMs(value: string | undefined): number {
-  const ms = Date.parse(value ?? '');
-  return Number.isNaN(ms) ? 0 : ms;
+function firstDay(row: Devotional | undefined): DevotionalDay | undefined {
+  return row?.days.find((day) => day.dayNumber === 1);
+}
+
+/** The newer of the stored first day's clock and the row's clock. */
+function storedWriteClock(existing: Devotional | undefined): string | undefined {
+  const dayAt = firstDay(existing)?.updatedAt;
+  return lifecycleTimestampMs(dayAt) > lifecycleTimestampMs(existing?.updatedAt) ? dayAt : existing?.updatedAt;
 }
 
 /**
@@ -44,10 +49,10 @@ function clockMs(value: string | undefined): number {
  * read state stays whatever this phone's clock says.
  */
 function replacesStoredSample(existing: Devotional | undefined, incoming: DevotionalDay): boolean {
-  const stored = existing?.days.find((day) => day.dayNumber === 1);
+  const stored = firstDay(existing);
   if (!stored || stored.bodyText === incoming.bodyText) return false;
-  const completedAt = clockMs(incoming.updatedAt ?? incoming.generatedAt);
-  return completedAt > Math.max(clockMs(stored.updatedAt), clockMs(existing?.updatedAt));
+  const completedAt = lifecycleTimestampMs(incoming.updatedAt ?? incoming.generatedAt);
+  return completedAt > lifecycleTimestampMs(storedWriteClock(existing));
 }
 
 function sameContext(
@@ -62,7 +67,7 @@ function sameContext(
 
 function mergeFirstReadingDay(existing: Devotional | undefined, id: string, incoming: DevotionalDay): DevotionalDay {
   const normalized = normalizeGeneratedDayIdentity(id, { ...incoming, dayNumber: 1 }, 1);
-  const current = existing?.days.find((day) => day.dayNumber === 1);
+  const current = firstDay(existing);
   if (!current || !isUsableSampleDevotionalDay(current)) return normalized;
   return {
     ...normalized,
@@ -85,8 +90,7 @@ function shouldKeepExistingCurrent(state: {
 }
 
 function nextWriteAt(previous: string | undefined): string {
-  const previousMs = Date.parse(previous ?? '');
-  return new Date(Math.max(Date.now(), Number.isNaN(previousMs) ? 0 : previousMs + 1)).toISOString();
+  return new Date(Math.max(Date.now(), lifecycleTimestampMs(previous) + 1)).toISOString();
 }
 
 export function persistOnboardingFirstReading(input: {
@@ -102,7 +106,7 @@ export function persistOnboardingFirstReading(input: {
   const existingSameId = store.devotionals.find((row) => row.id === id);
   if (!isUsableSampleDevotionalDay(input.day)) {
     return isOnboardingFirstReading(existingSameId)
-      && isUsableSampleDevotionalDay(existingSameId?.days.find((day) => day.dayNumber === 1));
+      && isUsableSampleDevotionalDay(firstDay(existingSameId));
   }
   if (existingSameId && isAutoTrialSeries(existingSameId)) return false;
   if (existingSameId && (existingSameId.totalDays !== 1 || existingSameId.days.some((day) => day.dayNumber > 1))) {
@@ -133,8 +137,7 @@ export function persistOnboardingFirstReading(input: {
 
   // The saved day carries the write's clock, so a pull of an older row of the
   // same day cannot replace it.
-  const storedDayAt = existingSameId?.days.find((row) => row.dayNumber === 1)?.updatedAt;
-  const updatedAt = nextWriteAt(clockMs(storedDayAt) > clockMs(existingSameId?.updatedAt) ? storedDayAt : existingSameId?.updatedAt);
+  const updatedAt = nextWriteAt(storedWriteClock(existingSameId));
   // A sample the first life's trial retired comes back live, on a clock past
   // its retirement, so the server takes the resume.
   const lifecycle = replacesStored && existingSameId && isDevotionalArchived(existingSameId)

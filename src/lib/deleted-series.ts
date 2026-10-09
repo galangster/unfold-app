@@ -42,10 +42,12 @@ export function rememberDeletedSeries(devotionalId: string, deletedAt: string): 
   const known = clocks.get(devotionalId);
   if (known !== undefined && known >= at) return;
   clocks.set(devotionalId, at);
-  const newest = [...clocks].sort((a, b) => b[1] - a[1]).slice(0, MAX_REMEMBERED_DELETES);
-  deletedAtById = new Map(newest);
+  if (clocks.size > MAX_REMEMBERED_DELETES) {
+    const oldest = [...clocks].sort((a, b) => b[1] - a[1]).slice(MAX_REMEMBERED_DELETES);
+    for (const [id] of oldest) clocks.delete(id);
+  }
   try {
-    mmkvStorage.setItem(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(newest)));
+    mmkvStorage.setItem(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(clocks)));
   } catch {
     // The clock still holds for this session, and a queued tombstone covers it until it syncs.
   }
@@ -57,6 +59,11 @@ export function wasSeriesDeleted(devotionalId: string, rowUpdatedAt?: string): b
   const rowAt = rowUpdatedAt ? Date.parse(rowUpdatedAt) : Number.NaN;
   if (deletedAt !== undefined && !(rowAt > deletedAt)) return true;
   return peekSyncOutbox().some((change) => change.table === 'devotionals' && change.deleted && change.id === devotionalId);
+}
+
+/** Forget the remembered deletes in memory. A full reset wipes the stored copy. */
+export function clearDeletedSeriesCache(): void {
+  deletedAtById = new Map();
 }
 
 export function resetDeletedSeriesForTesting(): void {

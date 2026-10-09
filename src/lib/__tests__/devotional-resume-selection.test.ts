@@ -4,6 +4,7 @@ const ARCHIVE_AT = '2026-09-12T15:00:00.000Z';
 const RESUME_AT = '2026-09-12T16:00:00.000Z';
 const NEWER_RESUME_AT = '2026-09-12T17:00:00.000Z';
 const OLDER_AT = '2026-09-12T14:00:00.000Z';
+const neverFinished = () => false;
 
 // 2026-10-09 release audit round 5: a shell built from a pull without series
 // dates carries this phone's guess for its creation. That ranked an old
@@ -24,6 +25,7 @@ describe('a held series pulled without series dates', () => {
   it('ranks by the creation time the pull returned for it when a sync restores Today', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', createdAt: GUESSED_AT, archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }, held[1]],
       next: held,
       pulled,
@@ -40,6 +42,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('restores Today onto a newer accepted remote resume', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
       next: [{ id: 'series-1', archivedAt: null, archivedStateAt: RESUME_AT }],
     })).toBe('series-1');
@@ -48,11 +51,13 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('accepts a newer resume when the intervening archive was never pulled', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: null, archivedStateAt: RESUME_AT }],
       next: [{ id: 'series-1', archivedAt: null, archivedStateAt: NEWER_RESUME_AT }],
     })).toBe('series-1');
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: null, archivedStateAt: RESUME_AT }],
       next: [{ id: 'series-1', archivedAt: null, archivedStateAt: RESUME_AT }],
     })).toBeNull();
@@ -61,6 +66,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('does not select a stale or rejected resume intent', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
       next: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
     })).toBeNull();
@@ -69,6 +75,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('preserves an existing valid selected series when a sibling resumes', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-2',
+      isFinished: neverFinished,
       previous: [
         { id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT },
         { id: 'series-2' },
@@ -83,6 +90,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('picks the newest accepted intent clock when several resumes qualify', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [
         { id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT },
         { id: 'series-2', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT },
@@ -97,16 +105,19 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('does not select omitted, archived, or equal-clock lifecycle rows', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
       next: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
     })).toBeNull();
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
       next: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: OLDER_AT }],
     })).toBeNull();
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: null,
+      isFinished: neverFinished,
       previous: [{ id: 'series-1', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }],
       next: [{ id: 'series-1' }],
     })).toBeNull();
@@ -115,6 +126,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
   it('recomputes selection when the current series is archived or deleted in the same pull', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-1',
+      isFinished: neverFinished,
       previous: [
         { id: 'series-1' },
         { id: 'series-2', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT },
@@ -126,6 +138,7 @@ describe('selectSyncedCurrentDevotionalId', () => {
     })).toBe('series-2');
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-1',
+      isFinished: neverFinished,
       previous: [
         { id: 'series-1' },
         { id: 'series-2', archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT },
@@ -151,12 +164,14 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
   it('leaves Today empty when the resume and the pause arrive in separate pulls', () => {
     const afterResume = selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [liveX, pausedB],
       next: [liveX, resumedB],
     });
     expect(afterResume).toBe('series-x');
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: afterResume,
+      isFinished: neverFinished,
       previous: [liveX, resumedB],
       next: [pausedX, resumedB],
     })).toBeNull();
@@ -165,6 +180,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
   it('follows the resumed series when both arrive in one pull', () => {
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [liveX, pausedB],
       next: [pausedX, resumedB],
     })).toBe('series-b');
@@ -175,6 +191,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
   it('never follows a resume that another live series outranks', () => {
     const select = (others: Array<Record<string, unknown> & { id: string }>) => selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [liveX, pausedB, ...others],
       next: [pausedX, resumedB, ...others],
     });
@@ -194,6 +211,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     const startedElsewhere = { id: 'series-n', createdAt: NEWER_RESUME_AT, generationMode: 'progressive' };
     const selection = {
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [liveX, pausedB],
       next: [pausedX, resumedB],
       pulled: [pausedX, resumedB, startedElsewhere],
@@ -209,6 +227,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     const olderLive = { id: 'series-y', createdAt: CREATED_AT, generationMode: 'progressive', archivedAt: null, archivedStateAt: ARCHIVE_AT };
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [liveX, olderLive],
       next: [{ ...liveX, archivedAt: NEWER_RESUME_AT, archivedStateAt: NEWER_RESUME_AT }, olderLive],
     })).toBeNull();
@@ -222,6 +241,7 @@ describe('selectSyncedCurrentDevotionalId when the current series is paused else
     const startedAfter = { ...liveX, createdAt: RESUME_AT };
     expect(selectSyncedCurrentDevotionalId({
       previousCurrentId: 'series-x',
+      isFinished: neverFinished,
       previous: [startedAfter, olderResumed],
       next: [{ ...startedAfter, archivedAt: OLDER_AT, archivedStateAt: OLDER_AT }, olderResumed],
     })).toBeNull();

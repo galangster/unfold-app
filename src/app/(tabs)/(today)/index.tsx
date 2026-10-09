@@ -946,7 +946,7 @@ export default function HomeScreen() {
   // record names counts as landed: a record without one (an adopted job)
   // says nothing about the series already here.
   const keptSeriesId = keptInflightJob?.devotionalId;
-  const keptSeriesLanded = keptSeriesId != null && hasInflightSeriesLanded(keptSeriesId, landedSeries, false);
+  const keptSeriesLanded = hasInflightSeriesLanded(keptSeriesId, landedSeries, false);
   const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
     ? { onResume: handleResumeKeptInflight }
     : null;
