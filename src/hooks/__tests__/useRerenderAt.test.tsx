@@ -41,6 +41,43 @@ describe('useRerenderAt', () => {
     expect(screen.getByText('Try again')).toBeTruthy();
   });
 
+  it('waits again when a second rate limit follows the first retry', () => {
+    const first: SeriesRevealState = { kind: 'failed', jobId: null, reason: 'rate_limited', retryAtMs: NOW + 60_000 };
+    const { rerender } = render(<RetryGate state={first} />);
+    act(() => {
+      jest.advanceTimersByTime(60_001);
+    });
+    expect(screen.getByText('Try again')).toBeTruthy();
+    expect(jest.getTimerCount()).toBe(0);
+
+    // The reader tried again, and the next submit hit the limit too.
+    const second: SeriesRevealState = { kind: 'failed', jobId: null, reason: 'rate_limited', retryAtMs: Date.now() + 60_000 };
+    rerender(<RetryGate state={second} />);
+    expect(screen.getByText('Waiting')).toBeTruthy();
+    expect(jest.getTimerCount()).toBe(1);
+
+    act(() => {
+      jest.advanceTimersByTime(60_001);
+    });
+    expect(screen.getByText('Try again')).toBeTruthy();
+  });
+
+  it('replaces its timer when the retry time moves', () => {
+    const first: SeriesRevealState = { kind: 'failed', jobId: null, reason: 'rate_limited', retryAtMs: NOW + 60_000 };
+    const { rerender } = render(<RetryGate state={first} />);
+    rerender(<RetryGate state={{ ...first, retryAtMs: NOW + 120_000 }} />);
+    expect(jest.getTimerCount()).toBe(1);
+
+    act(() => {
+      jest.advanceTimersByTime(60_001);
+    });
+    expect(screen.getByText('Waiting')).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText('Try again')).toBeTruthy();
+  });
+
   it('sets no timer for a failure that can be retried now', () => {
     const state: SeriesRevealState = { kind: 'failed', jobId: null, reason: 'unreachable', retryAtMs: null };
     render(<RetryGate state={state} />);
