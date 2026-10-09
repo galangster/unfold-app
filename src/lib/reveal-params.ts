@@ -107,6 +107,28 @@ export function resolveRevealOutcome(
 }
 
 /**
+ * How long the reveal waits for a series this device does not hold. A ready
+ * push can arrive before its series does: on a second device that has not
+ * synced it, or for a first series that finished after a force quit. Past
+ * this the reveal sends the reader to Today, as it did before it waited.
+ */
+export const REVEAL_SERIES_PULL_TIMEOUT_MS = 8_000;
+
+/**
+ * Pure: the series a reveal should pull before it gives up. The push must name
+ * a series and a valid day number, and no local devotional may hold that id.
+ * A pull does not fix junk params or a local series whose day is out of range.
+ */
+export function missingRevealSeriesId(
+  params: { devotionalId?: RouteParam; dayNumber?: RouteParam },
+  devotionals: readonly { id: string }[],
+): string | null {
+  const devotionalId = firstParam(params.devotionalId);
+  if (!devotionalId || parsePositiveInteger(params.dayNumber) === null) return null;
+  return devotionals.some((devotional) => devotional.id === devotionalId) ? null : devotionalId;
+}
+
+/**
  * A ready push can outlive the series it names: Notification Center keeps it
  * after the reader moves on. Only the current series, or a live series that is
  * already the strict active winner (one that just landed), may become current
