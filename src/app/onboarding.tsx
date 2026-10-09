@@ -3634,7 +3634,7 @@ export default function OnboardingScreen() {
               scroll clear of it. */}
           <Animated.View entering={FadeIn.duration(600).delay(1850)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
             {!showMirrorCorrection ? (
-              <View style={{ height: Math.max(0, mirrorBackActionsHeight - STANDARD_STEP_BOTTOM_PADDING) }} />
+              <View testID="mirror-back-scroll-spacer" style={{ height: Math.max(0, mirrorBackActionsHeight - STANDARD_STEP_BOTTOM_PADDING) }} />
             ) : (
               <Animated.View entering={FadeIn.duration(300)} style={{ gap: Spacing['3'] }}>
                 <View style={{
@@ -4224,6 +4224,7 @@ export default function OnboardingScreen() {
   const renderMirrorBackActions = () => (
     <Animated.View
       entering={FadeIn.duration(600).delay(1850)}
+      testID="mirror-back-actions"
       onLayout={(e) => setMirrorBackActionsHeight(Math.ceil(e.nativeEvent.layout.height))}
       pointerEvents="box-none"
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}

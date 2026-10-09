@@ -304,6 +304,27 @@ describe('mirror-back actions', () => {
     expect(insideScroll(screen, 'Let me adjust something')).toBe(false);
   });
 
+  it('pins the actions to the bottom and pads the scroll by their measured height', async () => {
+    const screen = await openMirrorBack();
+    const footer = screen.root.findAll(
+      (n: { props?: { testID?: string; onLayout?: unknown } }) =>
+        n.props?.testID === 'mirror-back-actions' && typeof n.props?.onLayout === 'function',
+    )[0];
+    expect(footer.props.style).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 });
+
+    await act(async () => {
+      footer.props.onLayout({ nativeEvent: { layout: { height: 180.4 } } });
+    });
+
+    // The scroll already ends with 120 pt of padding, so the spacer adds the
+    // rest of the measured 181 pt footer.
+    const spacers = screen.root
+      .findAll((n: { type?: unknown }) => n.type === ScrollView)
+      .flatMap((scroll: Tree['root']) => scroll.findAll((n: { props?: { testID?: string } }) => n.props?.testID === 'mirror-back-scroll-spacer'));
+    expect(spacers.length).toBeGreaterThan(0);
+    expect(spacers[0].props.style).toMatchObject({ height: 61 });
+  });
+
   it('confirms the reflection and moves on to the feature summary', async () => {
     const screen = await openMirrorBack();
 
