@@ -94,6 +94,24 @@ function mergeStringList(
   return merged;
 }
 
+/**
+ * Rebase an unsaved draft onto text a merge changed under it. `base` is the
+ * text the draft was edited from and `merged` is that text after the merge.
+ * The draft's edits take the base's place inside the merged text, so text
+ * the merge brought in survives the next save. A field with no edits takes
+ * the merged text. When the base cannot be found, the draft follows the
+ * merged text, so nothing is dropped.
+ */
+export function rebaseJournalDraft(base: string, merged: string, draft: string): string {
+  if (merged === base) return draft;
+  if (draft === base) return merged;
+  const at = base.trim() ? merged.indexOf(base) : -1;
+  if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
+  if (!merged.trim()) return draft;
+  if (!draft.trim()) return merged;
+  return `${merged}\n\n${draft}`;
+}
+
 /** Fold `incoming` (the newer entry) into `base`, losing no user text. */
 function mergePair(base: JournalEntry, incoming: JournalEntry): JournalEntry {
   return {
