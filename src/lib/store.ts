@@ -1240,7 +1240,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           enqueueSyncChanges([
             ...(devotional ? [tombstone('devotionals', devotionalId)] : []),
             ...(devotional?.days ?? []).flatMap((day) => (day.id ? [tombstone('devotional_days', day.id)] : [])),
-            ...ownedBy(state.journalEntries).map((row) => tombstone('journal_entries', row.id)),
+            // A journal entry can be dated ahead of this phone (a pulled row, or
+            // a merge repair). Its delete is stamped past it, or the outbox and
+            // the server keep the live writing.
+            ...ownedBy(state.journalEntries).map((row) =>
+              buildPersonalDataSyncChange('journal_entries', row.id, {}, journalWriteClock(row, now), true)),
             ...ownedBy(state.checkIns).map((row) => tombstone('check_ins', row.id)),
             ...ownedBy(state.highlights).map((row) => tombstone('highlights', row.id)),
             ...ownedBy(state.bookmarks).map((row) => tombstone('bookmarks', row.id)),

@@ -816,11 +816,22 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         );
         const collapsed = collapseJournalEntryDays(pulled);
         const changed = journalEntriesChangedByCollapse(pulled, collapsed);
-        // A delete the reader asked for stays queued: a repair would replace it.
+        // A delete stays a delete: one the reader queued here, or one this pull
+        // applied for the entry or its series. A repair would push the legacy
+        // rows' text over it.
+        const deletedHere = (records: SyncPulledRecord[] | undefined, live: Array<{ id: string }>) => new Set(
+          (records ?? [])
+            .filter((record) => record.deleted && !live.some((item) => item.id === record.id))
+            .map((record) => record.id),
+        );
+        const deletedEntries = deletedHere(changes.journal_entries, pulled);
+        const deletedSeries = deletedHere(changes.devotionals, devotionals);
         for (const id of changed) {
           const entry = collapsed.find((item) => item.id === id);
           if (pendingDeletes.has(pendingKey('journal_entries', id))
-            || (entry && pendingDeletes.has(pendingKey('devotionals', entry.devotionalId)))) {
+            || deletedEntries.has(id)
+            || (entry && (pendingDeletes.has(pendingKey('devotionals', entry.devotionalId))
+              || deletedSeries.has(entry.devotionalId)))) {
             changed.delete(id);
           }
         }

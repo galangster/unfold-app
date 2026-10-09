@@ -295,6 +295,78 @@ describe('pushing the writing a pull folded together', () => {
     expect(queuedJournal()).toEqual([expect.objectContaining({ id: canonical, deleted: true })]);
   });
 
+  it('queues no repair for a day whose entry the same pull deletes', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [
+          { ...legacyRow(canonical, '', '2026-09-05T00:00:00.000Z'), deleted: true },
+          legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z'),
+          legacyRow('journal_two', 'Tablet.', '2026-09-01T09:30:00.000Z'),
+        ],
+      },
+      timestamp: '2026-09-05T00:00:01.000Z',
+    } as never);
+
+    expect(queuedJournal()).toEqual([]);
+  });
+
+  it('still repairs a day when the pulled delete is older than a change queued here', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-06T00:00:00.000Z');
+    enqueueSyncChanges([{
+      table: 'journal_entries',
+      id: canonical,
+      clientUpdatedAt: '2026-09-06T00:00:00.000Z',
+      data: { content: 'Written after the upgrade.' },
+      deleted: false,
+    }]);
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [
+          { ...legacyRow(canonical, '', '2026-09-05T00:00:00.000Z'), deleted: true },
+          legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z'),
+        ],
+      },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
+
+    const queued = queuedJournal();
+    expect(queued).toEqual([expect.objectContaining({ id: canonical, deleted: false })]);
+    expect(queued[0].data.content).toContain('Written after the upgrade.');
+    expect(queued[0].data.content).toContain('Phone.');
+  });
+
+  it('queues no repair for a day whose series the same pull deletes', () => {
+    seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+
+    applyPulledUserData({
+      changes: {
+        devotionals: [{ id: DEVOTIONAL, data: { id: DEVOTIONAL }, updatedAt: '2026-09-05T00:00:00.000Z', deleted: true }],
+        journal_entries: [legacyRow('journal_a1b2c3', 'Written on the old device.', '2026-09-01T09:00:00.000Z')],
+      },
+      timestamp: '2026-09-05T00:00:01.000Z',
+    } as never);
+
+    expect(queuedJournal()).toEqual([]);
+  });
+
+  it('stamps a series delete past a journal edit dated ahead of this phone, so the delete is what gets pushed', () => {
+    const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow(canonical, 'From a clock ahead.', '2099-06-01T00:00:00.000Z')] },
+      timestamp: '2099-06-01T00:00:01.000Z',
+    } as never);
+    useUnfoldStore.getState().updateJournalEntry(canonical, 'Edited here.');
+
+    useUnfoldStore.getState().removeDevotional(DEVOTIONAL);
+
+    expect(queuedJournal()).toEqual([
+      expect.objectContaining({ id: canonical, deleted: true, clientUpdatedAt: '2099-06-01T00:00:00.002Z' }),
+    ]);
+  });
+
   it('queues no repair for a day whose series has a queued delete', () => {
     seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
     enqueueSyncChanges([{ table: 'devotionals', id: DEVOTIONAL, clientUpdatedAt: '2026-09-05T00:00:00.000Z', data: {}, deleted: true }]);
