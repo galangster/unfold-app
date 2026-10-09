@@ -4239,6 +4239,7 @@ export default function OnboardingScreen() {
         gap: Spacing['3'],
       }}>
         <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
@@ -4270,6 +4271,7 @@ export default function OnboardingScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setShowMirrorCorrection(true);
