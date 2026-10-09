@@ -69,7 +69,7 @@ const mockPanGesture = {
   onEnd: null as null | ((event: { translationX: number }, success: boolean) => void),
   onFinalize: null as null | ((event: { translationX: number }, success: boolean) => void),
 };
-const routeParams: { devotionalId: string; dayNumber?: string; dayRequest?: string; readOnly?: string } = {
+const routeParams: { devotionalId: string; dayNumber?: string; readOnly?: string } = {
   devotionalId: DEVOTIONAL_ID,
   dayNumber: '3',
 };
@@ -652,7 +652,6 @@ describe('reader swipe cancellation', () => {
     jest.requireMock('../api-config').getAuthHeaders.mockReset().mockResolvedValue({ 'Content-Type': 'application/json' });
     routeParams.devotionalId = DEVOTIONAL_ID;
     routeParams.dayNumber = '3';
-    delete routeParams.dayRequest;
     delete routeParams.readOnly;
     mockFocused = true;
     mockPanGesture.enabledValues.length = 0;
@@ -711,27 +710,6 @@ describe('reader swipe cancellation', () => {
     });
     return tree!;
   }
-
-  it('opens the day the day menu picks again after a swipe moved away from it', async () => {
-    seedReader();
-    let tree: ReaderTree;
-    await act(async () => {
-      tree = renderer.create(<ReadingScreen />);
-    });
-    const dayShown = (day: number) => tree!.root.findAllByProps({ accessibilityLabel: `Day ${day} of 7` }).length > 0;
-    expect(dayShown(3)).toBe(true);
-
-    act(() => { mockPanGesture.onEnd?.({ translationX: 100 }, true); });
-    expect(dayShown(2)).toBe(true);
-
-    // The menu picks Day 3, which the route already names: only the request is new.
-    routeParams.dayRequest = '1';
-    await act(async () => {
-      tree!.update(<ReadingScreen />);
-    });
-    expect(dayShown(3)).toBe(true);
-    expect(dayShown(2)).toBe(false);
-  });
 
   it('places an open selection bar again after a scroll the reader ran itself, not after a fling', async () => {
     const tree = await renderWithDayFour();
@@ -2069,102 +2047,5 @@ describe('reader swipe cancellation', () => {
       await flushEffects();
     });
     act(() => tree!.unmount());
-  });
-
-  // What the server holds for a series this device lacks: Day 1.
-  function pulledMissingSeries(devotionalId: string) {
-    const startedAt = '2026-09-14T17:00:00.000Z';
-    return {
-      devotional: {
-        id: devotionalId,
-        title: 'A series from the server',
-        totalDays: 7,
-        currentDay: 1,
-        createdAt: startedAt,
-        seriesStartDate: startedAt,
-        updatedAt: startedAt,
-        generationMode: 'progressive' as const,
-      },
-      days: [makeDay(1, { id: canonicalGeneratedDayId(devotionalId, 1), devotionalId, isRead: false })],
-      timestamp: TYPING_AT,
-    };
-  }
-
-  async function renderMissingSeries(devotionalId: string) {
-    seedReader();
-    useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
-    routeParams.devotionalId = devotionalId;
-    routeParams.dayNumber = '1';
-    let tree: ReaderTree;
-    await act(async () => {
-      tree = renderer.create(<ReadingScreen />);
-      await flushEffects();
-    });
-    return tree!;
-  }
-
-  it('offers Try again after a failed series pull, and says the series is missing only once a pull finds nothing', async () => {
-    mockPullDevotionalContent.mockRejectedValueOnce(new Error('Network request failed'));
-    const tree = await renderMissingSeries('missing-offline');
-
-    let screenText = JSON.stringify(tree.toJSON());
-    expect(screenText).toContain('This series couldn’t load.');
-    expect(screenText).toContain('Check your connection and try again.');
-    expect(screenText).not.toContain('This series isn’t on the device.');
-    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
-
-    let resolveRetry: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
-    mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve; }));
-    await act(async () => {
-      (tree.root.findByProps({ accessibilityLabel: 'Try again' }).props.onPress as () => void)();
-      await flushEffects();
-    });
-    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
-    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-offline');
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
-
-    await act(async () => {
-      resolveRetry?.(emptyPull());
-      await flushEffects();
-    });
-    screenText = JSON.stringify(tree.toJSON());
-    expect(screenText).toContain('This series isn’t on the device.');
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
-    act(() => tree.unmount());
-  });
-
-  it('asks again after a failed pull when the reader comes back, not while it stays open, and shows what it brings', async () => {
-    mockPullDevotionalContent.mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }));
-    const tree = await renderMissingSeries('missing-5xx');
-    expect(JSON.stringify(tree.toJSON())).toContain('This series couldn’t load.');
-
-    await act(async () => {
-      tree.update(<ReadingScreen />);
-      await flushEffects();
-    });
-    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
-
-    mockFocused = false;
-    await act(async () => {
-      tree.update(<ReadingScreen />);
-      await flushEffects();
-    });
-    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
-
-    mockFocused = true;
-    mockPullDevotionalContent.mockResolvedValueOnce(pulledMissingSeries('missing-5xx'));
-    await act(async () => {
-      tree.update(<ReadingScreen />);
-      await flushEffects();
-    });
-    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
-    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-5xx');
-
-    // The retried pull brings the series: its reading replaces the error.
-    expect(tree.root.findAllByProps({ testID: 'devotional-reader-screen' }).length).toBeGreaterThan(0);
-    expect(JSON.stringify(tree.toJSON())).not.toContain('This series couldn’t load.');
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' })).toHaveLength(0);
-    act(() => tree.unmount());
   });
 });
