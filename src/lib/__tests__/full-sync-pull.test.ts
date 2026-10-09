@@ -1266,6 +1266,38 @@ describe('pulled series lifecycle', () => {
     });
   });
 
+  // 2026-10-09 release audit round 5: a shell a pull built without series
+  // dates carries this phone's guess for its creation, and a full sync ranked
+  // that guess above a newer series started on another device.
+  it('ranks a held series by the creation time the full sync returned for it', () => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ createdAt: '2026-10-09T13:00:00.000Z', archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', createdAt: '2026-09-12T18:00:00.000Z', days: [] }),
+      ],
+      currentDevotionalId: null,
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T19:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: '2026-09-12T17:00:00.000Z',
+          deleted: false,
+          data: {
+            createdAt: '2026-09-01T00:00:00.000Z',
+            archivedAt: null,
+            archivedStateAt: '2026-09-12T17:00:00.000Z',
+            clientUpdatedAt: '2026-09-12T17:00:00.000Z',
+          },
+        }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
   it('does not restore a stale remote resume or steal a different live selection', () => {
     useUnfoldStore.setState({
       devotionals: [

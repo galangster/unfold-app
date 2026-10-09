@@ -1,9 +1,40 @@
-import { selectSyncedCurrentDevotionalId } from '../devotional-resume-selection';
+import { canPulledSeriesTakeEmptyToday, selectSyncedCurrentDevotionalId } from '../devotional-resume-selection';
 
 const ARCHIVE_AT = '2026-09-12T15:00:00.000Z';
 const RESUME_AT = '2026-09-12T16:00:00.000Z';
 const NEWER_RESUME_AT = '2026-09-12T17:00:00.000Z';
 const OLDER_AT = '2026-09-12T14:00:00.000Z';
+
+// 2026-10-09 release audit round 5: a shell built from a pull without series
+// dates carries this phone's guess for its creation. That ranked an old
+// resumed series above a newer one started on another device, and a ready
+// push for the old series put Today on it.
+describe('a held series pulled without series dates', () => {
+  const GUESSED_AT = '2026-10-09T13:00:00.000Z';
+  const SIBLING_AT = '2026-09-12T18:00:00.000Z';
+  const pulled = [
+    { id: 'series-1', createdAt: OLDER_AT, archivedAt: null, archivedStateAt: RESUME_AT },
+    { id: 'series-2', createdAt: SIBLING_AT, archivedAt: null },
+  ];
+  const held = [
+    { id: 'series-1', createdAt: GUESSED_AT, archivedAt: null, archivedStateAt: RESUME_AT, generationMode: 'progressive' },
+    { id: 'series-2', createdAt: SIBLING_AT, archivedAt: null, generationMode: 'progressive' },
+  ];
+
+  it('ranks by the creation time the pull returned for it when a sync restores Today', () => {
+    expect(selectSyncedCurrentDevotionalId({
+      previousCurrentId: null,
+      previous: [{ id: 'series-1', createdAt: GUESSED_AT, archivedAt: ARCHIVE_AT, archivedStateAt: ARCHIVE_AT }, held[1]],
+      next: held,
+      pulled,
+    })).toBeNull();
+  });
+
+  it('ranks by the creation time the pull returned for it when Reading fills an empty Today', () => {
+    expect(canPulledSeriesTakeEmptyToday('series-1', held, pulled)).toBe(false);
+    expect(canPulledSeriesTakeEmptyToday('series-2', held, pulled)).toBe(true);
+  });
+});
 
 describe('selectSyncedCurrentDevotionalId', () => {
   it('restores Today onto a newer accepted remote resume', () => {

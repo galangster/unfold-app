@@ -97,8 +97,9 @@ const newDay1: DevotionalDay = {
 
 const landed = { devotionalId: NEW_ID, devotionalDay: newDay1, seriesTitle: 'A New Thing', totalDays: 7 };
 
-/** The new series' job was recorded (/generating binds the replacement then), and its result lands. */
+/** The new series' job was submitted for the stored request (/generating binds the replacement then), and its result lands. */
 function land(result = landed) {
+  ensureInitialGenerationRequestId();
   bindReplacementSeries(result.devotionalId);
   return applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 }
