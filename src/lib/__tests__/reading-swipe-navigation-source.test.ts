@@ -33,14 +33,16 @@ describe('reading swipe navigation source contract', () => {
     // to advance to — not for a swipe backward at day 1, and not for a
     // below-threshold nudge.
     expect(onEndBlock).toContain('event.translationX < -80 && viewingDay >= availableDays');
-    expect(onEndBlock).toContain('setLockedDayToast');
+    expect(onEndBlock).toContain('runOnJS(showBlockedForwardToast)()');
 
     // Reuses the existing message-toast pattern (styles.toastContainer /
     // styles.toastText), not a bespoke component.
     const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,900}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
-    // The message names why: series finished, daily pace, or day not ready.
-    expect(lockedToastBlock).toContain(
-      'BLOCKED_FORWARD_MESSAGES[resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, calendarNow)]',
+    // The message names why, and the reason is fixed when the swipe is
+    // blocked, so moving to another day does not rewrite it.
+    expect(lockedToastBlock).toContain('BLOCKED_FORWARD_MESSAGES[lockedDayToast]');
+    expect(readingSource).toContain(
+      'setLockedDayToast(resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));',
     );
     expect(lockedToastBlock).toContain('styles.toastContainer');
     expect(lockedToastBlock).toContain('styles.toastText');

@@ -604,7 +604,7 @@ describe('resolveBlockedForwardReason', () => {
       days: [day({ dayNumber: 7, isRead: true, readAt: todayIso })],
     });
 
-    expect(resolveBlockedForwardReason(series, 7, 7, now)).toBe('series-finished');
+    expect(resolveBlockedForwardReason(series, 7, 7, false, now)).toBe('series-finished');
     expect(BLOCKED_FORWARD_MESSAGES['series-finished']).toBe('This is the last day of this series');
   });
 
@@ -617,7 +617,7 @@ describe('resolveBlockedForwardReason', () => {
       ],
     });
 
-    expect(resolveBlockedForwardReason(series, 5, 7, now)).toBe('daily-pace');
+    expect(resolveBlockedForwardReason(series, 5, 7, false, now)).toBe('daily-pace');
     expect(BLOCKED_FORWARD_MESSAGES['daily-pace']).toBe("Tomorrow's reading unlocks after midnight");
   });
 
@@ -627,6 +627,38 @@ describe('resolveBlockedForwardReason', () => {
       days: [day({ dayNumber: 5, isRead: true, readAt: yesterdayIso })],
     });
 
-    expect(resolveBlockedForwardReason(series, 5, 7, now)).toBe('not-ready');
+    expect(resolveBlockedForwardReason(series, 5, 7, false, now)).toBe('not-ready');
+  });
+
+  it('says a paused series will not get its missing next day, even with today read', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [day({ dayNumber: 5, isRead: true, readAt: todayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('paused');
+    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe("This series is paused, so its next day wasn't prepared");
+  });
+
+  it('keeps the daily pace for a paused series whose next day is here', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [
+        day({ dayNumber: 5, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 6, isRead: false }),
+      ],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('daily-pace');
+  });
+
+  it('asks the reader to finish this day when the next day is already here', () => {
+    const series = devotional({
+      currentDay: 1,
+      days: [day({ dayNumber: 1 }), day({ dayNumber: 2 })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 1, 7, false, now)).toBe('finish-current');
+    expect(BLOCKED_FORWARD_MESSAGES['finish-current']).toBe('Finish this reading to open the next day');
   });
 });

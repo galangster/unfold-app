@@ -80,27 +80,41 @@ export function getLockedTodayDayNumber(
   return currentDayIsTomorrowCandidate ? latestReadToday : null;
 }
 
-export type BlockedForwardReason = 'series-finished' | 'daily-pace' | 'not-ready';
+export type BlockedForwardReason =
+  | 'series-finished'
+  | 'paused'
+  | 'daily-pace'
+  | 'finish-current'
+  | 'not-ready';
 
 /**
- * Why a forward swipe from `viewingDay` went nowhere: the series has no
- * later day, today's reading already set the daily pace, or the next day is
- * not on this device yet (still being prepared, missing, or paused).
+ * Why a forward swipe from `viewingDay` went nowhere: the series has no later
+ * day; a paused series lacks the next day and will not get it; today's
+ * reading already set the daily pace; the next day is here but this one is
+ * unfinished; or the next day is not on this device yet.
  */
 export function resolveBlockedForwardReason(
-  devotional: DevotionalReadingProgress | null | undefined,
+  devotional: Devotional | null | undefined,
   viewingDay: number,
   totalDays: number,
+  seriesPaused: boolean,
   now = new Date(),
 ): BlockedForwardReason {
   if (viewingDay >= totalDays) return 'series-finished';
+  const nextDayReady = selectRenderableDevotionalDay(devotional, viewingDay + 1).status === 'ready';
+  // Only the current series gets new days, so waiting will not bring a
+  // missing day to a paused one.
+  if (seriesPaused && !nextDayReady) return 'paused';
   if (getLockedTodayDayNumber(devotional, now) != null) return 'daily-pace';
+  if (nextDayReady) return 'finish-current';
   return 'not-ready';
 }
 
 export const BLOCKED_FORWARD_MESSAGES: Record<BlockedForwardReason, string> = {
   'series-finished': 'This is the last day of this series',
+  paused: "This series is paused, so its next day wasn't prepared",
   'daily-pace': "Tomorrow's reading unlocks after midnight",
+  'finish-current': 'Finish this reading to open the next day',
   'not-ready': "The next day isn't ready yet",
 };
 
