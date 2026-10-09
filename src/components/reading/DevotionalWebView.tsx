@@ -42,17 +42,13 @@ export interface HighlightsChangedEvent {
   primarySerial: string;
   /** True for undo replays — reconcile the store, show no toast. */
   silent: boolean;
-  /** The document that produced the change. Undo replays it into that document only. */
-  docId: string;
 }
 
 /** Imperative handle for the reader screen (undo). */
 export interface DevotionalWebViewCommands {
   /** Apply the inverse of a reported change to the document. The resulting
-   *  diff comes back through `onHighlightsChanged` with `silent: true`. The
-   *  change replays by character position, so it is dropped once the
-   *  document that produced it is gone (new text for the same day). */
-  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => void;
+   *  diff comes back through `onHighlightsChanged` with `silent: true`. */
+  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
   /** Flash and report the y of a stored highlight in the live document
    *  (reader Highlights sheet). Resolves through `onTargetHighlightLocated`. */
   scrollToHighlight: (highlight: Highlight) => void;
@@ -316,9 +312,6 @@ const HIGHLIGHTS_SCRIPT = `
         after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
         postToApp({
           type: 'HIGHLIGHTS_CHANGED',
-          // Which document changed, so a message still in flight from a
-          // replaced document is not saved under the one that replaced it.
-          docId: document.documentElement.getAttribute('data-doc-id'),
           reason: reason,
           removed: removed,
           added: added,
@@ -2510,9 +2503,6 @@ export function DevotionalWebView({
   // truth. appliedJson tracks the values the document is showing so that an
   // unchanged theme is never pushed twice.
   const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
-  // The document on screen now, for commands that must not reach a newer one.
-  const liveDocIdRef = useRef(webViewDocument.docId);
-  liveDocIdRef.current = webViewDocument.docId;
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2628,7 +2618,6 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        if (change.docId !== liveDocIdRef.current) return;
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {
@@ -2737,17 +2726,12 @@ export function DevotionalWebView({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
-        // A change still in flight from the previous document (same-key
-        // source swap) belongs to a page no longer open. Saving it, or
-        // offering its Undo, would land on this one.
-        if (data.docId !== webViewDocument.docId) return;
         onHighlightsChanged({
           reason: data.reason,
           removed: Array.isArray(data.removed) ? data.removed : [],
           added: Array.isArray(data.added) ? data.added : [],
           primarySerial: typeof data.primarySerial === 'string' ? data.primarySerial : '',
           silent: !!data.silent,
-          docId: data.docId,
         });
       } else if (data.type === 'HIGHLIGHT_FAILED') {
         onHighlightFailed?.();

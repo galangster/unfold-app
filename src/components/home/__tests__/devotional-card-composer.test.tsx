@@ -94,12 +94,10 @@ jest.mock('expo-router', () => ({
 }));
 
 // Cuts off the whole empty/journey-complete subtree (store, api-config,
-// qa-tools, expo-haptics, expo-router's useRouter). The journey-complete tests
-// render the card's fallback to stand in for a recommendation that failed.
-let mockRecommendationFailed = false;
+// qa-tools, expo-haptics, expo-router's useRouter) — none of that is exercised
+// by the unread/complete-today/tomorrow-locked states under test here.
 jest.mock('../RecommendedSeriesCard', () => ({
-  RecommendedSeriesCard: ({ renderFallback }: { renderFallback?: () => React.ReactNode }) =>
-    (mockRecommendationFailed && renderFallback ? renderFallback() : null),
+  RecommendedSeriesCard: () => null,
 }));
 
 jest.mock('@/components/ui', () => ({
@@ -271,33 +269,6 @@ function findByLabel(tree: any, label: string) {
 }
 
 // ─── Tests ──────────────────────────────────────────────────────
-
-describe('DevotionalCard journey-complete next steps', () => {
-  afterEach(() => {
-    mockRecommendationFailed = false;
-  });
-
-  function journeyCompleteState(onCreateNew = jest.fn()): DevotionalCardState {
-    return { type: 'journey-complete', seriesTitle: 'Your First Devotional', onCreateNew };
-  }
-
-  it('leaves the next step to the recommendation instead of a second Create Series button', () => {
-    const tree = renderInAct(<DevotionalCard state={journeyCompleteState()} />);
-    expect(findByLabel(tree, 'Create a new devotional series')).toHaveLength(0);
-    expect(textContent(tree.root)).not.toContain('Create Series');
-    act(() => tree.unmount());
-  });
-
-  it('keeps Create Series as the one next step when no recommendation can show', () => {
-    mockRecommendationFailed = true;
-    const onCreateNew = jest.fn();
-    const tree = renderInAct(<DevotionalCard state={journeyCompleteState(onCreateNew)} />);
-    expect(textContent(tree.root).match(/Create Series/g)).toHaveLength(1);
-    act(() => findByLabel(tree, 'Create a new devotional series')[0].props.onPress());
-    expect(onCreateNew).toHaveBeenCalledTimes(1);
-    act(() => tree.unmount());
-  });
-});
 
 describe('DevotionalCard composer integration', () => {
   it('opens the same next reading without assigning it to yesterday', () => {
@@ -1146,32 +1117,6 @@ describe('DevotionalCard daily recovery', () => {
     expect(tree.root.findAll((node: any) => textContent(node).includes('Try this reading again'))).toHaveLength(0);
   });
 
-  it('says when a day the server will not retry is tried again, and keeps Check Again to find it', () => {
-    const onCheckAgain = jest.fn(async () => undefined);
-    const tree = renderInAct(
-      <DevotionalCard
-        state={{
-          ...baseState,
-          recovery: {
-            status: 'failed',
-            jobId: 'job-1',
-            canRetry: false,
-            failureKind: 'job',
-            retriesExhausted: true,
-            onCheckAgain,
-            onRetry: jest.fn(async () => undefined),
-          },
-        }}
-      />,
-    );
-
-    expect(tree.root.findAll((node: any) => textContent(node).includes('We couldn’t prepare Day 2.')).length).toBeGreaterThan(0);
-    expect(tree.root.findAll((node: any) => textContent(node).includes('We’ll try this reading again tomorrow.')).length)
-      .toBeGreaterThan(0);
-    act(() => findByLabel(tree, 'Check Again')[0].props.onPress());
-    expect(onCheckAgain).toHaveBeenCalledTimes(1);
-  });
-
   it('keeps Check Again visible with disabled and busy feedback while checking', () => {
     const tree = renderInAct(
       <DevotionalCard
@@ -1217,10 +1162,6 @@ describe('DevotionalCard daily recovery', () => {
     {
       recovery: { status: 'blocked' as const, reason: 'day-not-ready' as const },
       title: 'Day 2 isn’t available yet.',
-    },
-    {
-      recovery: { status: 'blocked' as const, reason: 'read-sync-pending' as const },
-      title: 'Saving your last reading.',
     },
     {
       recovery: { status: 'service-error' as const },

@@ -18,7 +18,6 @@ import { EmberSystem } from '@/components/EmberSystem';
 import type { ExclusionZone } from '@/lib/ember-system';
 import { alpha } from '@/components/ui';
 import { SheetHandle } from '@/components/ui/SheetHandle';
-import { ALL_METHOD_IDS } from '@/constants/bible-study-methods';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -744,7 +743,7 @@ export default function PaywallScreen() {
     { icon: CircleNotchIcon, title: 'AI companion', desc: 'Learns your story and shapes tomorrow\u2019s reading' },
     { icon: SunHorizonIcon, title: 'A rhythm, morning to night', desc: 'Check-ins and reflections that adapt your next devotional to your responses' },
     { icon: BooksIcon, title: 'Thousands of resources', desc: 'Stories, commentaries, and encyclopedias curated for you' },
-    { icon: BookOpenTextIcon, title: `${ALL_METHOD_IDS.length} study methods`, desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
+    { icon: BookOpenTextIcon, title: '40+ study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
     { icon: PencilLineIcon, title: 'Longer, deeper content', desc: 'Extended devotionals and longer series' },
     { icon: ChatCircleDotsIcon, title: 'Guided journal prompts', desc: 'Reflection questions shaped by your story and today\u2019s reading' },
     { icon: PaletteIcon, title: 'Themes, fonts & colors', desc: 'Make the app feel like yours' },
@@ -755,7 +754,7 @@ export default function PaywallScreen() {
     { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
     { label: 'Series length', free: 'A one-day sample', premium: '3 to 30 days' },
     { label: 'AI Companion', free: false, premium: 'Daily check-ins + chat' },
-    { label: 'Study methods', free: 'Basic', premium: `${ALL_METHOD_IDS.length} methods` },
+    { label: 'Study methods', free: 'Basic', premium: '40+ methods' },
     { label: 'Journal prompts', free: false, premium: true },
     { label: 'Themes & fonts', free: '1 theme', premium: '7 themes + fonts' },
   ];

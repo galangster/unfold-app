@@ -650,15 +650,15 @@ describe('DevotionalWebView highlight interactions', () => {
 
     const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
     act(() => {
-      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId: getDocId(tree), reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
+      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
       props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHT_FAILED' }) } });
     });
-    expect(onHighlightsChanged).toHaveBeenCalledWith({ reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false, docId: getDocId(tree) });
+    expect(onHighlightsChanged).toHaveBeenCalledWith({ reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false });
     expect(onHighlightFailed).toHaveBeenCalledTimes(1);
 
     mockInjectJavaScript.mockClear();
     act(() => {
-      commandRef.current.applyInverse({ added, removed: [], docId: getDocId(tree) });
+      commandRef.current.applyInverse({ added, removed: [] });
     });
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldApplyInverse(');
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('10$20$1$rangy-highlight-yellow$');
@@ -819,60 +819,6 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(afterRoot).not.toContain('#C8A55C');
     expect(afterRoot).not.toContain('#2a2a2a');
     expect(afterRoot).not.toContain('#FFE86A');
-  });
-
-  it('drops a highlight change still in flight from a document the page replaced', () => {
-    const onHighlightsChanged = jest.fn();
-    let tree: any;
-    act(() => {
-      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-    });
-    const script = getWebViewProps(tree).injectedJavaScript as string;
-    expect(script).toMatch(/type: 'HIGHLIGHTS_CHANGED',[\s\S]{0,200}docId: document\.documentElement\.getAttribute\('data-doc-id'\)/);
-    const oldDocId = getDocId(tree);
-
-    // New content for the same day reloads the WebView in place.
-    act(() => {
-      tree.update(<DevotionalWebView day={{ ...day, bodyText: 'Revised teaching.' }} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-    });
-    const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-    const change = (docId: string) => ({
-      nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId, reason: 'remove', added: [], removed: added, primarySerial: '', silent: false }) },
-    });
-    act(() => {
-      getWebViewProps(tree).onMessage(change(oldDocId));
-    });
-    expect(onHighlightsChanged).not.toHaveBeenCalled();
-
-    act(() => {
-      getWebViewProps(tree).onMessage(change(getDocId(tree)));
-    });
-    expect(onHighlightsChanged).toHaveBeenCalledTimes(1);
-  });
-
-  // 2026-10-09 release audit: an Undo still on screen replays by character
-  // position, so new text for the same day must not take it.
-  it('drops an Undo whose document new text for the day replaced', () => {
-    const commandRef = { current: null as any };
-    let tree: any;
-    act(() => {
-      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" commandRef={commandRef} />);
-    });
-    reportHeight(tree);
-    const oldDocId = getDocId(tree);
-    act(() => {
-      tree.update(<DevotionalWebView day={{ ...day, bodyText: 'Revised teaching.' }} fontSize="medium" commandRef={commandRef} />);
-    });
-    reportHeight(tree);
-    const removed = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-    const inverseCalls = () => mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
-
-    mockInjectJavaScript.mockClear();
-    act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-    expect(inverseCalls()).toHaveLength(0);
-
-    act(() => { commandRef.current.applyInverse({ added: [], removed, docId: getDocId(tree) }); });
-    expect(inverseCalls()).toHaveLength(1);
   });
 
   it('keeps the exact source when the day object is replaced with identical content (e.g. marked read)', () => {
