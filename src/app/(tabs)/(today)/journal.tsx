@@ -63,14 +63,12 @@ import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import {
   EMPTY_SOAP_RESPONSES,
-  SOAP_FIELDS,
   buildInitialQuestionResponses,
   diffSoapWrites,
   normalizeSoapResponses,
   resolveInitialJournalMode,
   resolveJournalCloseAction,
 } from '@/lib/journal-entry-state';
-import { rebaseJournalDraft } from '@/lib/journal-entry-merge';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   createAutosaveController,
@@ -285,39 +283,6 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       savedEntryIdRef.current = existingEntry.id;
     }
   }, [existingEntry]);
-
-  // A sync merge can move this day's entry to its canonical id while the
-  // editor is open. Every save addresses savedEntryIdRef, and a save to the
-  // old id matches no entry and is dropped. The ref follows the store's entry
-  // for the day as soon as the store changes, before any pending autosave.
-  useEffect(() => useUnfoldStore.subscribe((state, previous) => {
-    const movedFrom = savedEntryIdRef.current;
-    if (!movedFrom) return;
-    const live = state.journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber);
-    if (!live || live.id === movedFrom) return;
-    savedEntryIdRef.current = live.id;
-    // Unsaved edits were made over the entry as it stood before the move, and
-    // the move can bring in text merged from another row. The pending save
-    // would replace that text, so the draft is rebased onto the merged entry.
-    // With no edits pending, the resync effect loads the merged entry.
-    const before = previous.journalEntries.find((e) => e.id === movedFrom);
-    if (!before || !hasChangesRef.current) return;
-    const content = rebaseJournalDraft(before.content ?? '', live.content ?? '', contentRef.current);
-    if (content !== contentRef.current) {
-      contentRef.current = content;
-      setContent(content);
-    }
-    const beforeSoap = normalizeSoapResponses(before.soapResponses) ?? EMPTY_SOAP_RESPONSES;
-    const liveSoap = normalizeSoapResponses(live.soapResponses) ?? EMPTY_SOAP_RESPONSES;
-    const soap = { ...soapValuesRef.current };
-    for (const field of SOAP_FIELDS) {
-      soap[field] = rebaseJournalDraft(beforeSoap[field] ?? '', liveSoap[field] ?? '', soap[field] ?? '');
-    }
-    if (SOAP_FIELDS.some((field) => soap[field] !== soapValuesRef.current[field])) {
-      soapValuesRef.current = soap;
-      setSoapValues(soap);
-    }
-  }), [devotionalId, dayNumber]);
 
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');

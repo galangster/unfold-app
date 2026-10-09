@@ -12,12 +12,11 @@ import {
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
-import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
-import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
-import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
+import { useUnfoldStore } from './store';
+import { peekSyncOutbox } from './sync-outbox';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates } from './journal-entry-merge';
+import { mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -33,7 +32,7 @@ import type {
   SeriesPersonaRecord,
   UsedScripture,
 } from './store';
-import { flushCompanionChatPersistAsync, useCompanionChatStore } from './companion-chat-store';
+import { useCompanionChatStore } from './companion-chat-store';
 import { forgetCompanionDraft, markCompanionDraftEmptied } from './companion-drafts';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
@@ -104,44 +103,6 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
     }
   }
   return pending;
-}
-
-/**
- * Journal entries as their live changes still queued here say they are. A
- * write reaches the outbox at once and the store's disk a moment later, so
- * after a crash in between, the queued copy is newer than the row on this
- * device, or the row is gone.
- */
-function queuedJournalEntries(): JournalEntry[] {
-  return peekSyncOutbox()
-    .filter((change) => change.table === 'journal_entries' && !change.deleted)
-    .map((change) => mapJournalEntry({
-      id: change.id,
-      data: change.data,
-      updatedAt: change.clientUpdatedAt,
-      deleted: false,
-    } as SyncPulledRecord))
-    .filter((entry): entry is JournalEntry => entry != null);
-}
-
-function pendingDeletedRecords(): Set<string> {
-  return new Set(
-    peekSyncOutbox().filter((change) => change.deleted).map((change) => pendingKey(change.table, change.id)),
-  );
-}
-
-/**
- * The clock for a merged entry queued as a repair: later than now, than the
- * entries it folds, and than a change already queued for it. Older than any
- * of them, the repair would lose to an unmerged snapshot in the queue or to
- * the server's row, even after the device clock moved back.
- */
-function repairClock(now: string, folded: string | undefined, pending: string | undefined): string {
-  const after = (value: string | undefined) => {
-    const ms = value ? Date.parse(value) : Number.NaN;
-    return Number.isFinite(ms) ? new Date(ms + 1).toISOString() : now;
-  };
-  return [now, after(folded), after(pending)].reduce((latest, value) => (value > latest ? value : latest));
 }
 
 function pendingDevotionalArchivedStateAtById(): Map<string, string> {
@@ -239,23 +200,6 @@ function collapseJournalEntryDays(entries: JournalEntry[]): JournalEntry[] {
   );
   const rest = entries.filter((entry) => entry && !keyable.includes(entry));
   return [...mergeJournalEntryDuplicates(keyable), ...rest];
-}
-
-/**
- * The entries a collapse moved to a canonical id or merged. The server holds
- * neither under the canonical id, so a later pull of that row, written from
- * an unmerged copy, would replace the folded writing on this device.
- */
-function journalEntriesChangedByCollapse(before: JournalEntry[], after: JournalEntry[]): Set<string> {
-  const changed = new Set<string>();
-  if (after === before) return changed;
-  for (const entry of after) {
-    const prior = before.find((candidate) => candidate.id === entry.id);
-    if (!prior || JSON.stringify(journalEntrySyncData(prior)) !== JSON.stringify(journalEntrySyncData(entry))) {
-      changed.add(entry.id);
-    }
-  }
-  return changed;
 }
 
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
@@ -735,10 +679,6 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByRecord = pendingClientUpdatedAtsByRecord();
   const pendingByChapter = pendingBibleReadingByChapter();
   const pendingLifecycleById = pendingDevotionalArchivedStateAtById();
-  const collapsedAt = new Date().toISOString();
-  const pendingDeletes = pendingDeletedRecords();
-  const queuedEntries = queuedJournalEntries();
-  let collapsedJournalEntries: JournalEntry[] = [];
   useUnfoldStore.setState((state) => {
     const previousDevotionals = state.devotionals;
     let devotionals = previousDevotionals;
@@ -752,8 +692,6 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
           seriesArc: asRecord(asRecord(record.data).seriesArc),
         });
       });
-    // Series this pull deleted. A journal repair must not rebuild their days.
-    const acceptedSeriesDeletes = new Set<string>();
     for (const record of incomingDevotionals) {
       const current = devotionals.find((item) => item.id === record.id);
       const contentShouldApply = shouldApply(record, current, 'devotionals', pendingByRecord);
@@ -767,7 +705,6 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       // pending read must not block a newer remote lifecycle decision.
       if (record.deleted) {
         if (!contentShouldApply) continue;
-        acceptedSeriesDeletes.add(record.id);
         devotionals = devotionals.filter((item) => item.id !== record.id);
         continue;
       }
@@ -831,66 +768,12 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       // carry random ids, so upserting them by id alone re-creates exactly the
       // per-day duplicates the v41→42 migration merged. Collapse the day again
       // after applying: the merge is idempotent and keeps every piece of text.
-      journalEntries: (() => {
-        // A queued copy newer than this device's row stands in for it, so a
-        // repair below carries the reader's latest writing rather than
-        // replacing it in the outbox. Only on a day this pull brings rows for,
-        // in a series still here (a delete queued here or applied by this pull
-        // has removed it), and only for an entry whose row is older or gone. A
-        // legacy-id copy whose day already has an entry was folded into it and
-        // stays gone; the day's canonical copy always stands in, since a crash
-        // can leave the store on the legacy rows it was folded from.
-        const dayKey = (entry: { devotionalId: string; dayNumber: number }) => `${entry.devotionalId}:${entry.dayNumber}`;
-        const pulledDays = new Set((changes.journal_entries ?? [])
-          .map((record) => mapJournalEntry(record))
-          .filter((entry): entry is JournalEntry => entry != null)
-          .map(dayKey));
-        const local = queuedEntries.reduce((items, queued) => {
-          if (!pulledDays.has(dayKey(queued))
-            || !devotionals.some((item) => item.id === queued.devotionalId)) return items;
-          const current = items.find((item) => item.id === queued.id);
-          if (current && (localUpdatedAt(current) ?? '') >= (queued.updatedAt ?? '')) return items;
-          if (!current
-            && queued.id !== canonicalJournalEntryId(queued.devotionalId, queued.dayNumber)
-            && items.some((item) => dayKey(item) === dayKey(queued))) return items;
-          // The queued copy carries every field but when the entry began: the
-          // row's own date, or the server's copy of it in this pull.
-          if (current) return items.map((item) => (item.id === queued.id ? { ...queued, createdAt: item.createdAt } : item));
-          const serverCopy = (changes.journal_entries ?? []).find((record) => record.id === queued.id && !record.deleted);
-          const began = serverCopy ? mapJournalEntry(serverCopy)?.createdAt : undefined;
-          return [{ ...queued, createdAt: began ?? queued.createdAt }, ...items];
-        }, state.journalEntries);
-        const acceptedEntryDeletes = new Set<string>();
-        const pulled = (changes.journal_entries ?? []).reduce((items, record) => {
-          if (record.deleted
-            && shouldApply(record, items.find((item) => item.id === record.id), 'journal_entries', pendingByRecord)) {
-            acceptedEntryDeletes.add(record.id);
-          }
-          return upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry);
-        }, local);
-        const collapsed = collapseJournalEntryDays(pulled);
-        const changed = journalEntriesChangedByCollapse(pulled, collapsed);
-        // A delete stays a delete: one the reader queued here, or one this pull
-        // applied for the entry or its series. A repair would push the legacy
-        // rows' text over it.
-        for (const id of changed) {
-          const entry = collapsed.find((item) => item.id === id);
-          if (pendingDeletes.has(pendingKey('journal_entries', id))
-            || acceptedEntryDeletes.has(id)
-            || (entry && (pendingDeletes.has(pendingKey('devotionals', entry.devotionalId))
-              || acceptedSeriesDeletes.has(entry.devotionalId)))) {
-            changed.delete(id);
-          }
-        }
-        if (changed.size === 0) return collapsed;
-        const stamped = collapsed.map((entry) => (
-          changed.has(entry.id)
-            ? { ...entry, updatedAt: repairClock(collapsedAt, entry.updatedAt, pendingByRecord.get(pendingKey('journal_entries', entry.id))) }
-            : entry
-        ));
-        collapsedJournalEntries = stamped.filter((entry) => changed.has(entry.id));
-        return stamped;
-      })(),
+      journalEntries: collapseJournalEntryDays(
+        (changes.journal_entries ?? []).reduce(
+          (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
+          state.journalEntries
+        )
+      ),
       bookmarks: (changes.bookmarks ?? []).reduce(
         (items, record) => upsertRecord(items, record, 'bookmarks', pendingByRecord, mapBookmark),
         state.bookmarks
@@ -933,15 +816,6 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       ),
     };
   });
-  // The merged writing goes to the server under the canonical id. Until the
-  // push lands, its queued change keeps an older copy of the row from
-  // replacing it here. The legacy rows stay on the server: removing one
-  // before the merged row is safely stored could lose its text.
-  if (collapsedJournalEntries.length > 0) {
-    enqueueSyncChanges(collapsedJournalEntries.map((entry) => buildPersonalDataSyncChange(
-      'journal_entries', entry.id, journalEntrySyncData(entry), entry.updatedAt ?? collapsedAt,
-    )));
-  }
 }
 
 function applyCompanionChanges(payload: SyncPullResponse): void {
@@ -1069,12 +943,6 @@ export async function pullAllUserData(options: PullAllUserDataOptions = {}): Pro
     const payload = await response.json() as SyncPullResponse;
     assertSyncSessionCurrent(session, 'sync pull');
     applyPulledUserData(payload);
-    // The cursor moves only once the pulled rows are on disk, in both stores
-    // the pull writes. Their writes wait up to a few seconds, and a kill in
-    // that window with the cursor already saved would skip those rows on
-    // every later pull.
-    await Promise.all([flushUnfoldStorePersistAsync(), flushCompanionChatPersistAsync()]);
-    assertSyncSessionCurrent(session, 'sync pull');
     mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
     return payload;
   } catch (error) {

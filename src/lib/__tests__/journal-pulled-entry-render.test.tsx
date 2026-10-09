@@ -134,9 +134,7 @@ jest.mock('@/lib/mmkv-storage', () => {
 import JournalScreen from '../../app/(tabs)/(today)/journal';
 import JournalDetailScreen from '../../app/(tabs)/(today)/journal-detail';
 import { applyPulledUserData } from '@/lib/full-sync-pull';
-import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
-import { OUTBOX_KEY } from '@/lib/sync-outbox';
 
 const DEVOTIONAL: any = {
   id: 'dev-1',
@@ -196,9 +194,7 @@ describe('journal screens with a sync-restored entry', () => {
   let errorSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    // A real reset clears the store and the outbox together.
     useUnfoldStore.getState().reset();
-    mmkvStorage.removeItem(OUTBOX_KEY);
     useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -244,107 +240,6 @@ describe('journal screens with a sync-restored entry', () => {
     const texts = tree.root
       .findAll((node: any) => typeof node.type !== 'string' && node.props.children === 'Restored freewrite text from the server');
     expect(texts.length).toBeGreaterThan(0);
-    act(() => tree.unmount());
-  });
-});
-
-describe('the journal editor when a merge moves its entry', () => {
-  beforeEach(() => {
-    // A real reset clears the store and the outbox together.
-    useUnfoldStore.getState().reset();
-    mmkvStorage.removeItem(OUTBOX_KEY);
-    useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('saves typing still pending when the entry moved to its canonical id, and keeps the merged-in writing', () => {
-    const legacyId = useUnfoldStore.getState().addJournalEntry({
-      devotionalId: 'dev-1',
-      dayNumber: 1,
-      content: 'Before the merge.',
-      journalMode: 'freewrite',
-    });
-    let tree: any;
-    act(() => { tree = renderer.create(<JournalScreen />); });
-    const input = tree.root.findAll(
-      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
-    )[0];
-
-    act(() => { input.props.onChangeText('Before the merge, and more.'); });
-    // A pull's collapse moves the day's entry to its canonical id and folds
-    // in the other device's writing.
-    act(() => {
-      useUnfoldStore.setState((state) => ({
-        journalEntries: state.journalEntries.map((entry) => (
-          entry.id === legacyId
-            ? { ...entry, id: 'journal-canonical-1', content: 'Before the merge.\n\nFrom the other device.' }
-            : entry
-        )),
-      }));
-    });
-    act(() => { jest.advanceTimersByTime(2_000); });
-
-    const entries = useUnfoldStore.getState().journalEntries
-      .filter((entry) => entry.devotionalId === 'dev-1' && entry.dayNumber === 1);
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      id: 'journal-canonical-1',
-      content: 'Before the merge, and more.\n\nFrom the other device.',
-    });
-    act(() => tree.unmount());
-  });
-
-  it('keeps a SOAP field the merge filled while another field has a pending edit', () => {
-    const legacyId = useUnfoldStore.getState().addJournalEntry({
-      devotionalId: 'dev-1',
-      dayNumber: 1,
-      content: '',
-      journalMode: 'soap',
-    });
-    useUnfoldStore.setState((state) => ({
-      journalEntries: state.journalEntries.map((entry) => (
-        entry.id === legacyId
-          ? { ...entry, soapResponses: { scripture: 'The verse I chose.', observation: '', application: '', prayer: '' } }
-          : entry
-      )),
-    }));
-    let tree: any;
-    act(() => { tree = renderer.create(<JournalScreen />); });
-    const byLabel = (label: string) => tree.root.findAll(
-      (node: any) => node.props.accessibilityLabel === label && typeof node.type !== 'string',
-    )[0];
-
-    act(() => { byLabel('Scripture section').props.onPress(); });
-    act(() => { byLabel('Scripture journal entry').props.onChangeText('The verse I chose, and why.'); });
-    act(() => {
-      useUnfoldStore.setState((state) => ({
-        journalEntries: state.journalEntries.map((entry) => (
-          entry.id === legacyId
-            ? {
-              ...entry,
-              id: 'journal-canonical-1',
-              soapResponses: {
-                scripture: 'The verse I chose.',
-                observation: 'Noticed on the other device.',
-                application: '',
-                prayer: '',
-              },
-            }
-            : entry
-        )),
-      }));
-    });
-    act(() => { jest.advanceTimersByTime(2_000); });
-
-    const day = useUnfoldStore.getState().journalEntries.find((entry) => entry.id === 'journal-canonical-1');
-    expect(day?.soapResponses).toMatchObject({
-      scripture: 'The verse I chose, and why.',
-      observation: 'Noticed on the other device.',
-    });
     act(() => tree.unmount());
   });
 });
