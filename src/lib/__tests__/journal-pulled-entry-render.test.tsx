@@ -134,7 +134,9 @@ jest.mock('@/lib/mmkv-storage', () => {
 import JournalScreen from '../../app/(tabs)/(today)/journal';
 import JournalDetailScreen from '../../app/(tabs)/(today)/journal-detail';
 import { applyPulledUserData } from '@/lib/full-sync-pull';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
+import { OUTBOX_KEY } from '@/lib/sync-outbox';
 
 const DEVOTIONAL: any = {
   id: 'dev-1',
@@ -194,7 +196,9 @@ describe('journal screens with a sync-restored entry', () => {
   let errorSpy: jest.SpyInstance;
 
   beforeEach(() => {
+    // A real reset clears the store and the outbox together.
     useUnfoldStore.getState().reset();
+    mmkvStorage.removeItem(OUTBOX_KEY);
     useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -246,7 +250,9 @@ describe('journal screens with a sync-restored entry', () => {
 
 describe('the journal editor when a merge moves its entry', () => {
   beforeEach(() => {
+    // A real reset clears the store and the outbox together.
     useUnfoldStore.getState().reset();
+    mmkvStorage.removeItem(OUTBOX_KEY);
     useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
     jest.useFakeTimers();
   });
