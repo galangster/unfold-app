@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, Text, View } from 'react-native';
-import { NotifyNote, NOTIFY_NOTE_COPY } from '@/components/generating/NotifyNote';
+import { NotifyNote } from '@/components/generating/NotifyNote';
+import { NOTIFY_NOTE_COPY } from '@/lib/generating-notify-state';
 import {
   askNotificationPermissionInContext,
   readNotificationPermissionState,

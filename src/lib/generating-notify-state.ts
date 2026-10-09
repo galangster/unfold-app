@@ -92,15 +92,23 @@ export function resolveNotifyPromisePlacement(
   return isLongSeries(totalDays) ? 'wait-line' : 'exit';
 }
 
+/** Notification status below the generation actions. */
+export const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed' | 'registration-unavailable'>, string> = {
+  pending: 'Setting up your notification\u2026',
+  denied: 'Notifications are off. You can turn them on in\u00A0Settings.',
+  'registration-failed': 'We couldn\u2019t set up notifications.',
+  'registration-unavailable': 'Notifications aren\u2019t available here.',
+};
+
 /** The wait line's second sentence when it carries the promise. */
 export const WAIT_LINE_NOTIFY_PROMISE_COPY =
   'You can leave this screen. We\u2019ll let you know when Day 1 is ready.';
 
+const KEEP_WRITING_COPY = 'We\u2019ll keep writing your first devotional.';
+
 /** Copy below the accepted-job exit. */
 export function resolveAcceptedGenerationExitCopy(placement: NotifyPromisePlacement): string {
-  if (placement === 'exit') {
-    return 'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.';
-  }
-  if (placement === 'wait-line') return 'We\u2019ll keep writing your first devotional.';
-  return 'We\u2019ll keep writing your first devotional.\nCome back whenever you\u2019re ready.';
+  if (placement === 'exit') return `${KEEP_WRITING_COPY}\nWe\u2019ll notify you when it\u2019s ready.`;
+  if (placement === 'wait-line') return KEEP_WRITING_COPY;
+  return `${KEEP_WRITING_COPY}\nCome back whenever you\u2019re ready.`;
 }

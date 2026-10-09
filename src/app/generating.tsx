@@ -69,13 +69,14 @@ import {
 import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
+  NOTIFY_NOTE_COPY,
   resolveAcceptedGenerationExitCopy,
   resolveNotifyPromisePlacement,
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
 import { resolveGeneratingWaitCopy } from '@/lib/generating-wait-copy';
-import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { NotifyNote } from '@/components/generating/NotifyNote';
 import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
@@ -136,24 +137,25 @@ function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed
   return 'Generation failed on server';
 }
 
-function autoReadySeriesDays(state: SeriesRevealState): number | undefined {
-  const landedId = state.kind === 'revealed' ? state.devotionalId : null;
-  const landed = landedId
-    ? useUnfoldStore.getState().devotionals.find((row) => row.id === landedId)
-    : undefined;
-  return getServerOwnedSeriesTotalDays(landed) || readAutoTrialIntent()?.trialDays;
-}
-
 /**
- * When an auto-trial wait softens to the long-running copy. The trial hook
- * owns its polling, so the clock starts when the server accepted the job.
+ * What an auto-trial wait reads from one read of the intent: the series
+ * length, which a revealed series reports itself, and, while generating, when
+ * the server accepted the job. The trial hook owns its polling, so that is
+ * when the long-running clock starts.
  */
-function autoTrialLongRunningAtMs(): number | null {
+function readAutoTrialWait(
+  generating: boolean,
+  revealedId: string | null,
+): { seriesDays: number | undefined; acceptedAtMs: number | null } {
   const intent = readAutoTrialIntent();
-  const submittedAtMs = Date.parse(intent?.submittedAt ?? '');
-  return intent && Number.isFinite(submittedAtMs)
-    ? submittedAtMs + resolveLongRunningAfterMs(intent.trialDays)
-    : null;
+  const landed = revealedId
+    ? useUnfoldStore.getState().devotionals.find((row) => row.id === revealedId)
+    : undefined;
+  const acceptedAtMs = Date.parse(intent?.submittedAt ?? '');
+  return {
+    seriesDays: getServerOwnedSeriesTotalDays(landed) || intent?.trialDays,
+    acceptedAtMs: generating && Number.isFinite(acceptedAtMs) ? acceptedAtMs : null,
+  };
 }
 
 function resolveEntryNow(params: {
@@ -302,21 +304,34 @@ export default function GeneratingScreen() {
   });
   const auto = useAutoTrialGeneration(autoTrialHandoffId);
   const autoState = auto.state;
-  const autoReadyDays = useMemo(
-    () => (autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined),
-    [autoTrialHandoffId, autoState],
+  // Undefined unless the state is generating; null until the server accepts the job.
+  const autoGeneratingJobId = autoState.kind === 'generating' ? autoState.jobId : undefined;
+  const autoRevealedId = autoState.kind === 'revealed' ? autoState.devotionalId : null;
+  // Keyed on the generating job, not the whole state: accepting the job writes
+  // submittedAt while the state stays generating, and a poll's network-error
+  // count changes nothing read here.
+  const autoTrialWait = useMemo(
+    () => (autoTrialHandoffId ? readAutoTrialWait(autoGeneratingJobId !== undefined, autoRevealedId) : null),
+    [autoTrialHandoffId, autoGeneratingJobId, autoRevealedId],
   );
+  const autoReadyDays = autoTrialWait?.seriesDays;
+  const devotionalLength = user?.devotionalLength ?? 7;
+  // The one series length the wait copy and both long-running clocks follow.
+  const seriesDays = autoReadyDays ?? devotionalLength;
+  const longRunningAfterMs = resolveLongRunningAfterMs(seriesDays);
   const autoSetUpSeries = auto.setUpSeries;
   // Try again stays hidden until a rate limit's retry time. Nothing else
   // renders the error screen then, so the screen renders itself.
   useRerenderAt(autoTrialHandoffId ? seriesRevealRetryOpensAtMs(autoState) : null);
-  const autoLongRunningAt = useMemo(
-    () => (autoTrialHandoffId && autoState.kind === 'generating' ? autoTrialLongRunningAtMs() : null),
-    [autoTrialHandoffId, autoState],
-  );
-  useRerenderAt(autoLongRunningAt);
+  const autoAcceptedAtMs = autoTrialWait?.acceptedAtMs ?? null;
+  useRerenderAt(autoAcceptedAtMs == null ? null : autoAcceptedAtMs + longRunningAfterMs);
   const showLongRunning = autoTrialHandoffId
-    ? autoLongRunningAt != null && Date.now() >= autoLongRunningAt
+    ? autoAcceptedAtMs != null && evaluateGenerationDeadline({
+      elapsedMs: Date.now() - autoAcceptedAtMs,
+      maxDurationMs: longRunningAfterMs,
+      // The trial hook owns the network-error cap.
+      consecutiveNetworkErrors: 0,
+    }) === 'long-running'
     : isLongRunning;
   const canRetry = autoTrialHandoffId
     ? canRetrySeriesReveal(autoState, Date.now())
@@ -389,8 +404,6 @@ export default function GeneratingScreen() {
 
   // Rotating message state
   const [messageIndex, setMessageIndex] = useState(0);
-
-  const devotionalLength = user?.devotionalLength ?? 7;
 
   // Rotate through waiting messages
   useEffect(() => {
@@ -546,8 +559,7 @@ export default function GeneratingScreen() {
     isComplete,
     outcome: notifyOutcome,
   });
-  const waitSeriesDays = autoReadyDays ?? devotionalLength;
-  const notifyPromise = resolveNotifyPromisePlacement(notifyControl, waitSeriesDays);
+  const notifyPromise = resolveNotifyPromisePlacement(notifyControl, seriesDays);
 
   const handleDismissNotificationPrompt = () => {
     if (notificationPromptTimerRef.current) {
@@ -658,7 +670,7 @@ export default function GeneratingScreen() {
     const assessDeadline = (): GenerationDeadlineDecision => {
       const decision = evaluateGenerationDeadline({
         elapsedMs: Date.now() - pollStartTime.current,
-        maxDurationMs: resolveLongRunningAfterMs(devotionalLength),
+        maxDurationMs: longRunningAfterMs,
         consecutiveNetworkErrors: consecutiveNetworkErrorsRef.current,
       });
       setIsLongRunning(decision === 'long-running');
@@ -768,7 +780,7 @@ export default function GeneratingScreen() {
     };
 
     poll();
-  }, [handleGenerationComplete, failGenerationSession, devotionalLength]);
+  }, [handleGenerationComplete, failGenerationSession, longRunningAfterMs]);
 
   // ========== JOB SUBMISSION ==========
 
@@ -1392,8 +1404,8 @@ export default function GeneratingScreen() {
 
           {/* Fixed wait estimate. It sits outside the keyed message above, so
               a message change never remounts it and VoiceOver reads it once. */}
-          <Text style={[genStyles.exitNote, genStyles.waitLine, { color: colors.textMuted }]}>
-            {resolveGeneratingWaitCopy(waitSeriesDays, notifyPromise)}
+          <Text style={[genStyles.waitLine, { color: colors.textMuted }]}>
+            {resolveGeneratingWaitCopy(seriesDays, notifyPromise)}
           </Text>
 
           {/* Series title reveal -- shows when server returns title from arc.
@@ -1778,8 +1790,11 @@ const genStyles = StyleSheet.create({
     marginTop: Spacing['4'],
   },
   waitLine: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
+    lineHeight: 22,
+    textAlign: 'center',
     maxWidth: 420,
-    marginTop: 0,
     marginBottom: Spacing['3'],
   },
   notificationPrompt: {

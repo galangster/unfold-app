@@ -4,15 +4,6 @@ import Animated from 'react-native-reanimated';
 import { BellIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
-import type { NotifyControlState } from '@/lib/generating-notify-state';
-
-/** Notification status below the generation actions. */
-export const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed' | 'registration-unavailable'>, string> = {
-  pending: 'Setting up your notification\u2026',
-  denied: 'Notifications are off. You can turn them on in\u00A0Settings.',
-  'registration-failed': 'We couldn\u2019t set up notifications.',
-  'registration-unavailable': 'Notifications aren\u2019t available here.',
-};
 
 export type NotifyNoteColors = {
   textMuted: string;

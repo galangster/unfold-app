@@ -1,16 +1,16 @@
 /**
  * The fixed wait line under the cycling messages on the generating screen.
  * The estimates come from measured first-series waits; see
- * LONG_RUNNING_AFTER_MS in generation-poll-outcome.ts.
+ * SHORT_SERIES_LONG_RUNNING_AFTER_MS in generation-poll-outcome.ts.
  */
 import { WAIT_LINE_NOTIFY_PROMISE_COPY, type NotifyPromisePlacement } from './generating-notify-state';
-import { isLongSeries } from './generation-poll-outcome';
+import { isLongSeries, MONTH_SERIES_DAYS, WEEK_SERIES_DAYS } from './generation-poll-outcome';
 
 function resolveWaitEstimate(totalDays: number): string {
   // Negated comparisons so a non-finite length reads as the shortest series.
-  if (!(totalDays > 7)) return 'This usually takes about two minutes.';
+  if (!(totalDays > WEEK_SERIES_DAYS)) return 'This usually takes about two minutes.';
   if (!isLongSeries(totalDays)) return 'This usually takes about three minutes.';
-  if (totalDays === 30) return 'A 30-day series usually takes four to six minutes.';
+  if (totalDays === MONTH_SERIES_DAYS) return 'A 30-day series usually takes four to six minutes.';
   return 'A longer series usually takes four to six minutes.';
 }
 
