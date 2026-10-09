@@ -643,22 +643,22 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain("postHighlightsChanged('create', before, primarySerial, false)");
     expect(script).toContain("postHighlightsChanged('remove', before, '', false)");
     expect(script).toContain("postHighlightsChanged('recolor', before, primarySerial, false)");
-    expect(script).toContain("postHighlightsChanged(change && change.reason === 'replay' ? 'replay' : 'undo', before, '', true)");
+    expect(script).toContain("postHighlightsChanged('undo', before, '', true)");
     // Nothing applied on the page ⇒ nothing stored: a failure is reported instead.
     expect(script).toContain("type: 'HIGHLIGHT_FAILED'");
     expect(script).not.toContain("type: 'QUOTE_SELECTED'");
 
     const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
     act(() => {
-      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId: getDocId(tree), reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
+      props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
       props.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHT_FAILED' }) } });
     });
-    expect(onHighlightsChanged).toHaveBeenCalledWith({ reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false, docId: getDocId(tree) });
+    expect(onHighlightsChanged).toHaveBeenCalledWith({ reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false });
     expect(onHighlightFailed).toHaveBeenCalledTimes(1);
 
     mockInjectJavaScript.mockClear();
     act(() => {
-      commandRef.current.applyInverse({ added, removed: [], docId: getDocId(tree) });
+      commandRef.current.applyInverse({ added, removed: [] });
     });
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('__unfoldApplyInverse(');
     expect(mockInjectJavaScript.mock.calls[0][0]).toContain('10$20$1$rangy-highlight-yellow$');
@@ -819,204 +819,6 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(afterRoot).not.toContain('#C8A55C');
     expect(afterRoot).not.toContain('#2a2a2a');
     expect(afterRoot).not.toContain('#FFE86A');
-  });
-
-  it('drops a highlight change still in flight from a document the page replaced', () => {
-    const onHighlightsChanged = jest.fn();
-    let tree: any;
-    act(() => {
-      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-    });
-    const script = getWebViewProps(tree).injectedJavaScript as string;
-    expect(script).toMatch(/type: 'HIGHLIGHTS_CHANGED',[\s\S]{0,200}docId: document\.documentElement\.getAttribute\('data-doc-id'\)/);
-    const oldDocId = getDocId(tree);
-
-    // New content for the same day reloads the WebView in place.
-    act(() => {
-      tree.update(<DevotionalWebView day={{ ...day, bodyText: 'Revised teaching.' }} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-    });
-    const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-    const change = (docId: string) => ({
-      nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId, reason: 'remove', added: [], removed: added, primarySerial: '', silent: false }) },
-    });
-    reportHeight(tree);
-    mockInjectJavaScript.mockClear();
-    act(() => {
-      getWebViewProps(tree).onMessage(change(oldDocId));
-    });
-    expect(onHighlightsChanged).not.toHaveBeenCalled();
-    // Its ranges belong to the old words, so nothing is replayed either.
-    expect(mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('))).toHaveLength(0);
-
-    act(() => {
-      getWebViewProps(tree).onMessage(change(getDocId(tree)));
-    });
-    expect(onHighlightsChanged).toHaveBeenCalledTimes(1);
-  });
-
-  // 2026-10-09 release audit round 3: a font switch rebuilds the page over the
-  // same words before the reader's last change reaches React.
-  it('replays a highlight change still in flight from a page a font switch replaced', () => {
-    const onHighlightsChanged = jest.fn();
-    const savedFont = mockDevotionalWebFont;
-    let tree: any;
-    act(() => {
-      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-    });
-    reportHeight(tree);
-    const oldDocId = getDocId(tree);
-    mockDevotionalWebFont = { family: 'Lora', css: '' };
-    try {
-      act(() => {
-        tree.update(<DevotionalWebView day={{ ...day }} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
-      });
-      reportHeight(tree);
-      expect(getDocId(tree)).not.toBe(oldDocId);
-      const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-      mockInjectJavaScript.mockClear();
-      act(() => {
-        getWebViewProps(tree).onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId: oldDocId, reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
-      });
-
-      // Not saved under the old page: the live page applies it and posts it back.
-      expect(onHighlightsChanged).not.toHaveBeenCalled();
-      const replays = mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
-      expect(replays).toHaveLength(1);
-      expect(String(replays[0][0])).toContain(JSON.stringify({ added: [], removed: added, reason: 'replay' }));
-    } finally {
-      mockDevotionalWebFont = savedFont;
-    }
-  });
-
-  // 2026-10-09 release audit: an Undo still on screen replays by character
-  // position, so new text for the same day must not take it.
-  it('drops an Undo whose document new text for the day replaced', () => {
-    const commandRef = { current: null as any };
-    let tree: any;
-    act(() => {
-      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" commandRef={commandRef} />);
-    });
-    reportHeight(tree);
-    const oldDocId = getDocId(tree);
-    act(() => {
-      tree.update(<DevotionalWebView day={{ ...day, bodyText: 'Revised teaching.' }} fontSize="medium" commandRef={commandRef} />);
-    });
-    reportHeight(tree);
-    const removed = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-    const inverseCalls = () => mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
-
-    mockInjectJavaScript.mockClear();
-    act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-    expect(inverseCalls()).toHaveLength(0);
-
-    act(() => { commandRef.current.applyInverse({ added: [], removed, docId: getDocId(tree) }); });
-    expect(inverseCalls()).toHaveLength(1);
-  });
-
-  describe('an Undo across reader page rebuilds', () => {
-    const removed = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
-    const inverseCalls = () => mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
-    let savedFont: typeof mockDevotionalWebFont;
-    beforeEach(() => { savedFont = mockDevotionalWebFont; });
-    afterEach(() => { mockDevotionalWebFont = savedFont; });
-
-    function mount(commandRef: { current: any }, shownDay: typeof day = day) {
-      let tree: any;
-      act(() => {
-        tree = renderer.create(<DevotionalWebView day={shownDay} fontSize="medium" commandRef={commandRef} />);
-      });
-      reportHeight(tree);
-      return tree;
-    }
-
-    function switchFont(tree: any, commandRef: { current: any }, family: string | null, shownDay: typeof day = day) {
-      mockDevotionalWebFont = family === null ? null : { family, css: '' };
-      act(() => {
-        tree.update(<DevotionalWebView day={{ ...shownDay }} fontSize="medium" commandRef={commandRef} />);
-      });
-      if (family !== null) reportHeight(tree);
-    }
-
-    it('replays after a font switch over the same text', () => {
-      const commandRef = { current: null as any };
-      const tree = mount(commandRef);
-      const oldDocId = getDocId(tree);
-      switchFont(tree, commandRef, 'Lora');
-      expect(getDocId(tree)).not.toBe(oldDocId);
-
-      mockInjectJavaScript.mockClear();
-      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-      expect(inverseCalls()).toHaveLength(1);
-    });
-
-    it('replays after the day records an act and the font switches', () => {
-      const commandRef = { current: null as any };
-      const tree = mount(commandRef);
-      const oldDocId = getDocId(tree);
-      const actRecorded = { ...day, actOutcome: 'done' as const, updatedAt: '2026-10-09T09:00:00.000Z' };
-      act(() => {
-        tree.update(<DevotionalWebView day={actRecorded} fontSize="medium" commandRef={commandRef} />);
-      });
-      expect(getDocId(tree)).toBe(oldDocId);
-      switchFont(tree, commandRef, 'Lora', actRecorded);
-      expect(getDocId(tree)).not.toBe(oldDocId);
-
-      mockInjectJavaScript.mockClear();
-      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-      expect(inverseCalls()).toHaveLength(1);
-    });
-
-    it('holds an Undo tapped while the new font loads and sends it once the page is ready', () => {
-      const commandRef = { current: null as any };
-      const tree = mount(commandRef);
-      const oldDocId = getDocId(tree);
-      switchFont(tree, commandRef, null);
-      expect(tree.root.findAllByType('WebView')).toHaveLength(0);
-
-      mockInjectJavaScript.mockClear();
-      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-      expect(inverseCalls()).toHaveLength(0);
-
-      switchFont(tree, commandRef, 'Lora');
-      expect(inverseCalls()).toHaveLength(1);
-    });
-
-    it('drops a held Undo when the reader moves to another series showing the same words', () => {
-      const commandRef = { current: null as any };
-      let tree: any;
-      act(() => {
-        tree = renderer.create(<DevotionalWebView day={day} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
-      });
-      reportHeight(tree);
-      const oldDocId = getDocId(tree);
-      mockDevotionalWebFont = null;
-      act(() => {
-        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
-      });
-      mockInjectJavaScript.mockClear();
-      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-
-      mockDevotionalWebFont = { family: 'Lora', css: '' };
-      act(() => {
-        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-b" fontSize="medium" commandRef={commandRef} />);
-      });
-      reportHeight(tree);
-      expect(inverseCalls()).toHaveLength(0);
-    });
-
-    it('still replays after many font previews', () => {
-      const commandRef = { current: null as any };
-      const tree = mount(commandRef);
-      const oldDocId = getDocId(tree);
-      for (const family of ['Lora', 'Georgia', 'Lora', 'Georgia', 'Lora', 'Georgia']) {
-        switchFont(tree, commandRef, null);
-        switchFont(tree, commandRef, family);
-      }
-
-      mockInjectJavaScript.mockClear();
-      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
-      expect(inverseCalls()).toHaveLength(1);
-    });
   });
 
   it('keeps the exact source when the day object is replaced with identical content (e.g. marked read)', () => {
@@ -1838,30 +1640,6 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
 
   afterEach(() => {
     while (openPages.length) openPages.pop()?.window.close();
-  });
-
-  // 2026-10-09 release audit round 3: a change an older page of the same words
-  // posted too late is replayed on the live page. A rebuilt page gives the
-  // marks it restores new ids, so a replayed removal finds its mark by where it is.
-  it('replays a late create, then a late removal whose serial carries another page\'s id', async () => {
-    const tree = renderPage();
-    const oldPage = await openPage(tree);
-    await highlightWords(oldPage, 'Grace meets you', 'yellow');
-    const created = lastMessage(oldPage, 'HIGHLIGHTS_CHANGED').added[0];
-    const parts = created.serial.split('$');
-    parts[2] = '7';
-    const oldSerial = parts.join('$');
-
-    const livePage = await openPage(tree);
-    livePage.window.__unfoldApplyInverse({ added: [], removed: [{ ...created, serial: oldSerial }], reason: 'replay' });
-    expect(livePage.document.querySelector('mark.highlight-yellow')?.textContent).toBe('Grace meets you');
-    expect(lastMessage(livePage, 'HIGHLIGHTS_CHANGED')).toMatchObject({ reason: 'replay', silent: true, removed: [], docId: getDocId(tree) });
-
-    livePage.window.__unfoldApplyInverse({ added: [{ ...created, serial: oldSerial }], removed: [], reason: 'replay' });
-    expect(livePage.document.querySelector('mark')).toBeNull();
-    const removal = lastMessage(livePage, 'HIGHLIGHTS_CHANGED');
-    expect(removal).toMatchObject({ reason: 'replay', added: [] });
-    expect(removal.removed).toEqual([expect.objectContaining({ text: 'Grace meets you' })]);
   });
 
   it('shows the bar above a new selection with Highlight, Bookmark, Share, and Copy', async () => {

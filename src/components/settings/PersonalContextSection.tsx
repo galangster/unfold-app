@@ -10,7 +10,6 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { syncUserProfileToBackend } from '@/lib/user-profile-sync';
 import {
-  COMPANION_FALLBACK_NAME,
   COMPANION_NAME_MAX_LENGTH,
   PERSONAL_CONTEXT_FUTURE_DAYS_COPY,
   PERSONAL_CONTEXT_MAX_LENGTH,
@@ -198,7 +197,7 @@ export function PersonalContextSection() {
                   if (isSaving) return;
                   setDraft((prev) => ({ ...prev, companionName }));
                 }}
-                placeholder={COMPANION_FALLBACK_NAME}
+                placeholder="e.g. Grace"
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accent}
                 cursorColor={colors.accent}

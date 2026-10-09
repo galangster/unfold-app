@@ -25,7 +25,6 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon, CaretLeftIcon } from '@/components/icons';
-import { ALL_METHOD_IDS } from '@/constants/bible-study-methods';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -59,7 +58,7 @@ export const FEATURE_PAGES: FeatureCard[] = [
     animation: 'weekCircles',
   },
   {
-    headline: `${ALL_METHOD_IDS.length} Bible study methods`,
+    headline: '32 Bible study methods',
     body: 'Lectio Divina. SOAP. Ignatian reflection. Character studies. Parables. Pick the approach that fits how you learn.',
     animation: 'network',
   },

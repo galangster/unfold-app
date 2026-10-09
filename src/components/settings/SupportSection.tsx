@@ -1,14 +1,12 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { View, Text, Alert, Linking, Platform, ActivityIndicator, Share } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CreditCardIcon,
   ChatDotsIcon,
   StarIcon,
   CopyIcon,
-  FingerprintIcon,
   LockIcon,
   BookIcon,
   CaretRightIcon,
@@ -18,34 +16,21 @@ import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
-import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
-import { elevated } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { COPIED_MESSAGE, useCopyConfirmation } from '@/hooks/useCopyConfirmation';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
-import { getRevenueCatSupportId, subscribeRevenueCatIdentityState } from '@/lib/revenuecatClient';
+import { getRevenueCatSupportId } from '@/lib/revenuecatClient';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 
-/** Enough of a long Support ID to recognize it. The clipboard always gets the full ID. */
-function shortenSupportId(id: string): string {
-  return id.length <= 20 ? id : `${id.slice(0, 10)}…${id.slice(-6)}`;
-}
-
 export function SupportSection() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isPremium = usePremiumAccessPolicy() === 'granted';
-  const reducedMotion = useReducedMotion();
-  const { copied: supportIdCopied, copy: copySupportId } = useCopyConfirmation();
-  // The ID can verify, fail, or reset while Settings is open. The row reads it again each time.
-  const supportId = useSyncExternalStore(subscribeRevenueCatIdentityState, getRevenueCatSupportId);
 
   const [isExportingData, setIsExportingData] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -84,13 +69,14 @@ export function SupportSection() {
       return;
     }
 
-    // The full ID goes to the clipboard. A small "Copied" toast confirms it.
-    if (await copySupportId(supportId)) {
+    try {
+      await Clipboard.setStringAsync(supportId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return;
+      Alert.alert('Support ID copied', 'You can now paste it into your support conversation.');
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Couldn't copy Support ID", 'Please try again.');
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    Alert.alert("Couldn't copy Support ID", 'Please try again.');
   };
 
   const promptForBugReportNote = (): Promise<string | undefined | null> =>
@@ -225,8 +211,13 @@ export function SupportSection() {
             <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
         ))}
-        <View
-          testID="support-id-row"
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleCopySupportId}
+          accessibilityRole="button"
+          testID="copy-support-id"
+          accessibilityLabel="Copy Support ID"
+          accessibilityHint="Copies the identifier used to find your subscription account."
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -242,70 +233,17 @@ export function SupportSection() {
               justifyContent: 'center', alignItems: 'center',
             }}
           >
-            <FingerprintIcon size={18} color={colors.text} weight="light" />
+            <CopyIcon size={18} color={colors.text} weight="light" />
           </View>
-          <View style={{ marginLeft: Spacing['3.5'], flex: 1, minWidth: 0 }}>
+          <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
             <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, lineHeight: 20, color: colors.text }}>
-              Support ID
+              Copy Support ID
             </Text>
-            <Text
-              numberOfLines={1}
-              style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, lineHeight: 18, color: colors.textMuted, marginTop: Spacing['0.5'], fontVariant: ['tabular-nums'] }}
-            >
-              {supportId ? shortenSupportId(supportId) : 'For help with your account'}
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, lineHeight: 18, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+              For help with your account
             </Text>
           </View>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={handleCopySupportId}
-            accessibilityRole="button"
-            testID="copy-support-id"
-            accessibilityLabel="Copy Support ID"
-            accessibilityHint="Copies the identifier used to find your subscription account."
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: Spacing['1.5'],
-              minHeight: 36,
-              marginLeft: Spacing['3'],
-              paddingHorizontal: Spacing['3'],
-              borderRadius: Radius.full,
-              backgroundColor: colors.buttonBackground,
-            }}
-          >
-            <CopyIcon size={16} color={colors.text} weight="light" />
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.text }}>Copy</Text>
-          </TouchableOpacity>
-          {supportIdCopied && (
-            // The copy hook already says "Copied" to a screen reader.
-            <Animated.View
-              testID="support-id-copied-toast"
-              pointerEvents="none"
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-              style={[
-                {
-                  position: 'absolute',
-                  top: -Spacing['3'],
-                  right: Spacing['4'],
-                  paddingHorizontal: Spacing['3'],
-                  paddingVertical: Spacing['1.5'],
-                  borderRadius: Radius.full,
-                  // The same neutral pill as the Bible reader's copy toast.
-                  backgroundColor: isDark ? '#3A3A3C' : 'rgba(30, 30, 30, 0.92)',
-                },
-                elevated('md', isDark),
-              ]}
-            >
-              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, letterSpacing: 0.2, color: '#FFFFFF' }}>
-                {COPIED_MESSAGE}
-              </Text>
-            </Animated.View>
-          )}
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           activeOpacity={0.7}

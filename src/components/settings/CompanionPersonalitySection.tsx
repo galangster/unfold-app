@@ -6,14 +6,12 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { COMPANION_PERSONALITIES, resolveCompanionPersonality } from '@/lib/companion-personality';
-import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 
 export function CompanionPersonalitySection() {
   const { colors } = useTheme();
   const user = useUnfoldStore((state) => state.user);
   const updateUser = useUnfoldStore((state) => state.updateUser);
-  const companionName = useUnfoldStore((state) => resolveCompanionDisplayName(state.user?.companionName, state.companionName));
   const stored = user?.companionPersonality;
   const selected = resolveCompanionPersonality(stored);
 
@@ -21,7 +19,7 @@ export function CompanionPersonalitySection() {
     <>
       <SettingsSectionHeader label="Companion" />
       <Text style={[styles.description, { color: colors.textMuted }]}>
-        Choose how {companionName ?? 'your Companion'} talks with you. Change it anytime. Your devotional writing stays the same.
+        Choose how your Companion talks with you. Change it anytime. Your devotional writing stays the same.
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabel="Companion personality" style={getSettingsCardStyle(colors)}>
         {COMPANION_PERSONALITIES.map((option, index) => (
