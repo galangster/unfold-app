@@ -1,5 +1,6 @@
-import { enqueueSyncChanges } from './sync-outbox';
+import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { devotionalLifecycleSyncFields } from './devotional-lifecycle';
+import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -60,6 +61,68 @@ export function journalEntrySyncData(entry: JournalEntry): Record<string, unknow
     questionResponses: entry.questionResponses,
     deeperQuestions: entry.deeperQuestions,
   });
+}
+
+function syncRow(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function syncString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function syncNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function syncArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+/**
+ * The entry a journal sync row holds: the inverse of journalEntrySyncData. A
+ * pulled row and a change still queued here both map through it, so the two
+ * cannot drift. Null when the row names no day.
+ */
+export function journalEntryFromSyncData(id: string, data: unknown, updatedAt: string): JournalEntry | null {
+  const row = syncRow(data);
+  const devotionalId = syncString(row.devotionalId);
+  const dayNumber = syncNumber(row.dayNumber);
+  if (!devotionalId || !dayNumber) return null;
+  return {
+    id,
+    devotionalId,
+    dayNumber,
+    content: syncString(row.content) ?? '',
+    createdAt: syncString(row.createdAt) ?? updatedAt,
+    updatedAt,
+    // Normalise the same way the entry screen does: a synced "guided" value
+    // (or anything else unrecognised) has no matching UI, so it becomes
+    // "freewrite" here rather than reaching the screen unnormalised.
+    journalMode: normalizeJournalMode(syncString(row.journalMode)),
+    // NULL column (every freewrite entry) → no object; the journal screens
+    // read the four fields unguarded, so never hand them `{}` or a partial.
+    soapResponses: normalizeSoapResponses(row.soapResponses),
+    prayerRequests: syncArray(row.prayerRequests) as JournalEntry['prayerRequests'],
+    questionResponses: syncArray(row.questionResponses) as JournalEntry['questionResponses'],
+    deeperQuestions: syncArray<string>(row.deeperQuestions),
+  };
+}
+
+/**
+ * Journal entries as their live changes still queued here say they are. A
+ * write reaches the outbox at once and the store's disk a moment later, so
+ * after a crash in between, the queued copy is newer than the row on this
+ * device, or the row is gone.
+ */
+export function queuedJournalEntries(): JournalEntry[] {
+  return peekSyncOutbox()
+    .filter((change) => change.table === 'journal_entries' && !change.deleted)
+    .map((change) => journalEntryFromSyncData(change.id, change.data, change.clientUpdatedAt))
+    .filter((entry): entry is JournalEntry => entry != null);
 }
 
 export function devotionalSyncData(devotional: Devotional): Record<string, unknown> {

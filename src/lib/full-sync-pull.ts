@@ -15,9 +15,13 @@ import { logger } from './logger';
 import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
 import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { rememberDeletedSeries, wasSeriesDeleted } from './deleted-series';
-import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
+import {
+  buildPersonalDataSyncChange,
+  journalEntryFromSyncData,
+  journalEntrySyncData,
+  queuedJournalEntries,
+} from './personal-data-sync-records';
 import { newId } from './sync-ids';
-import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields } from './journal-entry-merge';
 import type {
   BibleHighlight,
@@ -105,24 +109,6 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
     }
   }
   return pending;
-}
-
-/**
- * Journal entries as their live changes still queued here say they are. A
- * write reaches the outbox at once and the store's disk a moment later, so
- * after a crash in between, the queued copy is newer than the row on this
- * device, or the row is gone.
- */
-function queuedJournalEntries(): JournalEntry[] {
-  return peekSyncOutbox()
-    .filter((change) => change.table === 'journal_entries' && !change.deleted)
-    .map((change) => mapJournalEntry({
-      id: change.id,
-      data: change.data,
-      updatedAt: change.clientUpdatedAt,
-      deleted: false,
-    } as SyncPulledRecord))
-    .filter((entry): entry is JournalEntry => entry != null);
 }
 
 function pendingDeletedRecords(): Set<string> {
@@ -260,29 +246,7 @@ function journalEntriesChangedByCollapse(before: JournalEntry[], after: JournalE
 }
 
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
-  const row = asRecord(record.data);
-  const devotionalId = asString(row.devotionalId);
-  const dayNumber = asNumber(row.dayNumber);
-  const content = asString(row.content) ?? '';
-  if (!devotionalId || !dayNumber) return null;
-  return {
-    id: record.id,
-    devotionalId,
-    dayNumber,
-    content,
-    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
-    updatedAt: recordUpdatedAt(record),
-    // Normalise the same way the entry screen does: a synced "guided" value
-    // (or anything else unrecognised) has no matching UI, so it becomes
-    // "freewrite" here rather than reaching the screen unnormalised.
-    journalMode: normalizeJournalMode(asString(row.journalMode)),
-    // NULL column (every freewrite entry) → no object; the journal screens
-    // read the four fields unguarded, so never hand them `{}` or a partial.
-    soapResponses: normalizeSoapResponses(row.soapResponses),
-    prayerRequests: asArray(row.prayerRequests) as JournalEntry['prayerRequests'],
-    questionResponses: asArray(row.questionResponses) as JournalEntry['questionResponses'],
-    deeperQuestions: asArray<string>(row.deeperQuestions),
-  };
+  return journalEntryFromSyncData(record.id, record.data, recordUpdatedAt(record));
 }
 
 function mapBookmark(record: SyncPulledRecord): Bookmark | null {
