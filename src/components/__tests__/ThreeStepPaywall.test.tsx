@@ -665,6 +665,42 @@ describe('ThreeStepPaywall CTA copy with a free trial', () => {
   });
 });
 
+/** Spoken labels of the text nodes that carry one. */
+function headlineLabels(tree: any): string[] {
+  return tree.root
+    .findAll(
+      (n: any) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props?.children === 'string',
+      { deep: false },
+    )
+    .map((n: any) => n.props.accessibilityLabel);
+}
+
+// 1.1.18 release smoke (F04): VoiceOver joined the words around each hard line
+// break ("tryUnfold", "beforeyour", "personalBible experiencein").
+describe('ThreeStepPaywall headline labels', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+  });
+
+  it('reads every trial-path headline with normal spaces', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    expect(headlineLabels(tree)).toContain('We want you to try Unfold for free.');
+
+    await pressPrimaryCTA(tree);
+    expect(headlineLabels(tree)).toContain("We'll remind you before your free trial ends");
+
+    await pressPrimaryCTA(tree);
+    expect(headlineLabels(tree)).toContain('The most personal Bible experience in the world');
+  });
+
+  it('reads the no-trial headline with normal spaces', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: false }));
+    expect(headlineLabels(tree)).toContain('Unlock everything Unfold can do.');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Screen 1 phone mockup sizing. The bezel used to be sized from the window
 // width alone (62% wide at 9:19.5), which made it taller than the page area on

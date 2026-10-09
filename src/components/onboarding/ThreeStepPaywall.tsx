@@ -186,6 +186,15 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
   return 'Start My Free Trial';
 }
 
+const TRIAL_REMINDER_HEADLINE = "We'll remind you before\nyour free trial ends";
+const PRICING_HEADLINE = 'The most personal\nBible experience\nin the world';
+
+/** VoiceOver joins words across a hard line break ("tryUnfold"), so each
+ * headline also carries a label with normal spaces. */
+function spokenHeadline(headline: string): string {
+  return headline.replace(/\n/g, ' ');
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components (inline, single file)
 // ---------------------------------------------------------------------------
@@ -467,6 +476,9 @@ function ScreenProductInAction({
         availableWidth: wrapperLayout.width,
       })
     : null;
+  const headline = hasFreeTrial
+    ? `We want you to try\nUnfold for free.`
+    : `Unlock everything\nUnfold can do.`;
 
   return (
     <View style={styles.screen1Root}>
@@ -476,6 +488,7 @@ function ScreenProductInAction({
             {/* Top section: headline */}
             <View style={styles.screen1TopSection}>
               <Text
+                accessibilityLabel={spokenHeadline(headline)}
                 style={[
                   styles.headline,
                   {
@@ -487,9 +500,7 @@ function ScreenProductInAction({
                 // would otherwise eat the page area the phone mockup needs.
                 maxFontSizeMultiplier={1.3}
               >
-                {hasFreeTrial
-                  ? `We want you to try\nUnfold for free.`
-                  : `Unlock everything\nUnfold can do.`}
+                {headline}
               </Text>
             </View>
 
@@ -610,6 +621,7 @@ function ScreenTrialReminder({
 
             {/* Headline */}
             <Text
+              accessibilityLabel={spokenHeadline(TRIAL_REMINDER_HEADLINE)}
               style={[
                 styles.headline,
                 {
@@ -619,7 +631,7 @@ function ScreenTrialReminder({
                 },
               ]}
             >
-              We'll remind you before{'\n'}your free trial ends
+              {TRIAL_REMINDER_HEADLINE}
             </Text>
 
             {/* Supporting body text */}
@@ -746,8 +758,11 @@ function ScreenPricing({
           tintColor={colors.accent}
           cachePolicy="memory-disk"
         />
-        <Text style={[styles.screen3Headline, { color: colors.text }]}>
-          The most personal{'\n'}Bible experience{'\n'}in the world
+        <Text
+          accessibilityLabel={spokenHeadline(PRICING_HEADLINE)}
+          style={[styles.screen3Headline, { color: colors.text }]}
+        >
+          {PRICING_HEADLINE}
         </Text>
 
         {/* Social proof — honest framing only: these are quotes from early
