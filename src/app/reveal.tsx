@@ -60,9 +60,13 @@ async function pullRevealSeries(
   updateDevotionalDays: Parameters<typeof applyPulledDevotionalContent>[0]['updateDevotionalDays'],
 ): Promise<readonly ActiveSeriesCandidate[] | null> {
   const session = captureSyncSession();
+  let pulledSeries: readonly ActiveSeriesCandidate[] | null = null;
   try {
     const pulled = await pullDevotionalContent(devotionalId, { timeoutMs: REVEAL_SERIES_PULL_TIMEOUT_MS });
     if (!isSyncSessionCurrent(session)) return null;
+    // Kept even if the save below fails: the series is in the store by then,
+    // and the winner check still needs every row the pull saw.
+    pulledSeries = pulled.canonicalSeries ?? [];
     applyPulledDevotionalContent({
       devotionalId,
       pulled,
@@ -73,11 +77,10 @@ async function pullRevealSeries(
     await flushUnfoldStorePersistAsync();
     if (!isSyncSessionCurrent(session)) return null;
     commitDevotionalPullCursor(pulled);
-    return pulled.canonicalSeries ?? [];
   } catch (err) {
     logger.warn('[Reveal] could not pull the series a ready push names:', err instanceof Error ? err.message : err);
-    return null;
   }
+  return pulledSeries;
 }
 
 /**
@@ -267,8 +270,11 @@ export default function RevealScreen() {
     // A pull can show a newer series this device does not hold yet, or a
     // newer resume of one it holds (applied later, by the full sync). Every
     // pulled row counts beside the local ones, so only the series the server
-    // would pick becomes current: either copy of a sibling can block it.
-    const candidates = [...latestDevotionals, ...pulledSeriesRef.current];
+    // would pick becomes current: either copy of a sibling can block it. The
+    // server's copy of the target goes first, because the check reads the
+    // target's first row and a pulled shell is always marked progressive.
+    const pulledTarget = pulledSeriesRef.current.filter((row) => row.id === revealTarget.devotionalId);
+    const candidates = [...pulledTarget, ...latestDevotionals, ...pulledSeriesRef.current];
     const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);

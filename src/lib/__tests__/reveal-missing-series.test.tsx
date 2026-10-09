@@ -108,6 +108,11 @@ jest.mock('@/lib/mmkv-storage', () => {
 
 const mockPullDevotionalContent = jest.fn();
 const mockCommitDevotionalPullCursor = jest.fn();
+const mockFlushStore = jest.fn(async () => true);
+jest.mock('@/lib/store', () => ({
+  ...jest.requireActual('@/lib/store'),
+  flushUnfoldStorePersistAsync: () => mockFlushStore(),
+}));
 jest.mock('@/lib/devotional-sync-pull', () => ({
   ...jest.requireActual('@/lib/devotional-sync-pull'),
   pullDevotionalContent: (...args: unknown[]) => mockPullDevotionalContent(...args),
@@ -166,7 +171,13 @@ function pulledSeries() {
 }
 
 // A pull that also carries the account's series rows.
-function pulledWithSeries(rows: { id: string; createdAt: string; archivedAt?: string | null; archivedStateAt?: string }[]) {
+function pulledWithSeries(rows: {
+  id: string;
+  createdAt: string;
+  archivedAt?: string | null;
+  archivedStateAt?: string;
+  generationMode?: 'progressive' | 'batch';
+}[]) {
   // The pulled series started after the one here (a pulled shell dates
   // itself by its start).
   const pulled = pulledSeries();
@@ -174,7 +185,7 @@ function pulledWithSeries(rows: { id: string; createdAt: string; archivedAt?: st
   pulled.devotional.seriesStartDate = '2026-10-09T09:00:00.000Z';
   return {
     ...pulled,
-    canonicalSeries: rows.map((row) => ({ ...row, generationMode: 'progressive' as const, updatedAt: row.createdAt })),
+    canonicalSeries: rows.map((row) => ({ generationMode: 'progressive' as const, ...row, updatedAt: row.createdAt })),
   };
 }
 
@@ -223,6 +234,7 @@ function pressReveal() {
 describe('reveal for a series this device does not hold yet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFlushStore.mockImplementation(async () => true);
     useUnfoldStore.getState().reset();
     useUnfoldStore.setState({ devotionals: [localSeries], currentDevotionalId: LOCAL_ID, resumeContext: null });
   });
@@ -304,6 +316,35 @@ describe('reveal for a series this device does not hold yet', () => {
       { id: LOCAL_ID, createdAt: NOW },
       { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
       { id: 'paused-series', createdAt: '2026-10-08T06:00:00.000Z', archivedAt: null, archivedStateAt: '2026-10-09T10:00:00.000Z' },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
+  });
+
+  it('keeps the pulled rows when saving the pull fails', async () => {
+    mockFlushStore.mockImplementation(async () => { throw new Error('disk full'); });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      { id: 'newest-series', createdAt: '2026-10-09T10:00:00.000Z' },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+
+    expect(mockCommitDevotionalPullCursor).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
+  });
+
+  it('judges the pushed series by the server copy, not the shell built from it', async () => {
+    // The server holds it as a batch series; the shell from the pull is marked
+    // progressive. Only a progressive series can become current.
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z', generationMode: 'batch' },
     ]));
     await openReadyPush(PULLED_ID);
     pressReveal();
