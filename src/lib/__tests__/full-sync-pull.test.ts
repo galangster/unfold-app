@@ -1,3 +1,5 @@
+import { resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -1296,6 +1298,36 @@ describe('pulled series lifecycle', () => {
     });
 
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+  });
+
+  it('remembers a series another device deleted, so a pull already out cannot restore it', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T19:00:00.000Z',
+      changes: {
+        devotionals: [{ id: 'series-1', updatedAt: '2026-09-12T18:00:00.000Z', deleted: true, data: {} }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().devotionals).toEqual([]);
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 7 too: once the server acknowledged a delete made here, nothing on
+  // this phone said the series was deleted.
+  it('remembers a series deleted here after its delete leaves the outbox', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    useUnfoldStore.getState().removeDevotional('series-1');
+    replaceSyncOutbox([]);
+
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    expect(wasSeriesDeleted('series-2')).toBe(false);
+    resetDeletedSeriesForTesting();
   });
 
   it('does not restore a stale remote resume or steal a different live selection', () => {

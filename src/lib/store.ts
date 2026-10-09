@@ -33,6 +33,7 @@ import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
 import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { rememberDeletedSeries } from './deleted-series';
 import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
@@ -692,9 +693,10 @@ interface UnfoldState {
   /**
    * Ends a replaced series once its replacement has landed. Never a series
    * already ended. When it was current, a replacement already in the store
-   * (a sync pull landed it first) takes its place on Today.
+   * (a sync pull landed it first) takes its place on Today. `endedAt` dates
+   * the end; it defaults to now.
    */
-  archiveReplacedDevotional: (id: string, replacementId?: string) => void;
+  archiveReplacedDevotional: (id: string, replacementId?: string, endedAt?: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
@@ -1232,6 +1234,7 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       removeDevotional: (devotionalId) =>
         set((state) => {
+          rememberDeletedSeries(devotionalId);
           // The UI promises "This cannot be undone", so the server rows must
           // die with the local ones. Without tombstones a later pull (second
           // device, reinstall, account restore) resurrects the series and the
@@ -1499,14 +1502,14 @@ export const useUnfoldStore = create<UnfoldState>()(
         const current = devotionals.find((d) => d.id === currentId);
         recordReplacedSeries(currentId, current?.archivedStateAt ?? '');
       },
-      archiveReplacedDevotional: (id, replacementId) =>
+      archiveReplacedDevotional: (id, replacementId, endedAt) =>
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || isDevotionalArchived(existing)) return state;
           // Only the archive clock moves: this device's copy can hold older
           // progress than another device saved, and a full row with a fresh
           // content clock would win over it.
-          const archived = applyArchiveLifecycle(existing, new Date().toISOString());
+          const archived = applyArchiveLifecycle(existing, endedAt ?? new Date().toISOString());
           enqueueDevotionalLifecycle(archived);
           const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
           // The replacement becomes current only as the strict active winner,

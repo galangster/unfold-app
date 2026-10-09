@@ -6,6 +6,7 @@ import {
 import type { PulledDevotionalContent } from '@/lib/devotional-sync-pull';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import { replaceSyncOutbox } from '@/lib/sync-outbox';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '@/lib/deleted-series';
 
 const dayTwo: DevotionalDay = {
   id: 'day-devotional-1-2',
@@ -54,7 +55,28 @@ function pulledContent(overrides: Partial<PulledDevotionalContent> = {}): Pulled
 }
 
 describe('pulled devotional content application', () => {
-  afterEach(() => replaceSyncOutbox([]));
+  afterEach(() => {
+    replaceSyncOutbox([]);
+    resetDeletedSeriesForTesting();
+  });
+
+  // 2026-10-09 release audit round 7: a sync applied another device's delete
+  // while a pull of the same series was out, and the pull then restored it.
+  it('applies nothing for a series a sync deleted while the pull was out', () => {
+    rememberDeletedSeries('devotional-1');
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
 
   // 2026-10-09 release audit round 6: an old ready push pulled a series the
   // reader had deleted, before the delete reached the server, and restored it.

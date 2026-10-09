@@ -14,6 +14,7 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
 import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { rememberDeletedSeries } from './deleted-series';
 import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
@@ -768,6 +769,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       if (record.deleted) {
         if (!contentShouldApply) continue;
         acceptedSeriesDeletes.add(record.id);
+        rememberDeletedSeries(record.id);
         devotionals = devotionals.filter((item) => item.id !== record.id);
         continue;
       }

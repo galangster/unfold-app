@@ -10,6 +10,7 @@ import {
 } from './devotional-lifecycle';
 import { assertSyncSessionCurrent } from './sync-session-fence';
 import { peekSyncOutbox } from './sync-outbox';
+import { wasSeriesDeleted } from './deleted-series';
 import { buildDevotionalSyncMetadataPatch } from './devotional-sync-metadata';
 import {
   clampCurrentDayToSeriesBoundary,
@@ -131,11 +132,6 @@ function pulledSeriesBesides(pulled: PulledDevotionalContent, devotionalId: stri
   return pulled.canonicalSeries?.filter((series) => series.id !== devotionalId) ?? [];
 }
 
-/** The reader deleted this series here, and the delete has not reached the server yet. */
-export function hasQueuedSeriesDelete(devotionalId: string): boolean {
-  return peekSyncOutbox().some((change) => change.table === 'devotionals' && change.deleted && change.id === devotionalId);
-}
-
 /** Lifecycle clocks still waiting in the outbox count as local, as in the full sync. */
 function pendingLifecycleClocksById(): Map<string, string> {
   const pending = new Map<string, string>();
@@ -252,9 +248,10 @@ export function applyPulledDevotionalContent({
   ) => void;
 }): void {
   assertBoundPulledSession(pulled);
-  // A series this device deleted stays deleted while the delete waits in the
-  // outbox: until it lands, the server still returns its live copy.
-  if (hasQueuedSeriesDelete(devotionalId)) return;
+  // A deleted series stays deleted. The server returns its live copy until a
+  // delete made here lands, and a pull already out when a delete applied
+  // answers with it too.
+  if (wasSeriesDeleted(devotionalId)) return;
   if (pulled.devotional || pulled.days.length > 0 || pulledSeriesBesides(pulled, devotionalId).length > 0) {
     updateDevotionals(
       (devotionals, currentDevotionalId) => applyPulledDevotionalContentToDevotionals(

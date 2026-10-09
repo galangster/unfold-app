@@ -12,6 +12,7 @@ import {
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
+import { isStrictActiveSeriesWinner } from '@/lib/devotional-active-selection';
 import { newId } from '@/lib/sync-ids';
 
 export const AUTO_TRIAL_INTENT_KEY = 'auto-trial-series-intent-v1';
@@ -502,7 +503,11 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   if (!series || !series.days.some((day) => day.dayNumber === 1)) return;
 
   store.retireOnboardingSamples({ keepId: devotionalId });
-  store.setCurrentDevotional(devotionalId);
+  // The trial takes Today only as the series the server writes. A newer live
+  // series that reached this phone first keeps it.
+  if (isStrictActiveSeriesWinner(devotionalId, useUnfoldStore.getState().devotionals)) {
+    store.setCurrentDevotional(devotionalId);
+  }
 
   const inflight = readInflightGenerationJob();
   if (inflight?.jobId === intent.jobId) clearInflightGenerationJob();

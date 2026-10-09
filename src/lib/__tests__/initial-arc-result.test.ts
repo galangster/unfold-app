@@ -361,6 +361,28 @@ describe('applyInitialArcResult', () => {
       expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
     });
 
+    // 2026-10-09 release audit round 7: the end was dated when the new series
+    // landed, which beat a resume the reader made elsewhere after the choice.
+    it('dates the end from the reader\'s choice', () => {
+      useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', '', '2026-10-09T09:00:00.000Z');
+      bindForStoredRequest('devo-1');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedStateAt).toBe('2026-10-09T09:00:00.000Z');
+      expect(peekSyncOutbox().find((c) => c.table === 'devotionals' && c.id === 'old-series')?.data.archivedStateAt).toBe('2026-10-09T09:00:00.000Z');
+    });
+
+    it('dates the end just past a lifecycle clock that runs ahead of this phone', () => {
+      const aheadAt = '2099-01-01T00:00:00.000Z';
+      useUnfoldStore.setState({ devotionals: [replaced({ archivedAt: null, archivedStateAt: aheadAt } as Partial<Devotional>)], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', aheadAt, '2026-10-09T09:00:00.000Z');
+      bindForStoredRequest('devo-1');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedStateAt).toBe('2099-01-01T00:00:00.001Z');
+    });
+
     it('keeps it when the replacement was already paused', () => {
       const paused = { ...replaced({ id: 'devo-1', title: 'New', currentDay: 1 }), archivedAt: '2026-10-09T09:00:00.000Z', archivedStateAt: '2026-10-09T09:00:00.000Z' } as Devotional;
       useUnfoldStore.setState({ devotionals: [replaced(), paused], currentDevotionalId: 'old-series' });
@@ -873,6 +895,24 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     );
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
     expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
+  // 2026-10-09 release audit round 7: the trial step made its series current
+  // after the landing had kept Today on a newer live series.
+  it('leaves Today on a newer live series when an older trial lands', () => {
+    seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'newer-series', title: 'Newer', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-09T08:00:00.000Z',
+        updatedAt: '2026-10-09T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'newer-series',
+    });
+    applyInitialArcResult(
+      { ...result, seriesStartDate: '2026-09-08T17:00:00.000Z', arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('newer-series');
   });
 
   it('settles the matching id in the else branch', () => {
