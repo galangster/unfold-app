@@ -63,6 +63,11 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
   usePremiumAccessPolicy: () => 'denied',
 }));
 jest.mock('@/lib/qa-tools', () => ({ isQaToolsEnabled: () => false }));
+let mockHasSeenHomeTooltips = true;
+jest.mock('@/lib/store', () => ({
+  useUnfoldStore: (select: (state: { hasSeenHomeTooltips: boolean }) => unknown) =>
+    select({ hasSeenHomeTooltips: mockHasSeenHomeTooltips }),
+}));
 jest.mock('@/lib/theme', () => ({
   useTheme: () => ({
     colors: {
@@ -113,6 +118,7 @@ describe('ambient overlay timer notice', () => {
   beforeEach(() => {
     mockInsets = { top: 40, bottom: 34, left: 0, right: 0 };
     mockWindow = { width: 390, height: 844 };
+    mockHasSeenHomeTooltips = true;
     jest.mocked(listPendingAnnouncementPages).mockReturnValue([]);
     jest.mocked(canAnnounceFeatures).mockReturnValue(false);
     useAmbientAudioState.setState({
@@ -197,5 +203,24 @@ describe('ambient overlay timer notice', () => {
     expect(current().visible).toBe(true);
     act(() => current().onClose());
     expect(current().visible).toBe(false);
+  });
+
+  it('keeps what is new closed until the reader has finished the Today tour', () => {
+    jest.mocked(listPendingAnnouncementPages).mockReturnValue([
+      { id: 'companion-v1', kind: 'companion', title: 'Companion', body: 'Meet your Companion.' },
+    ]);
+    jest.mocked(canAnnounceFeatures).mockImplementation((input) => input.hasSeenTodayTour && input.pendingCount > 0);
+    const current = () => jest.mocked(FeatureAnnouncement).mock.calls.at(-1)![0];
+
+    mockHasSeenHomeTooltips = false;
+    const view = render(<AmbientSoundOverlay />);
+    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].hasSeenTodayTour).toBe(false);
+    expect(current().visible).toBe(false);
+    view.unmount();
+
+    mockHasSeenHomeTooltips = true;
+    render(<AmbientSoundOverlay />);
+    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].hasSeenTodayTour).toBe(true);
+    expect(current().visible).toBe(true);
   });
 });
