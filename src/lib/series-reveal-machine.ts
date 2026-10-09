@@ -146,11 +146,6 @@ export function canRetrySeriesReveal(
   return true;
 }
 
-/** When a rate-limited failure lets the reader try again, or null. */
-export function seriesRevealRetryOpensAtMs(state: SeriesRevealState): number | null {
-  return state.kind === 'failed' && state.reason === 'rate_limited' ? state.retryAtMs : null;
-}
-
 function keep(state: SeriesRevealState): { state: SeriesRevealState; effects: SeriesRevealEffect[] } {
   return { state, effects: [] };
 }
