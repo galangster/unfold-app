@@ -167,6 +167,17 @@ function mergeStringList(
  * the merged text. When the base cannot be found, the draft follows the
  * merged text, so nothing is dropped.
  */
+/** Whether `text` holds `part` as whole words: no letter or digit runs on at either edge. */
+function holdsWholeWords(text: string, part: string): boolean {
+  const wordCharacter = /[\p{L}\p{N}]/u;
+  for (let at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
+    const before = text[at - 1] ?? '';
+    const after = text[at + part.length] ?? '';
+    if (!wordCharacter.test(before) && !wordCharacter.test(after)) return true;
+  }
+  return false;
+}
+
 export function rebaseJournalDraft(base: string, merged: string, draft: string): string {
   // The merged text already is the draft, as when the editor's own save comes back.
   if (merged === draft) return draft;
@@ -175,12 +186,12 @@ export function rebaseJournalDraft(base: string, merged: string, draft: string):
   // The merge already holds the draft's additions, as when another device
   // saved the same words and more. Rebasing again would repeat them. A draft
   // started on an empty field counts too: all of it is the reader's addition.
-  if (draft.trim() && draft.includes(base) && merged.includes(draft)) return merged;
+  if (draft.trim() && draft.includes(base) && holdsWholeWords(merged, draft)) return merged;
   const at = base.trim() ? merged.indexOf(base) : -1;
   if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
   // The merge replaced the base with the draft's own words, as when both
   // devices made the same edit. Appending the draft would repeat them.
-  if (draft.trim() && merged.includes(draft)) return merged;
+  if (draft.trim() && holdsWholeWords(merged, draft)) return merged;
   if (!merged.trim()) return draft;
   if (!draft.trim()) return merged;
   return `${merged}\n\n${draft}`;

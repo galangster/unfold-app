@@ -457,6 +457,14 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('Old.', 'New.\n\nTablet note.', 'New.')).toBe('New.\n\nTablet note.');
   });
 
+  it('keeps a replacement that only appears inside another word of the merge', () => {
+    expect(rebaseJournalDraft('I am anxious.', 'I feel peaceful today.', 'peace')).toBe('I feel peaceful today.\n\npeace');
+  });
+
+  it('keeps a first draft that only appears inside another word of the merge', () => {
+    expect(rebaseJournalDraft('', 'banana', 'a')).toBe('banana\n\na');
+  });
+
   it('still appends a draft the merge does not hold when the base is gone', () => {
     expect(rebaseJournalDraft('Old.', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
   });
