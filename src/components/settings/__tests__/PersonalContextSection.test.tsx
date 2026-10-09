@@ -125,28 +125,6 @@ describe('PersonalContextSection', () => {
     );
   });
 
-  it('suggests Companion, not a stand-in name, and saves no name when the field is cleared', async () => {
-    let tree!: ReturnType<typeof renderer.create>;
-    await act(async () => {
-      tree = renderer.create(<PersonalContextSection />);
-    });
-    await act(async () => {
-      findByTestId(tree.root, 'personal-context-toggle').props.onPress();
-    });
-
-    const nameField = findByTestId(tree.root, 'personal-context-companion-name');
-    expect(nameField.props.placeholder).toBe('Companion');
-    await act(async () => {
-      nameField.props.onChangeText('  ');
-    });
-    await act(async () => {
-      await findByTestId(tree.root, 'personal-context-save').props.onPress();
-    });
-
-    expect(mockUpdateUser).toHaveBeenCalledWith({ companionName: '', aboutMe: profile.aboutMe });
-    expect(mockSetCompanionName).toHaveBeenCalledWith('');
-  });
-
   it('disables the accordion and inputs while Save is pending', async () => {
     let release!: (value?: unknown) => void;
     mockSync.mockImplementation(() => new Promise((resolve) => {

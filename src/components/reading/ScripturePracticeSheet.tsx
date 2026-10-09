@@ -43,7 +43,7 @@ import { useTheme } from '@/lib/theme';
 const PRACTICE_CATALOG = Object.values(SCRIPTURE_PRACTICES);
 const ANSWER_LIMIT = PRACTICE_ANSWER_MAX_CHARS;
 const UNAVAILABLE_COPY =
-  'This passage isn’t available in the app Bible. Read it in a physical Bible instead.';
+  "This passage isn't available in the app Bible. Read it in a physical Bible instead.";
 const DEVICE_NOTE = 'Notes stay on this device.';
 
 const EMPTY_SESSION: PracticeSession = {

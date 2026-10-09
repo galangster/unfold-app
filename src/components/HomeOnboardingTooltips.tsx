@@ -8,8 +8,6 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import { settleAnnouncementsForNewReader } from '@/lib/feature-announcements';
-import { resolveCompanionLabel } from '@/lib/support-clarity';
 import { buildBubblePath } from '@/lib/bubble-path';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
@@ -46,35 +44,32 @@ export interface OnboardingLayoutRects {
 // Steps
 // ---------------------------------------------------------------------------
 
-/** The tour names the Companion the way the tab does: its saved name, or "Companion". */
-function buildTooltipSteps(companion: string): TooltipStep[] {
-  return [
-    {
-      title: 'Companion check-in',
-      message: `When ${companion} speaks up, this little note helps you carry yesterday into today before you open the reading.`,
-      targetKey: 'context',
-      placement: 'auto',
-    },
-    {
-      title: 'Today’s thread',
-      message: 'Your next reading lives here. If a day slips by, Today gently brings you back to the right place.',
-      targetKey: 'reading',
-      placement: 'below',
-    },
-    {
-      title: 'Daily Rhythm',
-      message: 'A quiet signal of consistency — not a scoreboard. One faithful day at a time.',
-      targetKey: 'rhythm',
-      placement: 'above',
-    },
-    {
-      title: 'Read, Ask & Write',
-      message: `Devotional, Bible, ${companion}, and Journal are always one tap away whenever you want to continue a series, read, ask, or write.`,
-      targetKey: 'tabs',
-      placement: 'above',
-    },
-  ];
-}
+const TOOLTIP_STEPS: TooltipStep[] = [
+  {
+    title: 'Companion check-in',
+    message: 'When Companion speaks up, this little note helps you carry yesterday into today before you open the reading.',
+    targetKey: 'context',
+    placement: 'auto',
+  },
+  {
+    title: 'Today’s thread',
+    message: 'Your next reading lives here. If a day slips by, Today gently brings you back to the right place.',
+    targetKey: 'reading',
+    placement: 'below',
+  },
+  {
+    title: 'Daily Rhythm',
+    message: 'A quiet signal of consistency — not a scoreboard. One faithful day at a time.',
+    targetKey: 'rhythm',
+    placement: 'above',
+  },
+  {
+    title: 'Read, Ask & Write',
+    message: 'Devotional, Bible, Companion, and Journal are always one tap away whenever you want to continue a series, read, ask, or write.',
+    targetKey: 'tabs',
+    placement: 'above',
+  },
+];
 
 // ---------------------------------------------------------------------------
 // SVG spotlight mask — full screen dark + feathered rounded-rect hole
@@ -154,8 +149,6 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const insets = useSafeAreaInsets();
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
-  const companion = useUnfoldStore((s) => resolveCompanionLabel(s.user?.companionName, s.companionName));
-  const tooltipSteps = useMemo(() => buildTooltipSteps(companion), [companion]);
 
   const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
@@ -173,17 +166,14 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   }, [hasSeenHomeTooltips, layoutRects, screenW, screenH, insets.bottom]);
 
   const availableSteps = useMemo(
-    () => tooltipSteps.filter((tooltipStep) => measuredRects[tooltipStep.targetKey]),
-    [measuredRects, tooltipSteps],
+    () => TOOLTIP_STEPS.filter((tooltipStep) => measuredRects[tooltipStep.targetKey]),
+    [measuredRects],
   );
   const stepIndex = Math.min(currentStep, Math.max(availableSteps.length - 1, 0));
   const step = availableSteps[stepIndex];
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
-    // A reader who meets the tour is new to this version, so this version's
-    // "what's new" never opens for them. Settle it before the flag flips.
-    settleAnnouncementsForNewReader();
     setHasSeenHomeTooltips(true);
   }, [setHasSeenHomeTooltips]);
 

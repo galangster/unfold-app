@@ -42,17 +42,13 @@ export interface HighlightsChangedEvent {
   primarySerial: string;
   /** True for undo replays — reconcile the store, show no toast. */
   silent: boolean;
-  /** The document that produced the change. Undo replays it into that document only. */
-  docId: string;
 }
 
 /** Imperative handle for the reader screen (undo). */
 export interface DevotionalWebViewCommands {
   /** Apply the inverse of a reported change to the document. The resulting
-   *  diff comes back through `onHighlightsChanged` with `silent: true`. The
-   *  change replays by character position, so it is dropped once the
-   *  document that produced it is gone (new text for the same day). */
-  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => void;
+   *  diff comes back through `onHighlightsChanged` with `silent: true`. */
+  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
   /** Flash and report the y of a stored highlight in the live document
    *  (reader Highlights sheet). Resolves through `onTargetHighlightLocated`. */
   scrollToHighlight: (highlight: Highlight) => void;
@@ -316,9 +312,6 @@ const HIGHLIGHTS_SCRIPT = `
         after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
         postToApp({
           type: 'HIGHLIGHTS_CHANGED',
-          // Which document changed, so a message still in flight from a
-          // replaced document is not saved under the one that replaced it.
-          docId: document.documentElement.getAttribute('data-doc-id'),
           reason: reason,
           removed: removed,
           added: added,
@@ -2499,13 +2492,9 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    // The page's content for this series and day: every font value sits in
-    // <head>, so the markup from </head> on changes only with what the reader
-    // sees. The series and day keep two days with the same words apart.
-    const content = `${devotionalId ?? ''}#${day.dayNumber}\n${documentMarkup.slice(documentMarkup.indexOf('</head>'))}`;
-    return { docId, content, bakedThemeJson: themeVars.json, source: { html } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey and devotionalId included on purpose
-  }, [documentMarkup, webViewTargetKey, devotionalId]);
+    return { docId, bakedThemeJson: themeVars.json, source: { html } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
+  }, [documentMarkup, webViewTargetKey]);
 
   // "Live document" = the document currently loaded in the mounted WebView,
   // identified by mount key + docId. Its first HEIGHT_CHANGE (echoing the
@@ -2514,30 +2503,6 @@ export function DevotionalWebView({
   // truth. appliedJson tracks the values the document is showing so that an
   // unchanged theme is never pushed twice.
   const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
-  // The document on screen now, for commands that must not reach a newer one.
-  const liveDocIdRef = useRef(webViewDocument.docId);
-  liveDocIdRef.current = webViewDocument.docId;
-  const liveDocTokenRef = useRef(liveDocToken);
-  liveDocTokenRef.current = liveDocToken;
-  // Which content each document of this mount showed. A reading-font change
-  // rebuilds the page under a new docId over the same content, so an Undo
-  // from the old page still applies; new content for the day blocks it. Each
-  // distinct content is kept once, so every document of the mount stays known.
-  const contentNumbersRef = useRef(new Map<string, number>());
-  const docContentRef = useRef(new Map<string, number>());
-  if (!docContentRef.current.has(webViewDocument.docId)) {
-    const contents = contentNumbersRef.current;
-    if (!contents.has(webViewDocument.content)) contents.set(webViewDocument.content, contents.size);
-    docContentRef.current.set(webViewDocument.docId, contents.get(webViewDocument.content)!);
-  }
-  const showsSameContent = useCallback((docId: string) => {
-    const docContent = docContentRef.current;
-    return docId === liveDocIdRef.current
-      || (docContent.has(docId) && docContent.get(docId) === docContent.get(liveDocIdRef.current));
-  }, []);
-  // An Undo tapped while no page is ready (a font still loading unmounts it)
-  // waits here for the next page's first report.
-  const pendingInverseRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> | null>(null);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2653,15 +2618,6 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        if (!showsSameContent(change.docId)) return;
-        // A change from the page on screen proves that page runs its scripts.
-        const pageReady = Boolean(webViewRef.current) && (
-          change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
-        );
-        if (!pageReady) {
-          pendingInverseRef.current = change;
-          return;
-        }
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {
@@ -2684,7 +2640,7 @@ export function DevotionalWebView({
     return () => {
       commandRef.current = null;
     };
-  }, [callPage, commandRef, showsSameContent]);
+  }, [callPage, commandRef]);
 
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
@@ -2770,17 +2726,12 @@ export function DevotionalWebView({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
-        // A change still in flight from the previous document (same-key
-        // source swap) belongs to a page no longer open. Saving it, or
-        // offering its Undo, would land on this one.
-        if (data.docId !== webViewDocument.docId) return;
         onHighlightsChanged({
           reason: data.reason,
           removed: Array.isArray(data.removed) ? data.removed : [],
           added: Array.isArray(data.added) ? data.added : [],
           primarySerial: typeof data.primarySerial === 'string' ? data.primarySerial : '',
           silent: !!data.silent,
-          docId: data.docId,
         });
       } else if (data.type === 'HIGHLIGHT_FAILED') {
         onHighlightFailed?.();
@@ -2822,11 +2773,6 @@ export function DevotionalWebView({
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
           pushScreenReader(screenReaderOn);
-          const pendingInverse = pendingInverseRef.current;
-          pendingInverseRef.current = null;
-          if (pendingInverse && showsSameContent(pendingInverse.docId)) {
-            callPage('__unfoldApplyInverse', { added: pendingInverse.added, removed: pendingInverse.removed });
-          }
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }

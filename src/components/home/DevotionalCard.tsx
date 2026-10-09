@@ -756,9 +756,11 @@ function PremiumPausedState({
 
 function JourneyCompleteStateFallback({
   seriesTitle,
+  onCreateNew,
   ambienceVisible,
 }: {
   seriesTitle: string;
+  onCreateNew: () => void;
   ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
@@ -779,27 +781,20 @@ function JourneyCompleteStateFallback({
           {seriesTitle} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.
         </Text>
       </HeroGround>
-    </View>
-  );
-}
 
-/** The one next step when no recommendation can show. */
-function JourneyCompleteCreateAction({ onCreateNew }: { onCreateNew: () => void }) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.heroCtaRow}>
-      <TouchableOpacity
-        activeOpacity={0.72}
-        onPress={onCreateNew}
-        accessibilityRole="button"
-        accessibilityLabel="Create a new devotional series"
-        accessibilityHint="Opens the new series setup"
-        style={[styles.journeyCompleteCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.08) }]}
-      >
-        <Text style={[styles.journeyCompleteCtaText, { color: colors.text }]}>Create Series</Text>
-        <Text style={[styles.journeyCompleteCtaArrow, { color: colors.accent }]}>→</Text>
-      </TouchableOpacity>
+      <View style={styles.heroCtaRow}>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={onCreateNew}
+          accessibilityRole="button"
+          accessibilityLabel="Create a new devotional series"
+          accessibilityHint="Opens the new series setup"
+          style={[styles.journeyCompleteCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.08) }]}
+        >
+          <Text style={[styles.journeyCompleteCtaText, { color: colors.text }]}>Create Series</Text>
+          <Text style={[styles.journeyCompleteCtaArrow, { color: colors.accent }]}>→</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -821,16 +816,13 @@ function JourneyCompleteState({
     <View>
       <JourneyCompleteStateFallback
         seriesTitle={seriesTitle}
+        onCreateNew={onCreateNew}
         ambienceVisible={ambienceVisible}
       />
-      {/* The recommendation carries the next step: Begin the Next Study, with
-          one link to create a series instead. Create Series stands alone only
-          when no recommendation can show. */}
       <View style={styles.heroFollowCard}>
         <RecommendedSeriesCard
           variant="completion"
           onChooseOther={onCreateNew}
-          renderFallback={() => <JourneyCompleteCreateAction onCreateNew={onCreateNew} />}
           gateCreation={gateCreation}
           storedPick={storedPick}
         />
