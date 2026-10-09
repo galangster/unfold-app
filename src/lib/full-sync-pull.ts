@@ -10,6 +10,7 @@ import {
   parseLifecycleTimestamp,
 } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
+import { isSeriesComplete } from './book-of-seasons';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
@@ -841,6 +842,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         previous: previousDevotionals,
         next: devotionals,
         pulled: pulledCreation,
+        isFinished: isSeriesComplete,
       }),
       // Journal rows the server minted before entry ids were day-derived still
       // carry random ids, so upserting them by id alone re-creates exactly the

@@ -47,6 +47,7 @@ import {
   lifecycleTimestampMs,
 } from './devotional-lifecycle';
 import { selectSyncedCurrentDevotionalId, type ResumeSelectionSeries } from './devotional-resume-selection';
+import { isSeriesComplete } from './book-of-seasons';
 import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
@@ -1077,6 +1078,7 @@ export function updateSyncedDevotionals(
         previous: state.devotionals,
         next: devotionals,
         pulled: pulledSeries,
+        isFinished: isSeriesComplete,
       }),
     };
   });

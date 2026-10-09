@@ -2,7 +2,7 @@ import {
   isDevotionalArchived,
   lifecycleTimestampMs,
 } from './devotional-lifecycle';
-import { outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional-active-selection';
+import { isStrictActiveSeriesWinner, outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional-active-selection';
 
 export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
@@ -72,21 +72,30 @@ function outranksWithPulledSeries(
  * Today never moves to a series that another live series outranks, held here
  * or only pulled: a pull of one series can carry a newer series started on
  * another device, and the server writes that one. Today stays empty instead.
+ * A series that arrives only from the server (started on another device, or a
+ * failed first series the server ran again) has no resume clock. It takes
+ * Today only when Today holds no live series or a finished one, and only as
+ * the strict active winner. An unfinished current series always stays.
+ * A series held before the pull never wins this way: an older reply can omit
+ * a newer series that an earlier pull showed but did not save.
  */
-export function selectSyncedCurrentDevotionalId(options: {
+export function selectSyncedCurrentDevotionalId<T extends ResumeSelectionSeries>(options: {
   previousCurrentId: string | null | undefined;
   previous: readonly ResumeSelectionSeries[];
-  next: readonly ResumeSelectionSeries[];
+  next: readonly T[];
   /**
    * Every series row the pull returned. A pull of one series also carries
    * rows this device does not hold yet, and one of them can be the series
    * the server writes now.
    */
   pulled?: readonly ResumeSelectionSeries[];
+  /** The reader finished the series, so the series the server writes may replace it. */
+  isFinished?: (series: T) => boolean;
 }): string | null {
   const selected = options.next.find((item) => item.id === options.previousCurrentId);
   if (selected && !isDevotionalArchived(selected)) {
-    return selected.id;
+    if (!options.isFinished?.(selected)) return selected.id;
+    return arrivedStrictWinner(options) ?? selected.id;
   }
 
   const previousById = new Map(options.previous.map((item) => [item.id, item]));
@@ -104,7 +113,28 @@ export function selectSyncedCurrentDevotionalId(options: {
       chosenClock = clock;
     }
   }
-  return chosenId && outranksWithPulledSeries(chosenId, options.next, options.pulled) ? chosenId : null;
+  if (chosenId && outranksWithPulledSeries(chosenId, options.next, options.pulled)) return chosenId;
+  return arrivedStrictWinner(options);
+}
+
+/**
+ * The series this pull brought here that the server writes: the device did
+ * not hold it before, holds it live now, and the pull shows it live. No other
+ * live series, held here or only pulled, ranks with or above it.
+ */
+function arrivedStrictWinner(options: {
+  previous: readonly ResumeSelectionSeries[];
+  next: readonly ResumeSelectionSeries[];
+  pulled?: readonly ResumeSelectionSeries[];
+}): string | null {
+  const ranked = withPulledSeries(options.next, options.pulled);
+  const winner = options.pulled?.find((copy) => {
+    const held = options.next.find((series) => series.id === copy.id);
+    return held && !isDevotionalArchived(held) && !isDevotionalArchived(copy)
+      && !options.previous.some((series) => series.id === copy.id)
+      && isStrictActiveSeriesWinner(copy.id, ranked);
+  });
+  return winner?.id ?? null;
 }
 
 function isAcceptedExplicitResume(

@@ -2,9 +2,10 @@
 /**
  * A sync never moves Today to a series the server does not write. A sync
  * takes a new series only through an explicit resume that outranks every
- * other live series, held here or only pulled. Anything else leaves Today
- * empty: a wrong series on Today is worse than none, because the server
- * refuses to continue it.
+ * other live series, held here or only pulled, or as a series new to this
+ * device that is the strict active winner. Anything else leaves Today empty:
+ * a wrong series on Today is worse than none, because the server refuses to
+ * continue it.
  *
  * Another device resumed series-b ("Continue this series"), which paused
  * series-x, and the reader may then have started series-n there. The server
@@ -230,7 +231,7 @@ describe('a sync never moves Today to a series the server does not write', () =>
   it.each([
     ['the resume and the pause', [seriesRow(liveX, ended(RESUME_AT)), seriesRow(pausedB, resumed(RESUME_AT))]],
     ['only the series it asked for', [seriesRow(liveX)]],
-  ])('keeps Today empty, never on series-b, when Reading\'s older reply carries %s', async (_label, readingRows) => {
+  ])('never puts Today on series-b when Reading\'s older reply carries %s', async (_label, readingRows) => {
     pullOneSeries('series-x', [
       seriesRow(liveX, ended(RESUME_AT)),
       seriesRow(pausedB, resumed(RESUME_AT)),
@@ -246,13 +247,13 @@ describe('a sync never moves Today to a series the server does not write', () =>
     const { devotionals } = useUnfoldStore.getState();
     expect(devotionals.some((item) => item.id === 'series-n')).toBe(true);
     expect(isStrictActiveSeriesWinner('series-b', devotionals)).toBe(false);
-    // series-n arrives with no explicit resume, so nothing proves it here.
-    expect(today()).toBeNull();
+    // series-n arrives here with no resume clock, as the strict active winner.
+    expect(today()).toBe('series-n');
   });
 
   // The earlier P1: series-b resumed and series-n started elsewhere, and one
   // pull of series-x carries both with the pause.
-  it('keeps Today empty, never on series-b, when one pull carries the resume, the pause and a newer series', async () => {
+  it('never puts Today on series-b when one pull carries the resume, the pause and a newer series', async () => {
     pullOneSeries('series-x', [
       seriesRow(liveX, ended(RESUME_AT)),
       seriesRow(pausedB, resumed(RESUME_AT)),
@@ -264,13 +265,13 @@ describe('a sync never moves Today to a series the server does not write', () =>
 
     await runFullSync(fullSyncReply([liveX, ended(RESUME_AT)], [pausedB, resumed(RESUME_AT)], [newN]));
 
-    expect(today()).toBeNull();
+    expect(today()).toBe('series-n');
   });
 
   // Ending a series stamps the clock of the device that ends it. One running
   // slow stamps the end of series-x before series-y's last resume, though
   // series-x began after it. The reader started series-n there afterwards.
-  it('keeps Today empty, never on the older series, when a slow clock stamped the end', async () => {
+  it('never puts Today on the older series when a slow clock stamped the end', async () => {
     const startedX = series('series-x', { createdAt: '2026-09-12T16:00:00.000Z', seriesStartDate: '2026-09-12T16:00:00.000Z' });
     const olderY = series('series-y', { createdAt: '2026-09-01T00:00:00.000Z', ...resumed('2026-09-12T15:00:00.000Z') });
     useUnfoldStore.setState({ devotionals: [startedX, olderY], currentDevotionalId: 'series-x' });
@@ -280,7 +281,7 @@ describe('a sync never moves Today to a series the server does not write', () =>
 
     await runFullSync(fullSyncReply([olderY, resumed('2026-09-12T15:00:00.000Z')], [newN]));
 
-    expect(today()).toBeNull();
+    expect(today()).toBe('series-n');
   });
 
   // The pause of series-x reaches the server after series-b's resume, and
@@ -389,5 +390,66 @@ describe('canPulledSeriesTakeEmptyToday', () => {
   it('refuses an archived or missing series', () => {
     expect(canPulledSeriesTakeEmptyToday('series-c', [pausedC], [])).toBe(false);
     expect(canPulledSeriesTakeEmptyToday('series-missing', [pulledB], [])).toBe(false);
+  });
+});
+
+// 2026-10-09 release 1.1.19 lane: a series can reach this phone only from the
+// server, started on another device or a failed first series the server ran
+// again. It carries no resume clock, so Today stayed empty beside it.
+describe('a series that arrives only from the server', () => {
+  const finishedX = series('series-x', {
+    totalDays: 1,
+    days: [{ ...liveX.days[0], isRead: true, readAt: '2026-09-06T08:00:00.000Z' }],
+  });
+
+  it('gives an empty Today to the series the server writes', async () => {
+    useUnfoldStore.setState({ devotionals: [], currentDevotionalId: null });
+
+    await runFullSync(fullSyncReply([newN]));
+
+    expect(today()).toBe('series-n');
+  });
+
+  it('moves a finished series off Today for the newer series the server writes', async () => {
+    useUnfoldStore.setState({ devotionals: [finishedX], currentDevotionalId: 'series-x' });
+
+    await runFullSync(fullSyncReply([newN]));
+
+    expect(today()).toBe('series-n');
+  });
+
+  it('keeps an unfinished series on Today', async () => {
+    useUnfoldStore.setState({ devotionals: [liveX], currentDevotionalId: 'series-x' });
+
+    await runFullSync(fullSyncReply([newN]));
+
+    expect(today()).toBe('series-x');
+  });
+
+  it('keeps a finished series on Today beside an older pulled series', async () => {
+    const olderO = series('series-o', { createdAt: '2026-09-01T00:00:00.000Z', seriesStartDate: '2026-09-01T00:00:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [finishedX], currentDevotionalId: 'series-x' });
+
+    await runFullSync(fullSyncReply([olderO]));
+
+    expect(today()).toBe('series-x');
+  });
+
+  it('keeps Today empty beside a newer live series the pull did not carry', async () => {
+    const newerC = series('series-c', { createdAt: '2026-09-12T16:30:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [newerC], currentDevotionalId: null });
+
+    await runFullSync(fullSyncReply([newN]));
+
+    expect(today()).toBeNull();
+  });
+
+  it('keeps Today empty when a pull of one series carries the pause of the series held live here', () => {
+    const liveC = series('series-c', { createdAt: '2026-09-12T16:30:00.000Z' });
+    useUnfoldStore.setState({ devotionals: [liveC], currentDevotionalId: null });
+
+    pullOneSeries('series-c', [seriesRow(liveC, ended('2026-09-12T16:45:00.000Z'))]);
+
+    expect(today()).toBeNull();
   });
 });
