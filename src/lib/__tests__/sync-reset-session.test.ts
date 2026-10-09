@@ -50,7 +50,6 @@ jest.mock('../companion-chat-store', () => ({
       clearAllConversations: jest.fn(),
     })),
   },
-  flushCompanionChatPersistAsync: jest.fn(async () => false),
 }));
 
 jest.mock('../bridge-service', () => ({ clearBridgeCache: jest.fn() }));

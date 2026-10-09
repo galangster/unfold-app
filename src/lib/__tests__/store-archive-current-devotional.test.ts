@@ -137,13 +137,13 @@ describe('store archive and resume lifecycle', () => {
     jest.useRealTimers();
   });
 
-  it('ends only the replaced series, keeps history and read progress, and enqueues lifecycle fields', () => {
+  it('archives only the current series, keeps history and read progress, and enqueues lifecycle fields', () => {
     useUnfoldStore.setState({
       devotionals: [series(CURRENT_ID), series(OTHER_ID)],
       currentDevotionalId: CURRENT_ID,
     });
 
-    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID);
+    useUnfoldStore.getState().archiveCurrentDevotional();
 
     const state = useUnfoldStore.getState();
     const archived = state.devotionals.find((item) => item.id === CURRENT_ID);
@@ -164,45 +164,16 @@ describe('store archive and resume lifecycle', () => {
 
     const queued = peekSyncOutbox().filter((change) => change.table === 'devotionals');
     expect(queued).toHaveLength(1);
-    // Only the archive clock moves. The change keeps the row's content clock
-    // and carries no progress, so newer progress from another device stays.
     expect(queued[0]).toMatchObject({
       id: CURRENT_ID,
       deleted: false,
-      clientUpdatedAt: '2026-09-11T12:00:00.000Z',
+      clientUpdatedAt: CLOCK,
+      data: {
+        archivedAt: CLOCK,
+        archivedStateAt: CLOCK,
+        currentDay: 3,
+      },
     });
-    expect(queued[0].data).toEqual({ archivedAt: CLOCK, archivedStateAt: CLOCK });
-  });
-
-  it('makes the replacement current when it is the series the server writes', () => {
-    useUnfoldStore.setState({
-      devotionals: [series(CURRENT_ID), series('replacement', { createdAt: '2026-09-12T00:00:00.000Z' })],
-      currentDevotionalId: CURRENT_ID,
-    });
-
-    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID, 'replacement');
-
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe('replacement');
-  });
-
-  // 2026-10-09 release audit: a pull can land the replacement and a newer live
-  // series before the replacement's first day arrives. Today must not show the
-  // replacement while the server writes the newer series.
-  it('keeps Today off a replacement that a newer live series outranks', () => {
-    useUnfoldStore.setState({
-      devotionals: [
-        series(CURRENT_ID),
-        series('replacement', { createdAt: '2026-09-12T00:00:00.000Z' }),
-        series('newer-live', { createdAt: '2026-09-13T00:00:00.000Z' }),
-      ],
-      currentDevotionalId: CURRENT_ID,
-    });
-
-    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID, 'replacement');
-
-    const state = useUnfoldStore.getState();
-    expect(state.devotionals.find((item) => item.id === CURRENT_ID)?.archivedAt).toBe(CLOCK);
-    expect(state.currentDevotionalId).toBeNull();
   });
 
   it('does nothing when there is no current series', () => {

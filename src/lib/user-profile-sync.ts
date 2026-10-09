@@ -1,10 +1,9 @@
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from './api-config';
 import { authenticatedFetch } from './device-credential';
 import { logger } from './logger';
-import { getDeviceId, mmkvStorage } from './mmkv-storage';
+import { getDeviceId } from './mmkv-storage';
 import type { UserProfile } from './store';
 import { resolveCompanionPersonality } from './companion-personality';
-import { correlateSyncAcknowledgements, isValidConflictResult } from './sync-acknowledgements';
 import { enqueueSyncChanges } from './sync-outbox';
 import { buildSyncPushBody } from './sync-push-body';
 import {
@@ -85,26 +84,6 @@ export function buildUserProfileSyncChange(
   };
 }
 
-/**
- * The newest profile stamp the server refused because it holds a newer row.
- * Server last-write-wins only moves forward, so a snapshot stamped at or
- * before it can never land. Without this, useUserProfileSync re-sent the same
- * persisted snapshot on every app open, and the outbox sent it once more.
- */
-export const USER_PROFILE_CONFLICT_KEY = 'user-profile-sync-conflict-v1';
-
-function serverHoldsNewerProfile(change: UserProfileSyncChange): boolean {
-  const raw = mmkvStorage.getItem(USER_PROFILE_CONFLICT_KEY);
-  if (typeof raw !== 'string') return false;
-  try {
-    const refused = JSON.parse(raw) as { id?: unknown; clientUpdatedAt?: unknown };
-    if (refused.id !== change.id || typeof refused.clientUpdatedAt !== 'string') return false;
-    return Date.parse(change.clientUpdatedAt) <= Date.parse(refused.clientUpdatedAt);
-  } catch {
-    return false;
-  }
-}
-
 export async function syncUserProfileToBackend(
   user: UserProfile,
   clientUpdatedAt = new Date().toISOString()
@@ -112,7 +91,6 @@ export async function syncUserProfileToBackend(
   const session = captureSyncSession();
   assertSyncSessionCurrent(session, 'user profile sync');
   const change = buildUserProfileSyncChange(user, clientUpdatedAt);
-  if (serverHoldsNewerProfile(change)) return;
 
   const controller = new AbortController();
   const unregister = registerSyncTransport(controller);
@@ -135,21 +113,6 @@ export async function syncUserProfileToBackend(
       results?: Array<{ status?: string; reason?: string }>;
     } | null;
     assertSyncSessionCurrent(session, 'user profile sync');
-    // A conflict is the server's final answer for this snapshot, as in the
-    // outbox drain: its newer row stands. Queueing it would only re-send a
-    // snapshot that cannot win. A rejection still queues for retry below.
-    const answer = correlateSyncAcknowledgements([change], payload?.results ?? [])[0]?.result;
-    if (answer && isValidConflictResult(answer)) {
-      // Overlapping pushes can answer out of order. Keep the newest refused stamp.
-      if (!serverHoldsNewerProfile(change)) {
-        mmkvStorage.setItem(USER_PROFILE_CONFLICT_KEY, JSON.stringify({
-          id: change.id,
-          clientUpdatedAt: change.clientUpdatedAt,
-        }));
-      }
-      logger.log('[user-sync] Server holds a newer profile; not re-sending this one');
-      return;
-    }
     const result = payload?.results?.[0];
     if (result?.status && result.status !== 'accepted') {
       throw new Error(`User profile sync ${result.status}${result.reason ? `: ${result.reason}` : ''}`);

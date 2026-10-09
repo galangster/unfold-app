@@ -63,14 +63,12 @@ import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import {
   EMPTY_SOAP_RESPONSES,
-  SOAP_FIELDS,
   buildInitialQuestionResponses,
   diffSoapWrites,
   normalizeSoapResponses,
   resolveInitialJournalMode,
   resolveJournalCloseAction,
 } from '@/lib/journal-entry-state';
-import { rebaseJournalDraft } from '@/lib/journal-entry-merge';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   createAutosaveController,
@@ -285,61 +283,6 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       savedEntryIdRef.current = existingEntry.id;
     }
   }, [existingEntry]);
-
-  // A sync pull can change this day's entry while the editor is open: a merge
-  // can move it to its canonical id, or fold another device's writing in under
-  // the same id. Every save addresses savedEntryIdRef and writes the editor's
-  // own copy. So the ref follows the store's entry for the day as soon as the
-  // store changes, before any pending autosave, and whatever the pull brought
-  // in is rebased into the editor's copy. An editor that opened before the day
-  // had an entry follows the first one that arrives, and its pending draft is
-  // rebased onto it as onto an empty entry: the save that follows would
-  // otherwise find that entry and drop the draft.
-  useEffect(() => useUnfoldStore.subscribe((state, previous) => {
-    const followedId = savedEntryIdRef.current;
-    const live = state.journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber);
-    if (!live) return;
-    if (live.id !== followedId) savedEntryIdRef.current = live.id;
-    const before = followedId
-      ? previous.journalEntries.find((e) => e.id === followedId)
-      : { ...live, content: '', soapResponses: undefined, questionResponses: [] };
-    if (!before || before === live) return;
-    // Answers save on every keystroke, so the editor's answers hold nothing the
-    // store lacks. They take each answer the store changed, edits or not.
-    const answersBefore = new Map((before.questionResponses ?? []).map((qr) => [qr.question, qr.response]));
-    const changedAnswers = (live.questionResponses ?? [])
-      .filter((qr) => qr.response !== (answersBefore.get(qr.question) ?? ''));
-    if (changedAnswers.length > 0) {
-      setQuestionResponses((current) => {
-        const next = new Map(current);
-        for (const qr of changedAnswers) {
-          const base = answersBefore.get(qr.question) ?? '';
-          next.set(qr.question, rebaseJournalDraft(base, qr.response, current.get(qr.question) ?? base));
-        }
-        return next;
-      });
-    }
-    // Unsaved edits were made over the entry as it stood before the pull, and
-    // the pull can bring in text merged from another device. The pending save
-    // would replace that text, so the draft is rebased onto the merged entry.
-    // With no edits pending, the resync effect loads the merged entry.
-    if (!hasChangesRef.current) return;
-    const content = rebaseJournalDraft(before.content ?? '', live.content ?? '', contentRef.current);
-    if (content !== contentRef.current) {
-      contentRef.current = content;
-      setContent(content);
-    }
-    const beforeSoap = normalizeSoapResponses(before.soapResponses) ?? EMPTY_SOAP_RESPONSES;
-    const liveSoap = normalizeSoapResponses(live.soapResponses) ?? EMPTY_SOAP_RESPONSES;
-    const soap = { ...soapValuesRef.current };
-    for (const field of SOAP_FIELDS) {
-      soap[field] = rebaseJournalDraft(beforeSoap[field] ?? '', liveSoap[field] ?? '', soap[field] ?? '');
-    }
-    if (SOAP_FIELDS.some((field) => soap[field] !== soapValuesRef.current[field])) {
-      soapValuesRef.current = soap;
-      setSoapValues(soap);
-    }
-  }), [devotionalId, dayNumber]);
 
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
