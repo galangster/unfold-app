@@ -327,3 +327,75 @@ describe('mirror-back actions', () => {
     expect(field[0].props.placeholder).toBe('What did we get wrong?');
   });
 });
+
+// 1.1.18 release smoke (F10): onboarding stopped asking for the companion
+// name on 2026-09-13 and saved the default 'Grace' for every reader. Nick:
+// "the companion should be named what the user named it in the beginning".
+describe('companion name', () => {
+  type CarouselProps = {
+    onCompanionNameChange: (name: string) => void;
+    onComplete: () => void;
+  };
+  const carouselProps = () => mockFeatureSummaryCarousel.mock.calls.at(-1)?.[0] as unknown as CarouselProps;
+
+  function findByLabel(root: Tree, label: string) {
+    return root.root.findAll(
+      (n: { props?: { accessibilityLabel?: string; onPress?: unknown } }) =>
+        n.props?.accessibilityLabel === label && typeof n.props?.onPress === 'function',
+    );
+  }
+
+  async function completeFromReminderTime() {
+    const screen = await openAt('reminderTime');
+    await act(async () => {
+      findByLabel(screen, 'Morning')[0].props.onPress();
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 400);
+      });
+    });
+    expect(mockStoreState.setUser).toHaveBeenCalledTimes(1);
+    return mockStoreState.setUser.mock.calls[0][0] as { companionName?: string };
+  }
+
+  it('keeps the name the reader types on the feature summary', async () => {
+    await openAt('featureSummary');
+
+    await act(async () => {
+      carouselProps().onCompanionNameChange('  Selah ');
+    });
+    await act(async () => {
+      carouselProps().onComplete();
+    });
+
+    expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith('Selah');
+  });
+
+  it('keeps no name, not the default, when the reader leaves the field empty', async () => {
+    await openAt('featureSummary');
+
+    await act(async () => {
+      carouselProps().onComplete();
+    });
+
+    expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith(null);
+    expect(mockStoreState.setCompanionName).not.toHaveBeenCalledWith('Grace');
+  });
+
+  it('saves the typed name with the profile when onboarding completes', async () => {
+    mockStoreState.companionName = 'Selah';
+
+    const profile = await completeFromReminderTime();
+
+    expect(profile.companionName).toBe('Selah');
+    expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith('Selah');
+  });
+
+  it('saves no name with the profile when the reader gave none', async () => {
+    const profile = await completeFromReminderTime();
+
+    expect(profile.companionName).toBeUndefined();
+    expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith(null);
+  });
+});

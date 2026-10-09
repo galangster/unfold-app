@@ -12,6 +12,7 @@ import {
   personalContextDraftHasChanges,
   isReadableCurrentSeries,
   resolveCompanionDisplayName,
+  resolveCompanionLabel,
   resolveCompanionNameToPersist,
   resolveCreateNewDuringPendingInitial,
   resolveGeneratingCloseCopy,
@@ -34,13 +35,27 @@ const user = {
 describe('companion naming', () => {
   it('treats Grace as a name, not a writing-style change', () => {
     expect(resolveCompanionNameToPersist('Grace')).toBe('Grace');
-    expect(resolveCompanionNameToPersist('  ')).toBe('Grace');
     expect(resolveCompanionDisplayName('Grace', null)).toBe('Grace');
     expect(resolveCompanionDisplayName('Selah', 'Grace')).toBe('Selah');
     expect(resolveCompanionDisplayName(undefined, 'Selah')).toBe('Selah');
     expect(resolveCompanionDisplayName('', '')).toBeNull();
     expect(COMPANION_INTRO_BODY).toContain("talk through Scripture");
     expect(COMPANION_INTRO_BODY).not.toContain("Choose a name");
+  });
+
+  it('saves the name the reader typed and no stand-in name for a blank answer', () => {
+    expect(resolveCompanionNameToPersist('  Selah ')).toBe('Selah');
+    expect(resolveCompanionNameToPersist('  ')).toBe('');
+    expect(resolveCompanionNameToPersist('')).toBe('');
+    expect(applyPersonalContextDraft({ companionName: ' ', aboutMe: 'Hi' }).companionName).toBe('');
+  });
+
+  it('calls the Companion by its saved name, or Companion when none is saved', () => {
+    expect(resolveCompanionLabel('Selah', null)).toBe('Selah');
+    expect(resolveCompanionLabel(undefined, 'Grace')).toBe('Grace');
+    expect(resolveCompanionLabel('Grace', 'Grace')).toBe('Grace');
+    expect(resolveCompanionLabel(undefined, null)).toBe('Companion');
+    expect(resolveCompanionLabel('  ', '')).toBe('Companion');
   });
 });
 
@@ -211,8 +226,7 @@ describe('copy is wired where the questions arise', () => {
     expect(carousel).toContain('accessibilityRole="radiogroup"');
     expect(carousel).toContain('KeyboardAwareScrollView');
     expect(carousel).toContain('flexShrink: 1');
-    expect(carousel).not.toContain('Companion name');
-    expect(carousel).not.toContain('TextInput');
+    expect(carousel).toContain('onCompanionNameChange');
     expect(empty).not.toContain('COMPANION_EMPTY_STATE_NOTE');
     expect(empty).not.toContain('Explore Scripture');
     expect(profile).toContain('PERSONAL_CONTEXT_FUTURE_DAYS_COPY');
@@ -241,7 +255,7 @@ describe('copy is wired where the questions arise', () => {
     expect(onboarding).toContain('ensureInitialGenerationRequestId()');
     expect(onboarding).toContain('companionNameInputRef.current');
     expect(onboarding).toContain('resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)');
-    expect(onboarding).toContain('const companionName = resolveCompanionNameToPersist(companionNameInputRef.current)');
+    expect(onboarding).toContain('const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined');
     expect(today).toContain('resolvePendingInitialArcResume');
     expect(today).toContain("pendingInitialResume === 'offer-resume'");
     expect(today).toContain("pendingInitialResume === 'offer-nonblocking-resume'");

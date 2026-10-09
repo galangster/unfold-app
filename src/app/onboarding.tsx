@@ -670,8 +670,9 @@ export default function OnboardingScreen() {
   }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
-  // Preserve legacy names while new users choose a conversation style.
-  const [companionNameInput] = useState(() =>
+  // The name the reader gives the companion on the feature summary. A saved
+  // name prefills it. Empty means no name: nothing falls back to a default here.
+  const [companionNameInput, setCompanionNameInput] = useState(() =>
     resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
   );
   const [companionPersonality, setCompanionPersonality] = useState(() =>
@@ -1395,7 +1396,8 @@ export default function OnboardingScreen() {
     const pendingAuth = pendingAuthDataRef.current ?? {};
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
-    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    // An empty field saves no name, never a default.
+    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined;
     // A blank or skipped life answer keeps the saved context.
     const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
@@ -1437,7 +1439,7 @@ export default function OnboardingScreen() {
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     } else {
       setUser({
         name: data.name,
@@ -1479,7 +1481,7 @@ export default function OnboardingScreen() {
         mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     }
   }, [data, existingUser, updateUser, setUser, setCompanionName, purchasedDuringOnboarding]);
 
@@ -3733,13 +3735,18 @@ export default function OnboardingScreen() {
       return (
         <FeatureSummaryCarousel
           colors={colors}
+          companionName={companionNameInput}
+          onCompanionNameChange={setCompanionNameInput}
           companionPersonality={companionPersonality}
           onCompanionPersonalityChange={setCompanionPersonality}
           currentPage={featureSummaryPage}
           onPageChange={setFeatureSummaryPage}
           onComplete={() => {
             setFeatureSummaryPage(0);
-            updateUser({ companionPersonality });
+            // The store keeps the name across a relaunch until the profile is saved.
+            const companionName = resolveCompanionNameToPersist(companionNameInput) || undefined;
+            updateUser({ companionPersonality, companionName });
+            setCompanionName(companionName ?? null);
             advanceToNextStep();
           }}
         />

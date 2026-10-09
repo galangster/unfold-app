@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { HomeOnboardingTooltips } from '../HomeOnboardingTooltips';
 import { listPendingAnnouncementPages } from '@/lib/feature-announcements';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, type UserProfile } from '@/lib/store';
 
 const mockValues = new Map<string, string>();
 
@@ -88,5 +88,19 @@ describe('HomeOnboardingTooltips', () => {
 
     expect(useUnfoldStore.getState().hasSeenHomeTooltips).toBe(true);
     expect(listPendingAnnouncementPages(allAvailable)).toEqual([]);
+  });
+
+  it('names the Companion tab with the saved name', () => {
+    useUnfoldStore.setState({ user: { companionName: 'Selah' } as UserProfile });
+    render(<HomeOnboardingTooltips />);
+
+    expect(screen.getByText(/Devotional, Bible, Selah, and Journal/)).toBeTruthy();
+  });
+
+  it('says Companion when no name is saved', () => {
+    useUnfoldStore.setState({ user: { companionName: '' } as UserProfile, companionName: null });
+    render(<HomeOnboardingTooltips />);
+
+    expect(screen.getByText(/Devotional, Bible, Companion, and Journal/)).toBeTruthy();
   });
 });
