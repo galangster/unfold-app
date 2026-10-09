@@ -444,6 +444,39 @@ describe('pushing the writing a pull folded together', () => {
     }
   });
 
+  it('queues nothing new when both legacy rows of a folded day arrive again', () => {
+    seedSeries();
+    const canonical = seedCanonicalEntry('Shared.', '2026-09-01T09:15:00.000Z');
+    const rows = [
+      legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z'),
+      legacyRow('journal_two', 'Tablet.', '2026-09-01T09:30:00.000Z'),
+    ];
+    applyPulledUserData({ changes: { journal_entries: rows }, timestamp: '2026-09-02T00:00:00.000Z' } as never);
+    const first = queuedJournal();
+    expect(first.map((change) => change.data.content)).toEqual(['Phone.\n\nShared.\n\nTablet.']);
+
+    applyPulledUserData({ changes: { journal_entries: rows }, timestamp: '2026-09-03T00:00:00.000Z' } as never);
+
+    expect(queuedJournal()).toEqual(first);
+    expect(useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical)?.content)
+      .toBe('Phone.\n\nShared.\n\nTablet.');
+  });
+
+  it('dates a restored entry from the server copy the pull brings', () => {
+    seedSeries();
+    const canonical = queueWriteLostFromStore('Written just before the crash.', '2026-09-06T00:00:00.000Z');
+
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow(canonical, 'Older server copy.', '2026-09-02T00:00:00.000Z')] },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
+
+    expect(useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical)).toMatchObject({
+      content: 'Written just before the crash.',
+      createdAt: '2026-09-01T08:00:00.000Z',
+    });
+  });
+
   it('restores nothing on a pull that brings no row for the day', () => {
     seedSeries();
     const canonical = seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');

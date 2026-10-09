@@ -141,6 +141,15 @@ function mergePair(base: JournalEntry, incoming: JournalEntry): JournalEntry {
   };
 }
 
+const MERGED_FIELDS = [
+  'content', 'journalMode', 'soapResponses', 'questionResponses', 'prayerRequests', 'deeperQuestions',
+] as const;
+
+function addsNothingTo(base: JournalEntry, incoming: JournalEntry): boolean {
+  const merged = mergePair(base, incoming);
+  return MERGED_FIELDS.every((field) => JSON.stringify(merged[field] ?? null) === JSON.stringify(base[field] ?? null));
+}
+
 /**
  * Collapse every (devotionalId, dayNumber) group to a single entry under the
  * canonical id. Entries fold oldest-first so surviving text reads in
@@ -159,9 +168,22 @@ export function mergeJournalEntryDuplicates(entries: JournalEntry[]): JournalEnt
 
   const merged: JournalEntry[] = [];
   for (const group of groups.values()) {
-    const [oldest, ...rest] = [...group].sort(byUpdatedAtAscending);
+    const id = canonicalJournalEntryId(group[0].devotionalId, group[0].dayNumber);
+    // A row the day's entry already holds adds nothing. Folding it with the
+    // other rows first could join texts that the entry holds apart, and the
+    // joined text would then be added again.
+    const canonical = group.find((entry) => entry.id === id);
+    const adding = canonical
+      ? group.filter((entry) => entry === canonical || !addsNothingTo(canonical, entry))
+      : group;
+    const [oldest, ...rest] = [...adding].sort(byUpdatedAtAscending);
     const folded = rest.reduce(mergePair, oldest);
-    merged.push({ ...folded, id: canonicalJournalEntryId(folded.devotionalId, folded.dayNumber) });
+    merged.push({
+      ...folded,
+      id,
+      createdAt: group.map((entry) => entry.createdAt).filter(Boolean).sort()[0] ?? folded.createdAt,
+      updatedAt: group.map((entry) => entry.updatedAt).filter(Boolean).sort().pop() ?? folded.updatedAt,
+    });
   }
   return merged;
 }

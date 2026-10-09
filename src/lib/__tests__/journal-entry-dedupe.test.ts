@@ -148,6 +148,30 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].createdAt).toBe('2026-09-01T10:00:00.000Z');
   });
 
+  it('does not repeat text when rows the day already folded in arrive together again', () => {
+    // The day's entry holds A, C and B in clock order; A and B are its legacy rows.
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: DAY_ID, content: 'A\n\nC\n\nB', updatedAt: '2026-09-04T10:00:00.000Z' }),
+      entry({ id: 'legacy-a', content: 'A', updatedAt: '2026-09-01T10:00:00.000Z', createdAt: '2026-08-20T10:00:00.000Z' }),
+      entry({ id: 'legacy-b', content: 'B', updatedAt: '2026-09-05T10:00:00.000Z' }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].content).toBe('A\n\nC\n\nB');
+    // The rows left out still date the day, as a fold would.
+    expect(merged[0].createdAt).toBe('2026-08-20T10:00:00.000Z');
+    expect(merged[0].updatedAt).toBe('2026-09-05T10:00:00.000Z');
+  });
+
+  it("still folds a legacy row the day's entry does not hold, oldest first", () => {
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: DAY_ID, content: 'C', updatedAt: '2026-09-02T10:00:00.000Z' }),
+      entry({ id: 'legacy-a', content: 'A', updatedAt: '2026-09-01T10:00:00.000Z', createdAt: '2026-08-30T10:00:00.000Z' }),
+      entry({ id: 'legacy-b', content: 'B', updatedAt: '2026-09-03T10:00:00.000Z' }),
+    ]);
+    expect(merged[0].content).toBe('A\n\nC\n\nB');
+    expect(merged[0].createdAt).toBe('2026-08-30T10:00:00.000Z');
+  });
+
   it('does not repeat identical text, and an empty side never blanks the other', () => {
     const merged = mergeJournalEntryDuplicates([
       entry({ id: 'a', content: 'same words', updatedAt: '2026-09-01T10:00:00.000Z' }),
