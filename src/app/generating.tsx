@@ -17,6 +17,7 @@ import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
+import { bindReplacementSeries } from '@/lib/series-replacement';
 import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
@@ -159,6 +160,11 @@ function resolveEntryNow(params: {
   });
 }
 
+/** The server refused a retry: the job already spent every manual retry. */
+function isRetryLimitRefusal(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'MAX_RETRIES_EXCEEDED';
+}
+
 export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -246,6 +252,8 @@ export default function GeneratingScreen() {
       leftForHome: leftForHomeRef.current,
       ...(requestId ? { requestId } : {}),
     });
+    // A "Start a new series" choice waits for this series: only its result ends the old one.
+    if (devotionalId) bindReplacementSeries(devotionalId);
   }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
@@ -1013,7 +1021,9 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(errorMessage);
-      setErrorIsServerVerdict(false);
+      // The server refusing a retry because the job spent them all is its
+      // final verdict on that job. Any other failure leaves the job unanswered.
+      setErrorIsServerVerdict(isRetryLimitRefusal(err));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };

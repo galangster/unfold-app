@@ -16,7 +16,7 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { clearReplacedSeries, readReplacedSeries, readReplacedSeriesState } from '@/lib/series-replacement';
+import { clearReplacedSeries, readReplacedSeries, readReplacedSeriesState, readReplacementSeries } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -158,7 +158,8 @@ export function applyInitialArcResult(
   // The series "Start a new series" replaces ends now that this one exists.
   // First, so Today moves off the old series: to this one when a sync pull
   // already landed it, otherwise to the shell added below.
-  const replacedId = readReplacedSeries();
+  // Only the series the reader started in its place ends it.
+  const replacedId = readReplacedSeries() && readReplacementSeries() === devotionalId ? readReplacedSeries() : null;
   if (replacedId && replacedId !== devotionalId && replacementStillEnds(replacedId, devotionalId)) {
     useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
   }
@@ -206,8 +207,14 @@ export function applyInitialArcResult(
     store.addDevotional(newDevotional);
     // addDevotional makes the new series current. Beside a newer live series,
     // such as the replaced one resumed elsewhere after the choice, the server
-    // writes that one, so Today keeps it.
-    if (!isStrictActiveSeriesWinner(devotionalId, useUnfoldStore.getState().devotionals)) {
+    // writes that one, so Today keeps it. Without a server date the new
+    // series' start is this phone's guess, so it takes Today only in place of
+    // no chosen series or a finished one.
+    const landedState = useUnfoldStore.getState();
+    const previousCurrent = landedState.devotionals.find((d) => d.id === previousCurrentId);
+    const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals)
+      || (!serverAnchor && !holdsNoChosenSeries(previousCurrent) && !isSeriesComplete(previousCurrent));
+    if (keepsPrevious) {
       useUnfoldStore.setState({ currentDevotionalId: previousCurrentId });
     }
   }

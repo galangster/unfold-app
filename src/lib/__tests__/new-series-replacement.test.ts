@@ -42,7 +42,7 @@ import { writeInflightGenerationJob } from '../inflight-generation-job';
 import { ensureInitialGenerationRequestId } from '../initial-generation-request';
 import { applyInitialArcResult } from '../initial-arc-result';
 import { captureSyncSession } from '../generation-session';
-import { forgetReplacedSeriesUnlessPending } from '../series-replacement';
+import { bindReplacementSeries, forgetReplacedSeriesUnlessPending } from '../series-replacement';
 import { updateSyncedDevotionals, useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
 import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
 
@@ -97,7 +97,9 @@ const newDay1: DevotionalDay = {
 
 const landed = { devotionalId: NEW_ID, devotionalDay: newDay1, seriesTitle: 'A New Thing', totalDays: 7 };
 
+/** The new series' job was recorded (/generating binds the replacement then), and its result lands. */
 function land(result = landed) {
+  bindReplacementSeries(result.devotionalId);
   return applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 }
 

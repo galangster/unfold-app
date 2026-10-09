@@ -176,6 +176,7 @@ import {
 } from '../initial-generation-request';
 import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
+import { readReplacementSeries, recordReplacedSeries } from '../series-replacement';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
@@ -716,6 +717,35 @@ describe('Go home after the server ruled on the first series', () => {
 
     expect(readInitialGenerationRequestId()).toBeNull();
     expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  // 2026-10-09 release audit round 4: another device can spend the last retry
+  // first, and the server's refusal is its final verdict on the job.
+  it('retires the request id after the server refuses a retry for an exhausted job', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: true });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    mockRetryJob.mockRejectedValue(Object.assign(new Error('Job has exhausted all manual retries'), { status: 409, code: 'MAX_RETRIES_EXCEEDED' }));
+    await press(tree, 'Try again');
+    await flush();
+    expect(showsError(tree)).toBe(true);
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('binds a waiting "Start a new series" choice to the series its job generates', async () => {
+    recordReplacedSeries('old-series');
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    expect(readReplacementSeries()).toBe('devo-1');
   });
 
   it('retires the request id after a verdict on the job its submission adopted', async () => {
