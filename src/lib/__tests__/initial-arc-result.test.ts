@@ -58,7 +58,7 @@ import {
 import { extractBookFromReference } from '../devotional-service';
 import { captureSyncSession } from '../generation-session';
 import { mmkvStorage } from '../mmkv-storage';
-import { useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
+import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
 import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
 
 const NOW = 1_800_000_000_000;
@@ -214,6 +214,29 @@ describe('applyInitialArcResult', () => {
       title: 'Learning to Trust Again',
       devotionalId: 'devo-1',
     });
+  });
+
+  // 2026-10-09 release audit round 2: the store writes to disk on a delay, and
+  // the in-flight record is the only way to land the series again after a crash.
+  it('writes the new series to disk before it clears the in-flight record', () => {
+    flushUnfoldStorePersist();
+    mmkvStorage.removeItem('unfold-storage');
+    const removeItem = jest.mocked(mmkvStorage.removeItem);
+    const original = removeItem.getMockImplementation()!;
+    let storedWhenCleared: string | null | undefined;
+    removeItem.mockImplementation((key: string) => {
+      if (key === INFLIGHT_GENERATION_JOB_KEY && storedWhenCleared === undefined) {
+        storedWhenCleared = mmkvStorage.getItem('unfold-storage') as string | null;
+      }
+      return original(key);
+    });
+    try {
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+    } finally {
+      removeItem.mockImplementation(original);
+    }
+
+    expect(storedWhenCleared).toContain('"devo-1"');
   });
 
   it('throws before touching the store when the result has no devotional id', () => {

@@ -160,11 +160,13 @@ describe('starting a new series', () => {
       archivedStateAt: CLOCK,
       days: reading.days,
     });
+    // Only the archive clock moves. The change keeps the row's content clock
+    // and carries no progress, so newer progress from another device stays.
     expect(queuedChangesFor(READING_ID)).toEqual([
       expect.objectContaining({
         deleted: false,
-        clientUpdatedAt: CLOCK,
-        data: expect.objectContaining({ archivedAt: CLOCK, archivedStateAt: CLOCK, currentDay: 3 }),
+        clientUpdatedAt: '2026-10-07T12:00:00.000Z',
+        data: { archivedAt: CLOCK, archivedStateAt: CLOCK },
       }),
     ]);
   });
