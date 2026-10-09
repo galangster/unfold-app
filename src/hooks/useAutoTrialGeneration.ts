@@ -38,7 +38,7 @@ import {
   readInflightGenerationJob,
   writeInflightGenerationJob,
 } from '@/lib/inflight-generation-job';
-import { applyInitialArcResult, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DeletedSeriesResultError, type InitialArcResult } from '@/lib/initial-arc-result';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import {
   reduceSeriesReveal,
@@ -330,11 +330,21 @@ export function useAutoTrialGeneration(intentId: string | null): {
         const payload = lastCompleteRef.current;
         const user = useUnfoldStore.getState().user;
         if (payload) {
-          applyInitialArcResult(payload, {
-            user,
-            devotionalLength: intent?.trialDays ?? user?.devotionalLength ?? 3,
-            session: captureSyncSession(),
-          });
+          try {
+            applyInitialArcResult(payload, {
+              user,
+              devotionalLength: intent?.trialDays ?? user?.devotionalLength ?? 3,
+              session: captureSyncSession(),
+            });
+          } catch (err) {
+            if (!(err instanceof DeletedSeriesResultError)) throw err;
+            // The reader deleted this series: its job is done, and nothing is
+            // left to poll or reveal.
+            clearInflightGenerationJob();
+            useUnfoldStore.getState().clearGenerationSession();
+            apply({ type: 'go_to_today' });
+            return;
+          }
         }
         if (intent?.devotionalId) {
           settleLandedAutoTrialSeries(intent, intent.devotionalId);

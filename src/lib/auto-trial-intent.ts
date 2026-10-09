@@ -496,7 +496,15 @@ export function reconcileAutoTrialIntentOnLaunch(i: {
   return applyRevealGuard(action, intent, inflightJob, revealGuardKey);
 }
 
-export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotionalId: string): void {
+/**
+ * `mayTakeToday: false` is the landing's ruling that the series' start is a
+ * guess and a chosen series is held: the trial then never takes Today.
+ */
+export function settleLandedAutoTrialSeries(
+  intent: AutoTrialIntentV1,
+  devotionalId: string,
+  { mayTakeToday = true }: { mayTakeToday?: boolean } = {},
+): void {
   if (devotionalId !== intent.devotionalId) return;
   const store = useUnfoldStore.getState();
   const series = store.devotionals.find((row) => row.id === devotionalId);
@@ -508,7 +516,7 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   // sample's hand-off to a trial that still loses leaves Today empty.
   store.retireOnboardingSamples({ keepId: devotionalId });
   const retired = useUnfoldStore.getState();
-  if (isStrictActiveSeriesWinner(devotionalId, retired.devotionals)) {
+  if (mayTakeToday && isStrictActiveSeriesWinner(devotionalId, retired.devotionals)) {
     store.setCurrentDevotional(devotionalId);
   } else if (retired.currentDevotionalId === devotionalId) {
     useUnfoldStore.setState({ currentDevotionalId: null });

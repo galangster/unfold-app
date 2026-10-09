@@ -458,6 +458,28 @@ describe('applyInitialArcResult', () => {
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(readInflightGenerationJob()).not.toBeNull();
   });
+
+  // 2026-10-09 release audit round 8 review: sync restored a series whose delete lost, and its result was still discarded.
+  it('lands the result of a series sync kept live after a delete here', () => {
+    replaceSyncOutbox([]);
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1', title: 'Restored', totalDays: 3, currentDay: 1, days: [], createdAt: '2026-10-08T08:00:00.000Z',
+        updatedAt: '2026-10-09T10:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: null,
+    });
+    try {
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'devo-1')?.days.map((d) => d.dayNumber)).toEqual([1]);
+      expect(readInflightGenerationJob()).toBeNull();
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
 });
 
 describe('settleInflightInitialArcWatch', () => {
@@ -1008,6 +1030,27 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
       { user, devotionalLength: 3, session: captureSyncSession() },
     );
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('newer-series');
+  });
+
+  // 2026-10-09 release audit round 8 review: the landing held an undated trial back from Today, and the trial step then made it current by its guessed start.
+  it.each([
+    ['empty', null],
+    ['on the held series', 'held-series'],
+  ])('keeps Today %s when an undated trial lands beside a chosen series', (_label, currentDevotionalId) => {
+    seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'held-series', title: 'Held', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-05T08:00:00.000Z',
+        updatedAt: '2026-10-05T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId,
+    });
+    applyInitialArcResult(
+      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(currentDevotionalId);
+    expect(readAutoTrialIntent()?.status).toBe('landed');
   });
 
   // Round 7 again: retiring the current sample handed Today to the trial

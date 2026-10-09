@@ -168,7 +168,9 @@ export function applyInitialArcResult(
 ): AppliedInitialArcResult {
   assertSyncSessionCurrent(session, 'apply initial arc');
   const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
-  if (wasSeriesDeleted(devotionalId)) throw new DeletedSeriesResultError();
+  // A row sync kept past the delete here (the delete lost) is live again.
+  const held = useUnfoldStore.getState().devotionals.find((d) => d.id === devotionalId);
+  if (wasSeriesDeleted(devotionalId, held?.updatedAt)) throw new DeletedSeriesResultError();
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
   const day1 = result.devotionalDay;
@@ -202,6 +204,9 @@ export function applyInitialArcResult(
     studySubject: user?.selectedStudySubject,
   };
 
+  // Set when the undated new series is held back from Today, so the trial
+  // step below does not hand Today to it by its guessed start either.
+  let heldFromToday = false;
   if (existingDevotional) {
     store.addGeneratedDay(devotionalId, day1);
     fillMissingReaderContext(devotionalId, readerContext);
@@ -235,10 +240,10 @@ export function applyInitialArcResult(
     // only when no other chosen, unfinished series is held here, current or
     // not, and its guess ranks nothing.
     const landedState = useUnfoldStore.getState();
-    const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals)
-      || (!serverAnchor && landedState.devotionals.some((d) => (
-        d.id !== devotionalId && !holdsNoChosenSeries(d) && !isSeriesComplete(d)
-      )));
+    heldFromToday = !serverAnchor && landedState.devotionals.some((d) => (
+      d.id !== devotionalId && !holdsNoChosenSeries(d) && !isSeriesComplete(d)
+    ));
+    const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals) || heldFromToday;
     if (keepsPrevious) {
       // The previous series keeps Today only while the server would pick it.
       // Otherwise Today stays empty: another held series can carry a guessed
@@ -253,7 +258,7 @@ export function applyInitialArcResult(
 
   const intent = readAutoTrialIntent();
   if (intent && intent.devotionalId === devotionalId) {
-    settleLandedAutoTrialSeries(intent, devotionalId);
+    settleLandedAutoTrialSeries(intent, devotionalId, { mayTakeToday: !heldFromToday });
   }
 
   if (day1.scriptureReference) {
