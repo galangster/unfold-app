@@ -260,7 +260,7 @@ jest.mock('@/lib/devotional-sync-pull', () => ({
   commitDevotionalPullCursor: jest.fn(),
 }));
 jest.mock('@/lib/devotional-pulled-content', () => ({ applyPulledDevotionalContent: jest.fn() }));
-jest.mock('@/lib/sync-outbox', () => ({ drainSyncOutbox: jest.fn() }));
+jest.mock('@/lib/sync-outbox', () => ({ drainSyncOutbox: jest.fn(), peekSyncOutbox: jest.fn(() => []) }));
 jest.mock('@/lib/bug-logger', () => ({
   logBugEvent: (...args: unknown[]) => mockLogBugEvent(...args),
   logBugError: jest.fn(),

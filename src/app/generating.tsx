@@ -33,7 +33,7 @@ import {
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
-import { applyInitialArcResult, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DeletedSeriesResultError, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
   clearInitialGenerationRequestId,
   ensureInitialGenerationRequestId,
@@ -77,7 +77,7 @@ import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { useRerenderAt } from '@/hooks/useRerenderAt';
-import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { abandonAutoTrialIntentForDeletedSeries, readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { resolveGeneratingCloseCopy, resolveGeneratingGoHomeLabel } from '@/lib/support-clarity';
 import { resolveGeneratingPalette } from '@/lib/generating-palette';
@@ -540,8 +540,8 @@ export default function GeneratingScreen() {
     // Store, scripture bookkeeping, in-flight record and session are landed by
     // the shared helper (Today lands the same job the same way after "Go home").
     let applied;
+    const requestId = answeredRequestIdRef.current;
     try {
-      const requestId = answeredRequestIdRef.current;
       applied = applyInitialArcResult(result, {
         user,
         devotionalLength,
@@ -550,6 +550,16 @@ export default function GeneratingScreen() {
       });
     } catch (err) {
       if (isGenerationSessionInvalidatedError(err)) return;
+      if (err instanceof DeletedSeriesResultError) {
+        // The reader deleted this series: its job is done, as on Today's
+        // watch, and nothing is left to wait for here.
+        clearInflightGenerationJob();
+        if (requestId !== null && requestId === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
+        clearGenerationSession();
+        abandonAutoTrialIntentForDeletedSeries(result.devotionalId ?? '', Date.now());
+        router.replace('/(tabs)/(today)');
+        return;
+      }
       throw err;
     }
     const { devotionalId, seriesTitle, day1 } = applied;
@@ -569,7 +579,7 @@ export default function GeneratingScreen() {
       title: seriesTitle,
       dayTitle: day1.title,
     });
-  }, [user, devotionalLength]);
+  }, [user, devotionalLength, clearGenerationSession, router]);
 
   // ========== POLLING LOGIC ==========
 

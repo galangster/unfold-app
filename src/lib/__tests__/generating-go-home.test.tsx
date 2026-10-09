@@ -175,6 +175,7 @@ import {
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
 import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '../deleted-series';
 import { mmkvStorage } from '../mmkv-storage';
 import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordReplacedSeries } from '../series-replacement';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
@@ -1143,5 +1144,120 @@ describe('a series the sync pull landed before /generating resumed its job', () 
       pathname: '/(tabs)/(today)/reading',
       params: { devotionalId: 'devo-1' },
     });
+  });
+});
+
+describe('a finished job for a series deleted here', () => {
+  const deletedResult = (devotionalId: string) => ({
+    status: 'complete',
+    result: { devotionalId, seriesTitle: 'Deleted', totalDays: 3, devotionalDay: { dayNumber: 1, title: 'Day one' } },
+  });
+
+  async function settlePoll() {
+    await act(async () => { jest.advanceTimersByTime(3_000); });
+    await flush();
+  }
+
+  // 2026-10-09 release audit round 8 review: the result was refused after the poll stopped, so the screen kept showing generation in progress.
+  it('retires the job and its request and opens Today', async () => {
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-1'));
+    try {
+      const tree = await renderScreen();
+      mounted.push(tree);
+      await settlePoll();
+
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+      expect(readInflightGenerationJob()).toBeNull();
+      expect(readInitialGenerationRequestId()).toBeNull();
+      expect(useUnfoldStore.getState().generationSession.status).toBe('idle');
+      expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-1')).toBe(false);
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
+  // 2026-10-09 release audit round 8 review: the trial's refused result read as a lost connection, so the reveal kept polling a finished job.
+  it('retires a trial job and opens Today', async () => {
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
+    writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+      generationSession: { status: 'running', devotionalId: 'devo-trial', totalDays: 3, generatedDayNumbers: [] },
+    });
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-trial', '2026-10-09T09:00:00.000Z');
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-trial'));
+    try {
+      const tree = await renderScreen();
+      mounted.push(tree);
+      await settlePoll();
+
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+      expect(readInflightGenerationJob()).toBeNull();
+      expect(useUnfoldStore.getState().generationSession.status).toBe('idle');
+      expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(false);
+      // Round 8 review again: a submitted intent reopened /generating on the deleted job at the next launch.
+      expect(readAutoTrialIntent()).toMatchObject({ status: 'abandoned', abandonReason: 'series_deleted' });
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
+  // 2026-10-09 release audit round 8 review: the trial hook settled the trial
+  // a second time without the undated guard and handed it Today.
+  it('keeps an undated trial off Today beside a chosen series the phone holds', async () => {
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
+    writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+      devotionals: [{
+        id: 'held-series', title: 'Held', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-05T08:00:00.000Z',
+        updatedAt: '2026-10-05T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'held-series',
+      generationSession: { status: 'running', devotionalId: 'devo-trial', totalDays: 3, generatedDayNumbers: [] },
+    });
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-trial'));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settlePoll();
+
+    expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(true);
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-trial');
   });
 });

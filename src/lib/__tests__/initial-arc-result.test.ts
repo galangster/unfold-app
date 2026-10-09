@@ -61,7 +61,8 @@ import { captureSyncSession } from '../generation-session';
 import { mmkvStorage } from '../mmkv-storage';
 import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
 import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
-import { bindReplacementSeries, readReplacedSeries, readReplacedSeriesState, recordReplacedSeries } from '../series-replacement';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '../deleted-series';
+import { bindReplacementSeries, clearReplacedSeries, readReplacedSeries, readReplacedSeriesState, recordReplacedSeries } from '../series-replacement';
 import { clearInitialGenerationRequestId, ensureInitialGenerationRequestId, readInitialGenerationRequestId } from '../initial-generation-request';
 
 const NOW = 1_800_000_000_000;
@@ -310,6 +311,36 @@ describe('applyInitialArcResult', () => {
       expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
     });
 
+    // 2026-10-09 release audit round 8: with Today empty, an older result
+    // without server dates took Today from a newer live series sync brought.
+    it('leaves Today empty when a result without server dates lands beside a live series', () => {
+      const newer = replaced({ id: 'newer-series', title: 'Newer', createdAt: '2026-10-05T08:00:00.000Z' });
+      useUnfoldStore.setState({ devotionals: [newer], currentDevotionalId: null });
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.map((d) => d.id)).toContain('devo-1');
+      expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    });
+
+    // 2026-10-09 release audit round 8: after Start over, the abandoned
+    // attempt's late result ended the series while the new answers' request
+    // was still on its way.
+    it('leaves the replaced series to the new answers while their request is on its way', () => {
+      useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', '');
+      bindForStoredRequest('devo-1');
+      clearInitialGenerationRequestId();
+      ensureInitialGenerationRequestId(() => 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      try {
+        expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeFalsy();
+        expect(readReplacedSeries()).toBe('old-series');
+      } finally {
+        clearReplacedSeries();
+      }
+    });
+
     it('keeps Today on a chosen series when a result without server dates lands', () => {
       useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
       applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
@@ -426,6 +457,28 @@ describe('applyInitialArcResult', () => {
     );
     expect(useUnfoldStore.getState().devotionals).toHaveLength(0);
     expect(readInflightGenerationJob()).not.toBeNull();
+  });
+
+  // 2026-10-09 release audit round 8 review: sync restored a series whose delete lost, and its result was still discarded.
+  it('lands the result of a series sync kept live after a delete here', () => {
+    replaceSyncOutbox([]);
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1', title: 'Restored', totalDays: 3, currentDay: 1, days: [], createdAt: '2026-10-08T08:00:00.000Z',
+        updatedAt: '2026-10-09T10:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: null,
+    });
+    try {
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'devo-1')?.days.map((d) => d.dayNumber)).toEqual([1]);
+      expect(readInflightGenerationJob()).toBeNull();
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
   });
 });
 
@@ -587,6 +640,42 @@ describe('settleInflightInitialArcWatch', () => {
 
     expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
     expect(readReplacedSeries()).toBeNull();
+  });
+
+  // 2026-10-09 release audit round 8: the reader deleted the replacement after
+  // sync brought it, and its late result ended the current series and brought
+  // the deleted one back.
+  it('lands nothing for a series deleted here, and leaves the replaced series alone', () => {
+    replaceSyncOutbox([]);
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+    });
+    recordReplacedSeries('old-series', '');
+    const requestId = ensureInitialGenerationRequestId(() => 'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    bindReplacementSeries('devo-1');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId });
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    try {
+      settleInflightInitialArcWatch(
+        { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+        { jobId: 'job-1', session: captureSyncSession() },
+      );
+
+      const state = useUnfoldStore.getState();
+      expect(state.devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeFalsy();
+      expect(state.devotionals.some((d) => d.id === 'devo-1')).toBe(false);
+      expect(state.currentDevotionalId).toBe('old-series');
+      expect(readInflightGenerationJob()).toBeNull();
+      expect(state.generationSession.status).not.toBe('error');
+    } finally {
+      resetDeletedSeriesForTesting();
+      clearReplacedSeries();
+    }
   });
 
   it('keeps the record and fails the session when the server could not be reached', () => {
@@ -943,6 +1032,27 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('newer-series');
   });
 
+  // 2026-10-09 release audit round 8 review: the landing held an undated trial back from Today, and the trial step then made it current by its guessed start.
+  it.each([
+    ['empty', null],
+    ['on the held series', 'held-series'],
+  ])('keeps Today %s when an undated trial lands beside a chosen series', (_label, currentDevotionalId) => {
+    seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'held-series', title: 'Held', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-05T08:00:00.000Z',
+        updatedAt: '2026-10-05T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId,
+    });
+    applyInitialArcResult(
+      { ...result, arc: { ...result.arc, seriesKind: 'auto_trial' } },
+      { user, devotionalLength: 3, session: captureSyncSession() },
+    );
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(currentDevotionalId);
+    expect(readAutoTrialIntent()?.status).toBe('landed');
+  });
+
   // Round 7 again: retiring the current sample handed Today to the trial
   // before the winner check ran.
   it('leaves Today empty when an older trial retires the current sample beside a newer live series', () => {
@@ -986,6 +1096,23 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     settleLandedAutoTrialSeries(intent, 'devo-1');
 
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+  });
+
+  // 2026-10-09 release audit round 8 review: a deleted trial's intent stayed
+  // submitted, so each launch reopened /generating on the deleted job.
+  it('abandons a pending trial intent whose series was deleted here when Today\'s watch lands it', () => {
+    seedSubmittedIntent();
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    try {
+      settleInflightInitialArcWatch(
+        { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+        { jobId: 'job-1', session: captureSyncSession() },
+      );
+      expect(readAutoTrialIntent()).toMatchObject({ status: 'abandoned', abandonReason: 'series_deleted' });
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
   });
 
   it('settles the matching id in the else branch', () => {

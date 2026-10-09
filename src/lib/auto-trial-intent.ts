@@ -35,7 +35,8 @@ export type AutoTrialAbandonReason =
   | 'identity_changed'
   | 'user_setup_fallback'
   | 'user_left_after_failure'
-  | 'superseded_by_user_series';
+  | 'superseded_by_user_series'
+  | 'series_deleted';
 
 export interface AutoTrialIntentV1 {
   version: 1;
@@ -123,6 +124,7 @@ const ABANDON_REASONS = new Set<AutoTrialAbandonReason>([
   'user_setup_fallback',
   'user_left_after_failure',
   'superseded_by_user_series',
+  'series_deleted',
 ]);
 
 const ALLOWED_TRANSITIONS = new Set([
@@ -496,7 +498,27 @@ export function reconcileAutoTrialIntentOnLaunch(i: {
   return applyRevealGuard(action, intent, inflightJob, revealGuardKey);
 }
 
-export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotionalId: string): void {
+/**
+ * `mayTakeToday: false` is the landing's ruling that the series' start is a
+ * guess and a chosen series is held: the trial then never takes Today.
+ */
+const ABANDONABLE_STATUSES = new Set<AutoTrialIntentStatus>(['purchased', 'submitted', 'failed']);
+
+/**
+ * The reader deleted the series a pending trial names. Its job is done, so
+ * the intent ends here and a later launch does not reopen /generating for it.
+ */
+export function abandonAutoTrialIntentForDeletedSeries(devotionalId: string, nowMs: number): void {
+  const current = readAutoTrialIntent();
+  if (!current || current.devotionalId !== devotionalId || !ABANDONABLE_STATUSES.has(current.status)) return;
+  transitionAutoTrialIntent('abandoned', { abandonReason: 'series_deleted' }, { nowMs });
+}
+
+export function settleLandedAutoTrialSeries(
+  intent: AutoTrialIntentV1,
+  devotionalId: string,
+  { mayTakeToday = true }: { mayTakeToday?: boolean } = {},
+): void {
   if (devotionalId !== intent.devotionalId) return;
   const store = useUnfoldStore.getState();
   const series = store.devotionals.find((row) => row.id === devotionalId);
@@ -508,7 +530,7 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   // sample's hand-off to a trial that still loses leaves Today empty.
   store.retireOnboardingSamples({ keepId: devotionalId });
   const retired = useUnfoldStore.getState();
-  if (isStrictActiveSeriesWinner(devotionalId, retired.devotionals)) {
+  if (mayTakeToday && isStrictActiveSeriesWinner(devotionalId, retired.devotionals)) {
     store.setCurrentDevotional(devotionalId);
   } else if (retired.currentDevotionalId === devotionalId) {
     useUnfoldStore.setState({ currentDevotionalId: null });
