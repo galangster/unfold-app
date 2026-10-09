@@ -60,6 +60,10 @@ function mergeQuestionResponses(
 ): JournalEntry['questionResponses'] {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
+  // The newer list already holds every older response: keep it as it is.
+  if (existing.every((qr) => incoming.some((candidate) => (
+    candidate.question === qr.question && mergeText(qr.response, candidate.response) === candidate.response
+  )))) return incoming;
   const merged = existing.map((qr) => ({ ...qr }));
   for (const candidate of incoming) {
     const match = merged.find((qr) => qr.question === candidate.question);
@@ -69,15 +73,23 @@ function mergeQuestionResponses(
   return merged;
 }
 
+function samePrayer(left: PrayerRequest, right: PrayerRequest): boolean {
+  return left.id === right.id || left.text.trim() === right.text.trim();
+}
+
 function mergePrayerRequests(
   existing: PrayerRequest[] | undefined,
   incoming: PrayerRequest[] | undefined,
 ): PrayerRequest[] | undefined {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
-  const merged = [...existing];
+  // The newer list already holds every older prayer: keep it as it is.
+  if (existing.every((prayer) => incoming.some((candidate) => samePrayer(prayer, candidate)))) return incoming;
+  // A prayer in both keeps the newer entry's copy, so an answer marked later
+  // stays marked.
+  const merged = existing.map((prayer) => incoming.find((candidate) => samePrayer(prayer, candidate)) ?? prayer);
   for (const prayer of incoming) {
-    if (merged.some((p) => p.id === prayer.id || p.text.trim() === prayer.text.trim())) continue;
+    if (merged.some((p) => samePrayer(p, prayer))) continue;
     merged.push(prayer);
   }
   return merged;
@@ -89,6 +101,8 @@ function mergeStringList(
 ): string[] | undefined {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
+  // The newer list already holds every older value: keep it, order included.
+  if (existing.every((value) => incoming.includes(value))) return incoming;
   const merged = [...existing];
   for (const value of incoming) if (!merged.includes(value)) merged.push(value);
   return merged;

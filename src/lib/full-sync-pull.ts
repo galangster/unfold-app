@@ -106,6 +106,26 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
   return pending;
 }
 
+function pendingDeletedRecords(): Set<string> {
+  return new Set(
+    peekSyncOutbox().filter((change) => change.deleted).map((change) => pendingKey(change.table, change.id)),
+  );
+}
+
+/**
+ * The clock for a merged entry queued as a repair: later than now, than the
+ * entries it folds, and than a change already queued for it. Older than any
+ * of them, the repair would lose to an unmerged snapshot in the queue or to
+ * the server's row, even after the device clock moved back.
+ */
+function repairClock(now: string, folded: string | undefined, pending: string | undefined): string {
+  const after = (value: string | undefined) => {
+    const ms = value ? Date.parse(value) : Number.NaN;
+    return Number.isFinite(ms) ? new Date(ms + 1).toISOString() : now;
+  };
+  return [now, after(folded), after(pending)].reduce((latest, value) => (value > latest ? value : latest));
+}
+
 function pendingDevotionalArchivedStateAtById(): Map<string, string> {
   const pending = new Map<string, string>();
   for (const change of peekSyncOutbox()) {
@@ -698,6 +718,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByChapter = pendingBibleReadingByChapter();
   const pendingLifecycleById = pendingDevotionalArchivedStateAtById();
   const collapsedAt = new Date().toISOString();
+  const pendingDeletes = pendingDeletedRecords();
   let collapsedJournalEntries: JournalEntry[] = [];
   useUnfoldStore.setState((state) => {
     const previousDevotionals = state.devotionals;
@@ -795,8 +816,20 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         );
         const collapsed = collapseJournalEntryDays(pulled);
         const changed = journalEntriesChangedByCollapse(pulled, collapsed);
+        // A delete the reader asked for stays queued: a repair would replace it.
+        for (const id of changed) {
+          const entry = collapsed.find((item) => item.id === id);
+          if (pendingDeletes.has(pendingKey('journal_entries', id))
+            || (entry && pendingDeletes.has(pendingKey('devotionals', entry.devotionalId)))) {
+            changed.delete(id);
+          }
+        }
         if (changed.size === 0) return collapsed;
-        const stamped = collapsed.map((entry) => (changed.has(entry.id) ? { ...entry, updatedAt: collapsedAt } : entry));
+        const stamped = collapsed.map((entry) => (
+          changed.has(entry.id)
+            ? { ...entry, updatedAt: repairClock(collapsedAt, entry.updatedAt, pendingByRecord.get(pendingKey('journal_entries', entry.id))) }
+            : entry
+        ));
         collapsedJournalEntries = stamped.filter((entry) => changed.has(entry.id));
         return stamped;
       })(),
@@ -848,7 +881,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   // before the merged row is safely stored could lose its text.
   if (collapsedJournalEntries.length > 0) {
     enqueueSyncChanges(collapsedJournalEntries.map((entry) => buildPersonalDataSyncChange(
-      'journal_entries', entry.id, journalEntrySyncData(entry), collapsedAt,
+      'journal_entries', entry.id, journalEntrySyncData(entry), entry.updatedAt ?? collapsedAt,
     )));
   }
 }

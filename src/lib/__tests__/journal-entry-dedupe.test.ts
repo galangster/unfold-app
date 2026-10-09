@@ -193,6 +193,40 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].journalMode).toBe('soap');
   });
 
+  it("keeps the newer entry's answer on a prayer both entries hold", () => {
+    const merged = mergeJournalEntryDuplicates([
+      entry({
+        id: 'a',
+        updatedAt: '2026-09-01T10:00:00.000Z',
+        prayerRequests: [
+          { id: 'p1', text: 'for my family', isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' },
+          { id: 'p3', text: 'only on A', isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' },
+        ],
+      }),
+      entry({
+        id: 'b',
+        updatedAt: '2026-09-02T10:00:00.000Z',
+        prayerRequests: [
+          { id: 'p1', text: 'for my family', isAnswered: true, answeredAt: '2026-09-02T09:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' },
+        ],
+      }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([
+      expect.objectContaining({ id: 'p1', isAnswered: true, answeredAt: '2026-09-02T09:00:00.000Z' }),
+      expect.objectContaining({ id: 'p3', isAnswered: false }),
+    ]);
+  });
+
+  it('keeps the newer list in its own order when it already holds every older value', () => {
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'a', updatedAt: '2026-09-01T10:00:00.000Z', deeperQuestions: ['B?'] }),
+      entry({ id: 'b', updatedAt: '2026-09-02T10:00:00.000Z', deeperQuestions: ['A?', 'B?'] }),
+    ]);
+
+    expect(merged[0].deeperQuestions).toEqual(['A?', 'B?']);
+  });
+
   it('keeps entries for different days separate', () => {
     const merged = mergeJournalEntryDuplicates([
       entry({ id: 'a', dayNumber: 1, content: 'day one' }),
