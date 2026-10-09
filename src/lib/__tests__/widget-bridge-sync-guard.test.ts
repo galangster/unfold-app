@@ -36,6 +36,8 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 // devotional readAt changes without depending on the real module.
 jest.mock('@/lib/widget-timeline', () => ({
   getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
+  getTodayReadingProps: jest.requireActual('@/lib/widget-timeline').getTodayReadingProps,
+  getNextMidnight: jest.requireActual('@/lib/widget-timeline').getNextMidnight,
   buildWidgetTimelineEntries: jest.fn(() => [{ date: new Date(), props: {} }]),
   getWeeklyProgress: (
     devotionals: { days?: { readAt?: string }[] }[],
@@ -306,5 +308,75 @@ describe('syncWidgets fingerprint guard (RS10-1)', () => {
 
     // Only the first fires: 4 widgets × 1 call = 4
     expect(totalUpdateTimelineCalls()).toBe(4);
+  });
+});
+
+describe('syncWidgets follows the day Today shows', () => {
+  const readThisMorning = new Date(2026, 9, 7, 8, 0).toISOString();
+  // Day 5 was read this morning, so advanceDay moved currentDay to Day 6.
+  const series = ({ day5Title = 'Title 5', withDay6 = false } = {}) => ({
+    id: 'd1',
+    currentDay: 6,
+    totalDays: 7,
+    days: [
+      ...[1, 2, 3, 4, 5].map((n) => ({
+        dayNumber: n,
+        title: n === 5 ? day5Title : `Title ${n}`,
+        scriptureReference: `Psalm ${n}:1`,
+        scriptureText: `Verse ${n}.`,
+        quotableLine: `Line ${n}`,
+        isRead: true,
+        readAt: n === 5 ? readThisMorning : new Date(2026, 9, 2 + n, 8, 0).toISOString(),
+      })),
+      ...(withDay6
+        ? [{ dayNumber: 6, title: 'Title 6', scriptureReference: 'Psalm 6:1', scriptureText: 'Verse 6.', quotableLine: 'Line 6', isRead: false }]
+        : []),
+    ],
+  });
+  function showSeries(devotional: ReturnType<typeof series>) {
+    mockStoreState.streakLastReadDate = readThisMorning;
+    mockStoreState.devotionals = [devotional];
+    mockStoreState.getCurrentDevotional = () => devotional;
+  }
+
+  beforeEach(() => jest.useFakeTimers({ now: new Date(2026, 9, 7, 14, 0) }));
+  afterEach(() => jest.useRealTimers());
+
+  it('pushes the day read today, then pushes once more when the next day lands', () => {
+    const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
+      buildWidgetTimelineEntries: jest.Mock;
+    };
+    buildWidgetTimelineEntries.mockImplementation(
+      jest.requireActual('@/lib/widget-timeline').buildWidgetTimelineEntries
+    );
+    try {
+      const todayWidget = (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline;
+      const titles = (call: number) =>
+        (todayWidget.mock.calls[call][0] as { props: { dayTitle: string } }[]).map((e) => e.props.dayTitle);
+
+      showSeries(series());
+      syncWidgets();
+      syncWidgets();
+      expect(todayWidget).toHaveBeenCalledTimes(1);
+      expect(titles(0)).toEqual(['Title 5', 'Day 6 isn’t available yet']);
+
+      // The focus pull or the day watch lands Day 6 on the device.
+      showSeries(series({ withDay6: true }));
+      syncWidgets();
+      expect(todayWidget).toHaveBeenCalledTimes(2);
+      expect(titles(1)).toEqual(['Title 5', 'Title 6']);
+      expect(todayWidget.mock.calls[1][0][0].props.nextDayTitle).toBe('Title 6');
+    } finally {
+      buildWidgetTimelineEntries.mockImplementation(() => [{ date: new Date(), props: {} }]);
+    }
+  });
+
+  it('pushes again when the day read today changes, though currentDay did not', () => {
+    showSeries(series());
+    syncWidgets();
+
+    showSeries(series({ day5Title: 'Title 5, as the server wrote it' }));
+    syncWidgets();
+    expect(totalUpdateTimelineCalls()).toBe(8);
   });
 });

@@ -34,9 +34,10 @@ import { useUnfoldStore } from '../store';
 import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
 import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
-import { useCompanionChatStore } from '../companion-chat-store';
+import { flushCompanionChatPersist, useCompanionChatStore } from '../companion-chat-store';
 import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 import { mmkvStorage } from '../mmkv-storage';
+import { beginLocalResetSession, endLocalResetSession, SyncSessionInvalidatedError } from '../sync-session-fence';
 import type { SyncPushChange, SyncTable } from '../sync-types';
 
 const mockFetch = jest.fn();
@@ -258,6 +259,79 @@ describe('full user-data sync', () => {
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
   });
 
+
+  it('saves the cursor only after the pulled rows are written to disk', async () => {
+    serveSync({
+      pull: () => ({
+        timestamp: '2026-07-01T12:00:00.000Z',
+        changes: recordsFromChanges([{
+          table: 'bookmarks',
+          id: 'bookmark-from-another-device',
+          clientUpdatedAt: '2026-07-01T11:30:00.000Z',
+          data: { devotionalId: 'dev-1', dayNumber: 2, createdAt: '2026-07-01T11:30:00.000Z' },
+          deleted: false,
+        }]),
+      }),
+    });
+    jest.mocked(mmkvStorage.setItem).mockClear();
+
+    await pullAllUserData();
+
+    const keys = jest.mocked(mmkvStorage.setItem).mock.calls.map(([key]) => key);
+    const storeWrite = keys.indexOf('unfold-storage');
+    expect(storeWrite).toBeGreaterThanOrEqual(0);
+    expect(storeWrite).toBeLessThan(keys.indexOf(LAST_PULLED_AT_KEY));
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
+  });
+
+  it('saves the cursor only after pulled Companion rows are written to disk', async () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-pulled',
+        messages: [{ id: 'msg-pulled', role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: 'Open',
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    flushCompanionChatPersist();
+    const deletedAt = '2026-07-01T11:30:00.000Z';
+    serveSync({
+      pull: () => ({
+        timestamp: '2026-07-01T12:00:00.000Z',
+        changes: {
+          companion_messages: [{ id: 'msg-pulled', data: { conversationId: 'conv-pulled', clientUpdatedAt: deletedAt }, updatedAt: deletedAt, deleted: true }],
+        },
+      }),
+    });
+    jest.mocked(mmkvStorage.setItem).mockClear();
+
+    await pullAllUserData();
+
+    const keys = jest.mocked(mmkvStorage.setItem).mock.calls.map(([key]) => key);
+    const companionWrite = keys.indexOf('unfold-companion-chat');
+    expect(companionWrite).toBeGreaterThanOrEqual(0);
+    expect(companionWrite).toBeLessThan(keys.indexOf(LAST_PULLED_AT_KEY));
+  });
+
+  it('keeps the old cursor when a reset begins while the pulled rows are written', async () => {
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-07-01T11:00:00.000Z');
+    serveSync({ pull: () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }) });
+    const write = jest.mocked(mmkvStorage.setItem).getMockImplementation()!;
+    let resetToken: number | undefined;
+    jest.mocked(mmkvStorage.setItem).mockImplementation((key: string, value: string) => {
+      if (key === 'unfold-storage' && resetToken === undefined) resetToken = beginLocalResetSession();
+      return write(key, value);
+    });
+
+    await expect(pullAllUserData()).rejects.toBeInstanceOf(SyncSessionInvalidatedError);
+    expect(resetToken).toBeDefined();
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T11:00:00.000Z');
+    endLocalResetSession(resetToken!);
+  });
 
   it('rejects a pulled tombstone while a fresh local change is still un-pushed (WR-25 guard)', async () => {
     const store = useUnfoldStore.getState();
