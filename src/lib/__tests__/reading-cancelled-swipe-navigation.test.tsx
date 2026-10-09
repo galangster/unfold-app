@@ -2071,6 +2071,25 @@ describe('reader swipe cancellation', () => {
     act(() => tree!.unmount());
   });
 
+  // What the server holds for a series this device lacks: Day 1.
+  function pulledMissingSeries(devotionalId: string) {
+    const startedAt = '2026-09-14T17:00:00.000Z';
+    return {
+      devotional: {
+        id: devotionalId,
+        title: 'A series from the server',
+        totalDays: 7,
+        currentDay: 1,
+        createdAt: startedAt,
+        seriesStartDate: startedAt,
+        updatedAt: startedAt,
+        generationMode: 'progressive' as const,
+      },
+      days: [makeDay(1, { id: canonicalGeneratedDayId(devotionalId, 1), devotionalId, isRead: false })],
+      timestamp: TYPING_AT,
+    };
+  }
+
   async function renderMissingSeries(devotionalId: string) {
     seedReader();
     useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
@@ -2114,7 +2133,7 @@ describe('reader swipe cancellation', () => {
     act(() => tree.unmount());
   });
 
-  it('asks again after a failed pull when the reader comes back, not while it stays open', async () => {
+  it('asks again after a failed pull when the reader comes back, not while it stays open, and shows what it brings', async () => {
     mockPullDevotionalContent.mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }));
     const tree = await renderMissingSeries('missing-5xx');
     expect(JSON.stringify(tree.toJSON())).toContain('This series couldn’t load.');
@@ -2133,12 +2152,19 @@ describe('reader swipe cancellation', () => {
     expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
 
     mockFocused = true;
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledMissingSeries('missing-5xx'));
     await act(async () => {
       tree.update(<ReadingScreen />);
       await flushEffects();
     });
     expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
     expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-5xx');
+
+    // The retried pull brings the series: its reading replaces the error.
+    expect(tree.root.findAllByProps({ testID: 'devotional-reader-screen' }).length).toBeGreaterThan(0);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('This series couldn’t load.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' })).toHaveLength(0);
     act(() => tree.unmount());
   });
 });
