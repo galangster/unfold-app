@@ -21,23 +21,13 @@ import * as Haptics from 'expo-haptics';
 import { CaretUp } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { flushUnfoldStorePersistAsync, updateSyncedDevotionals, useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { useUIState } from '@/lib/ui-state';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
 import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
-import {
-  canRevealActivateSeries,
-  missingRevealSeriesId,
-  resolveRevealOutcome,
-  REVEAL_SERIES_PULL_TIMEOUT_MS,
-} from '@/lib/reveal-params';
-import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
-import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
-import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
-import type { ActiveSeriesCandidate } from '@/lib/devotional-active-selection';
-import { mergeDevotionalLifecycle } from '@/lib/devotional-lifecycle';
+import { canRevealActivateSeries, resolveRevealOutcome } from '@/lib/reveal-params';
 import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
 import { Typography } from '@/constants/typography';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -50,59 +40,6 @@ const COMMIT_THRESHOLD = -120;
 
 // Spring config — critically-damped (damping 30, stiffness 200, mass 1 = slightly overdamped)
 const CURTAIN_SPRING = { damping: 30, stiffness: 200, mass: 1 };
-
-/**
- * Pull the series a ready push names onto this device. A failure leaves the
- * store as it was, and the reveal then sends the reader to Today. Returns the
- * series rows the pull saw, which can include series this device lacks.
- */
-async function pullRevealSeries(
-  devotionalId: string,
-  updateDevotionalDays: Parameters<typeof applyPulledDevotionalContent>[0]['updateDevotionalDays'],
-): Promise<readonly ActiveSeriesCandidate[] | null> {
-  const session = captureSyncSession();
-  let pulledSeries: readonly ActiveSeriesCandidate[] | null = null;
-  try {
-    const pulled = await pullDevotionalContent(devotionalId, { timeoutMs: REVEAL_SERIES_PULL_TIMEOUT_MS });
-    if (!isSyncSessionCurrent(session)) return null;
-    // Kept even if the save below fails: the series is in the store by then,
-    // and the winner check still needs every row the pull saw.
-    pulledSeries = pulled.canonicalSeries ?? [];
-    applyPulledDevotionalContent({
-      devotionalId,
-      pulled,
-      updateDevotionalDays,
-      updateDevotionals: updateSyncedDevotionals,
-    });
-    // The cursor moves only once the rows are on disk, as on Today.
-    await flushUnfoldStorePersistAsync();
-    if (!isSyncSessionCurrent(session)) return null;
-    commitDevotionalPullCursor(pulled);
-  } catch (err) {
-    logger.warn('[Reveal] could not pull the series a ready push names:', err instanceof Error ? err.message : err);
-  }
-  return pulledSeries;
-}
-
-/**
- * The pushed series as the winner check should see it. A pulled row gives the
- * server's mode and creation time: the shell built from a pull is always
- * marked progressive, and a row without a mode is one the server does not
- * select. Pause and resume come from whichever copy is newer, as a sync
- * merges them: a sync can land a newer one after the reveal's pull.
- */
-function revealTargetCandidate(
-  local: ActiveSeriesCandidate | undefined,
-  pulled: ActiveSeriesCandidate | undefined,
-): ActiveSeriesCandidate | undefined {
-  if (!local || !pulled) return pulled ?? local;
-  return {
-    id: local.id,
-    createdAt: pulled.createdAt ?? local.createdAt,
-    generationMode: pulled.generationMode,
-    ...mergeDevotionalLifecycle({ local, incoming: pulled }),
-  };
-}
 
 /**
  * Reveal screen — full-screen overlay shown once per day
@@ -132,7 +69,6 @@ export default function RevealScreen() {
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
-  const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const devotionals = useUnfoldStore((s) => s.devotionals);
 
   // P3-4: params are only trusted once they resolve to a devotional that
@@ -143,11 +79,6 @@ export default function RevealScreen() {
     [devotionalId, dayNumber, devotionals],
   );
   const revealTarget = revealOutcome.kind === 'open' ? revealOutcome.target : null;
-  const missingSeriesId = missingRevealSeriesId({ devotionalId, dayNumber }, devotionals);
-  // The series being pulled, if any. The curtain holds until the pull settles.
-  const [pullingSeriesId, setPullingSeriesId] = useState<string | null>(null);
-  const seriesPullAttemptsRef = useRef(new Set<string>());
-  const pulledSeriesRef = useRef<readonly ActiveSeriesCandidate[]>([]);
 
   const revealedDay = devotionals
     .find((row) => row.id === revealTarget?.devotionalId)?.days
@@ -243,22 +174,9 @@ export default function RevealScreen() {
   // Bail to Today when the params don't resolve (unknown devotional, day out
   // of range, junk) — nothing is written to the store on that path.
   // `devotionals` is a dependency so a late hydration re-evaluates the guard.
-  // A series this device does not hold is pulled once first: the push can
-  // arrive before the series does.
   useEffect(() => {
     if (revealOutcome.kind === 'open' || hasNavigated.current) return;
     if (!useUnfoldStore.persist.hasHydrated()) return;
-    if (pullingSeriesId) return;
-    if (missingSeriesId && !seriesPullAttemptsRef.current.has(missingSeriesId)) {
-      seriesPullAttemptsRef.current.add(missingSeriesId);
-      setPullingSeriesId(missingSeriesId);
-      void pullRevealSeries(missingSeriesId, updateDevotionalDays)
-        .then((pulledSeries) => {
-          if (pulledSeries) pulledSeriesRef.current = pulledSeries;
-        })
-        .finally(() => setPullingSeriesId(null));
-      return;
-    }
     hasNavigated.current = true;
     if (revealOutcome.kind === 'locked') {
       // The push named a day the pacing lock keeps closed until the next local
@@ -270,7 +188,7 @@ export default function RevealScreen() {
       logger.warn('[Reveal] params do not resolve to a local devotional day — redirecting to Today');
     }
     router.replace('/(tabs)/(today)');
-  }, [revealOutcome, devotionals, router, missingSeriesId, pullingSeriesId, updateDevotionalDays]);
+  }, [revealOutcome, devotionals, router]);
 
   const navigateToReading = useCallback(() => {
     if (hasNavigated.current) {
@@ -288,17 +206,7 @@ export default function RevealScreen() {
     // Mark this day as revealed — teaser card won't show again
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
     const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
-    // A pull can show a newer series this device does not hold yet, or a
-    // newer resume of one it holds (applied later, by the full sync). Every
-    // pulled row counts beside the local ones, so only the series the server
-    // would pick becomes current: either copy of a sibling can block it. The
-    // check reads the target's first row, so the merged target goes first.
-    const target = revealTargetCandidate(
-      latestDevotionals.find((row) => row.id === revealTarget.devotionalId),
-      pulledSeriesRef.current.find((row) => row.id === revealTarget.devotionalId),
-    );
-    const candidates = [...(target ? [target] : []), ...latestDevotionals, ...pulledSeriesRef.current];
-    const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
+    const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, latestDevotionals);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);
       setResumeContext({
@@ -390,14 +298,13 @@ export default function RevealScreen() {
         }),
     [navigateToReading, fireApproachHaptic, fireCommitHaptic, didTickApproach, didTickCommit, translateY, screenHeight, reducedMotion],
   );
-  const isPullingSeries = pullingSeriesId !== null;
   const panGesture = useMemo(
-    () => createPanGesture(!contentOverflows && !isPullingSeries),
-    [createPanGesture, contentOverflows, isPullingSeries],
+    () => createPanGesture(!contentOverflows),
+    [createPanGesture, contentOverflows],
   );
   const promptPanGesture = useMemo(
-    () => createPanGesture(contentOverflows && !isPullingSeries),
-    [createPanGesture, contentOverflows, isPullingSeries],
+    () => createPanGesture(contentOverflows),
+    [createPanGesture, contentOverflows],
   );
 
   const curtainStyle = useAnimatedStyle(() => ({
@@ -409,7 +316,7 @@ export default function RevealScreen() {
   // button below, both land here. Mirrors the swipe-commit path (curtain
   // lifts, then navigates) so the two ways in feel like the same action.
   const activateReveal = useCallback(() => {
-    if (hasNavigated.current || isPullingSeries) return;
+    if (hasNavigated.current) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     AccessibilityInfo.announceForAccessibility('Revealing today’s reading');
     if (reducedMotion) {
@@ -421,7 +328,7 @@ export default function RevealScreen() {
         runOnJS(navigateToReading)();
       }
     });
-  }, [reducedMotion, navigateToReading, translateY, screenHeight, isPullingSeries]);
+  }, [reducedMotion, navigateToReading, translateY, screenHeight]);
 
   const onScatterComplete = useCallback(() => {
     onTitleComplete();
