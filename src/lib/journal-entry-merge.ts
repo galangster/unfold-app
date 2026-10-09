@@ -168,6 +168,9 @@ export function rebaseJournalDraft(base: string, merged: string, draft: string):
   if (merged === draft) return draft;
   if (merged === base) return draft;
   if (draft === base) return merged;
+  // The merge already holds the draft's additions, as when another device
+  // saved the same words and more. Rebasing again would repeat them.
+  if (base.trim() && draft.includes(base) && merged.includes(draft)) return merged;
   const at = base.trim() ? merged.indexOf(base) : -1;
   if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
   if (!merged.trim()) return draft;

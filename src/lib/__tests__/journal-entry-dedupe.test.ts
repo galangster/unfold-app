@@ -422,6 +422,14 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine.')).toBe('Mine.\n\nTheirs.');
   });
 
+  it('takes the merged text when it already holds the draft, without repeating words', () => {
+    expect(rebaseJournalDraft('Hope', 'Hope grows daily', 'Hope grows')).toBe('Hope grows daily');
+  });
+
+  it('still keeps a deletion when the merge added words after it', () => {
+    expect(rebaseJournalDraft('Hope is', 'Hope is here today', 'Hope')).toBe('Hope here today');
+  });
+
   it('puts the edits where the base sat inside the merged text', () => {
     expect(rebaseJournalDraft('Mine.', 'Theirs.\n\nMine.', 'Mine, edited.')).toBe('Theirs.\n\nMine, edited.');
     expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine, edited.')).toBe('Mine, edited.\n\nTheirs.');
