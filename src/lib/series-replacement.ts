@@ -34,9 +34,11 @@ export const REPLACED_SERIES_STATE_KEY = 'replaced-series-state-v1';
  * replaced series. An older job that lands meanwhile (a notification for an
  * earlier attempt) leaves it alone.
  *
- * The binding holds for that request only. Start over, a failed job's verdict
- * and a dismissed failure each retire the request, and the next request binds
- * the series it generates.
+ * The binding holds while that request is on its way: stored, or answered by
+ * the live in-flight job. Dismissing a lost connection on Today retires the
+ * request but keeps that job, and its result still ends the replaced series.
+ * Start over supersedes the job, and a failed job's verdict clears it with the
+ * request, so the next request binds the series it generates.
  */
 export const REPLACEMENT_SERIES_KEY = 'replaced-series-replacement-v1';
 
@@ -59,7 +61,7 @@ export function bindReplacementSeries(replacementId: string): void {
   mmkvStorage.setItem(REPLACEMENT_SERIES_KEY, JSON.stringify(binding));
 }
 
-/** The bound replacement, while the request it was bound for is still the stored one. */
+/** The bound replacement, while the request it was bound for is on its way. */
 export function readReplacementSeries(): string | null {
   const stored = mmkvStorage.getItem(REPLACEMENT_SERIES_KEY) as string | null;
   if (!stored) return null;
@@ -69,8 +71,15 @@ export function readReplacementSeries(): string | null {
   } catch {
     return null;
   }
-  const requestId = readInitialGenerationRequestId();
-  return requestId && binding.requestId === requestId && binding.devotionalId ? binding.devotionalId : null;
+  return binding.requestId && binding.devotionalId && isPendingRequest(binding.requestId) ? binding.devotionalId : null;
+}
+
+/**
+ * The request is still on its way: stored, or answered by the in-flight job.
+ * The record Start over leaves for an abandoned job carries no request.
+ */
+function isPendingRequest(requestId: string): boolean {
+  return requestId === readInitialGenerationRequestId() || readInflightGenerationJob()?.requestId === requestId;
 }
 
 /** The lifecycle clock recorded with the choice, or null for an older build's record. */

@@ -61,7 +61,7 @@ import { mmkvStorage } from '../mmkv-storage';
 import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
 import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
 import { bindReplacementSeries, readReplacedSeries, readReplacedSeriesState, recordReplacedSeries } from '../series-replacement';
-import { ensureInitialGenerationRequestId, readInitialGenerationRequestId } from '../initial-generation-request';
+import { clearInitialGenerationRequestId, ensureInitialGenerationRequestId, readInitialGenerationRequestId } from '../initial-generation-request';
 
 const NOW = 1_800_000_000_000;
 
@@ -477,6 +477,33 @@ describe('settleInflightInitialArcWatch', () => {
     ensureInitialGenerationRequestId(() => '66666666-6666-4666-8666-666666666666');
     bindForStoredRequest('devo-1');
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
+  // 2026-10-09 release audit round 5: Dismiss after a lost connection retires
+  // the request but keeps the job, and that job's result must still end the
+  // series it replaces.
+  it('ends a waiting replaced series with a job that outlived a dismissed request', () => {
+    replaceSyncOutbox([]);
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+    });
+    recordReplacedSeries('old-series', '');
+    const requestId = ensureInitialGenerationRequestId(() => '77777777-7777-4777-8777-777777777777');
+    bindReplacementSeries('devo-1');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId });
+    clearInitialGenerationRequestId();
+
+    settleInflightInitialArcWatch(
+      { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
 
     expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
     expect(readReplacedSeries()).toBeNull();

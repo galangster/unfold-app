@@ -820,12 +820,22 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       });
     }
 
+    // Each held series ranks by the creation time the server returned for it:
+    // a shell a pull built without series dates carries this phone's guess.
+    const pulledCreation = incomingDevotionals.flatMap((record) => {
+      const createdAt = asString(asRecord(record.data).createdAt);
+      return !record.deleted && createdAt && devotionals.some((item) => item.id === record.id)
+        ? [{ id: record.id, createdAt }]
+        : [];
+    });
+
     return {
       devotionals,
       currentDevotionalId: selectSyncedCurrentDevotionalId({
         previousCurrentId: state.currentDevotionalId,
         previous: previousDevotionals,
         next: devotionals,
+        pulled: pulledCreation,
       }),
       // Journal rows the server minted before entry ids were day-derived still
       // carry random ids, so upserting them by id alone re-creates exactly the
