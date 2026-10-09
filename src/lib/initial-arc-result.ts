@@ -16,7 +16,7 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { bindReplacementSeries, clearReplacedSeries, readReplacedSeries, readReplacedSeriesChosenAt, readReplacedSeriesState, readReplacementSeries } from '@/lib/series-replacement';
+import { bindReplacementSeries, clearReplacedSeries, readBoundReplacementSeries, readReplacedSeries, readReplacedSeriesChosenAt, readReplacedSeriesState } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -165,7 +165,7 @@ export function applyInitialArcResult(
   // already landed it, otherwise to the shell added below.
   // Only the series the reader started in its place ends it.
   if (answersCurrentRequest) bindReplacementSeries(devotionalId);
-  const replacedId = readReplacedSeries() && readReplacementSeries() === devotionalId ? readReplacedSeries() : null;
+  const replacedId = readReplacedSeries() && readBoundReplacementSeries() === devotionalId ? readReplacedSeries() : null;
   if (replacedId && replacedId !== devotionalId && replacementStillEnds(replacedId, devotionalId)) {
     // Dated from the reader's choice, so a resume made elsewhere after it
     // still wins on the server. The archive clock still moves past the one

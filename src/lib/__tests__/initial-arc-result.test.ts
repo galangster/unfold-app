@@ -562,6 +562,33 @@ describe('settleInflightInitialArcWatch', () => {
     expect(readReplacedSeries()).toBeNull();
   });
 
+  // 2026-10-09 release audit sweep: a failed replacement's verdict retired its
+  // request, and a Try again from the failure push then landed the same
+  // series without ending the one it replaces.
+  it('ends a waiting replaced series when its bound series lands after its request retired', () => {
+    replaceSyncOutbox([]);
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+    });
+    recordReplacedSeries('old-series', '');
+    ensureInitialGenerationRequestId(() => '88888888-8888-4888-8888-888888888888');
+    bindReplacementSeries('devo-1');
+    clearInitialGenerationRequestId();
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000 });
+
+    settleInflightInitialArcWatch(
+      { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+      { jobId: 'job-1', session: captureSyncSession() },
+    );
+
+    expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
   it('keeps the record and fails the session when the server could not be reached', () => {
     settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1', session: captureSyncSession() });
 

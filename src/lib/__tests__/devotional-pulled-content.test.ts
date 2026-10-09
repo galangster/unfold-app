@@ -1,3 +1,5 @@
+jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPull: jest.fn(async () => undefined) }));
+
 import {
   applyPulledDevotionalContent,
   applyPulledDevotionalContentToDevotionals,
@@ -76,6 +78,26 @@ describe('pulled devotional content application', () => {
 
     expect(updateDevotionals).not.toHaveBeenCalled();
     expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
+
+  // 2026-10-09 release audit sweep: a phone that stayed open never applied
+  // another device's delete, and its next read revived the series.
+  it('leaves a series another device deleted to the full sync, which applies the delete', () => {
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+    const { triggerUserDataPull } = jest.requireMock('@/lib/full-sync-pull') as { triggerUserDataPull: jest.Mock };
+    triggerUserDataPull.mockClear();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent({ devotional: undefined, days: [], seriesDeleted: true }),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+    expect(triggerUserDataPull).toHaveBeenCalledWith('series-deleted');
   });
 
   // Round 7 again: a delete that lost to a newer server row left the series

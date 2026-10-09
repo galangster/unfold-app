@@ -70,15 +70,27 @@ export function bindReplacementSeries(replacementId: string): void {
 
 /** The bound replacement, while the request it was bound for is on its way. */
 export function readReplacementSeries(): string | null {
+  const binding = readBinding();
+  return binding?.requestId && binding.devotionalId && isPendingRequest(binding.requestId) ? binding.devotionalId : null;
+}
+
+/**
+ * The series the choice is bound to, even after its request retired. Its
+ * result still ends the replaced series: a Try again from a failure push
+ * lands the same series. A new request rebinds, and then only its series does.
+ */
+export function readBoundReplacementSeries(): string | null {
+  return readBinding()?.devotionalId || null;
+}
+
+function readBinding(): Partial<ReplacementBinding> | null {
   const stored = mmkvStorage.getItem(REPLACEMENT_SERIES_KEY) as string | null;
   if (!stored) return null;
-  let binding: Partial<ReplacementBinding>;
   try {
-    binding = JSON.parse(stored) as Partial<ReplacementBinding>;
+    return JSON.parse(stored) as Partial<ReplacementBinding>;
   } catch {
     return null;
   }
-  return binding.requestId && binding.devotionalId && isPendingRequest(binding.requestId) ? binding.devotionalId : null;
 }
 
 /**

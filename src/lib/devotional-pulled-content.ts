@@ -132,6 +132,14 @@ function pulledSeriesBesides(pulled: PulledDevotionalContent, devotionalId: stri
   return pulled.canonicalSeries?.filter((series) => series.id !== devotionalId) ?? [];
 }
 
+function requestFullSyncForDelete(): void {
+  // Loaded only when a delete arrives: full-sync-pull brings the store and the
+  // network stack, which every screen that applies a pull would load too.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pull = require('./full-sync-pull') as typeof import('./full-sync-pull');
+  void pull.triggerUserDataPull('series-deleted');
+}
+
 /** Lifecycle clocks still waiting in the outbox count as local, as in the full sync. */
 function pendingLifecycleClocksById(): Map<string, string> {
   const pending = new Map<string, string>();
@@ -248,6 +256,13 @@ export function applyPulledDevotionalContent({
   ) => void;
 }): void {
   assertBoundPulledSession(pulled);
+  // Another device deleted this series. The full sync applies that delete,
+  // with its checks for writes still waiting here, so this pull leaves the
+  // series to it. Without it, a read here would bring the series back.
+  if (pulled.seriesDeleted) {
+    requestFullSyncForDelete();
+    return;
+  }
   // A deleted series stays deleted. The server returns its live copy until a
   // delete made here lands, and a pull already out when a delete applied
   // answers with it too. A copy the server kept past the delete is live.
