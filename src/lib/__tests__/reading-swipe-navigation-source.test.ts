@@ -7,6 +7,13 @@ const readingSource = readFileSync(
 );
 
 describe('reading swipe navigation source contract', () => {
+  it('applies a day menu choice even when the route already names that day', () => {
+    expect(readingSource).toContain(
+      "const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}:${params.dayRequest ?? ''}`;",
+    );
+    expect(readingSource).toContain('}, [currentDevotional, effectiveDevotionalId, requestedDayNumber, params.dayRequest]);');
+  });
+
   it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
     const scriptureTapBlock = readingSource.match(
       /onScriptureTap=\{\(ref, savedPassage\) => \{[\s\S]{0,700}?\}\}/,
@@ -33,13 +40,17 @@ describe('reading swipe navigation source contract', () => {
     // to advance to — not for a swipe backward at day 1, and not for a
     // below-threshold nudge.
     expect(onEndBlock).toContain('event.translationX < -80 && viewingDay >= availableDays');
-    expect(onEndBlock).toContain('setLockedDayToast');
-
-    expect(readingSource).toContain("Tomorrow's reading unlocks after midnight");
+    expect(onEndBlock).toContain('runOnJS(showBlockedForwardToast)()');
 
     // Reuses the existing message-toast pattern (styles.toastContainer /
     // styles.toastText), not a bespoke component.
-    const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,600}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
+    const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,900}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
+    // The message names why, and the reason is fixed when the swipe is
+    // blocked, so moving to another day does not rewrite it.
+    expect(lockedToastBlock).toContain('{lockedDayToast}');
+    expect(readingSource).toContain(
+      'setLockedDayToast(blockedForwardMessage(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));',
+    );
     expect(lockedToastBlock).toContain('styles.toastContainer');
     expect(lockedToastBlock).toContain('styles.toastText');
   });
