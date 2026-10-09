@@ -2070,4 +2070,75 @@ describe('reader swipe cancellation', () => {
     });
     act(() => tree!.unmount());
   });
+
+  async function renderMissingSeries(devotionalId: string) {
+    seedReader();
+    useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
+    routeParams.devotionalId = devotionalId;
+    routeParams.dayNumber = '1';
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    return tree!;
+  }
+
+  it('offers Try again after a failed series pull, and says the series is missing only once a pull finds nothing', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(new Error('Network request failed'));
+    const tree = await renderMissingSeries('missing-offline');
+
+    let screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series couldn’t load.');
+    expect(screenText).toContain('Check your connection and try again.');
+    expect(screenText).not.toContain('This series isn’t on the device.');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    let resolveRetry: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
+    mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve; }));
+    await act(async () => {
+      (tree.root.findByProps({ accessibilityLabel: 'Try again' }).props.onPress as () => void)();
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-offline');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveRetry?.(emptyPull());
+      await flushEffects();
+    });
+    screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series isn’t on the device.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('asks again after a failed pull when the reader comes back, not while it stays open', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }));
+    const tree = await renderMissingSeries('missing-5xx');
+    expect(JSON.stringify(tree.toJSON())).toContain('This series couldn’t load.');
+
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = false;
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = true;
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-5xx');
+    act(() => tree.unmount());
+  });
 });
