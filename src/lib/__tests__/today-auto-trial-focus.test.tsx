@@ -68,9 +68,14 @@ const mockTodayStoreState: Record<string, unknown> = {
 
 let mockSearchParams: Record<string, string> = {};
 const mockRouterPush = jest.fn();
+const mockRouterReplace = jest.fn();
+// The app's router is one object for the screen's life. Tests that count
+// effect runs set this; the rest keep a fresh object per render.
+let mockStableRouter: Record<string, unknown> | null = null;
 let mockIsTodayFocused = true;
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
+  useRouter: () => mockStableRouter
+    ?? ({ push: mockRouterPush, replace: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useFocusEffect: (callback: () => void | (() => void)) => require('react').useEffect(callback, [callback]),
@@ -205,14 +210,26 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// Records a test seeds for Today to read. Writes are still dropped.
+const mockMmkvItems = new Map<string, string>();
 jest.mock('@/lib/mmkv-storage', () => ({
   getDeviceId: () => 'device-1',
   getSharedEncryptionKey: () => undefined,
   mmkvStorage: {
-    getItem: () => null,
+    getItem: (key: string) => mockMmkvItems.get(key) ?? null,
     setItem: () => undefined,
-    removeItem: () => undefined,
+    removeItem: (key: string) => {
+      mockMmkvItems.delete(key);
+    },
   },
+}));
+
+const mockPollJobStatus = jest.fn(async (..._args: unknown[]): Promise<unknown> => {
+  throw new Error('no job status in this test');
+});
+jest.mock('@/lib/generation-api', () => ({
+  ...jest.requireActual('@/lib/generation-api'),
+  pollJobStatus: (...args: unknown[]) => mockPollJobStatus(...args),
 }));
 
 let mockReplacedSeries: string | null = null;
@@ -263,7 +280,7 @@ import {
 } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import {
-
+  INFLIGHT_GENERATION_JOB_KEY,
   resolveTodayInflightAction,
   type InflightGenerationJob,
 } from '@/lib/inflight-generation-job';
@@ -706,6 +723,160 @@ describe('Today across local midnight', () => {
 
     expect(drainSyncOutbox).toHaveBeenCalledTimes(2);
     expect(mockPullDevotionalContent).not.toHaveBeenCalled();
+  });
+});
+
+describe('Today app-kill recovery while the server cannot be reached', () => {
+  // The app was killed while /generating waited on a series. The record has
+  // no leftForHome marker, so Today asks the server about the job before it
+  // sends the reader back to /generating.
+  const record: InflightGenerationJob = {
+    jobId: 'job-1',
+    devotionalId: 'series-new',
+    submittedAt: new Date(2026, 9, 9, 6, 50).getTime(),
+  };
+  const serverDown = Object.assign(new Error('Service Unavailable'), { status: 503 });
+  const olderSeries = {
+    id: 'today-series',
+    title: 'Today Series',
+    totalDays: 3,
+    currentDay: 1,
+    generationMode: 'progressive',
+    createdAt: '2026-10-01T00:00:00.000Z',
+    seriesStartDate: '2026-10-01T00:00:00.000Z',
+    days: [{ id: 'today-series-day-1', devotionalId: 'today-series', dayNumber: 1, title: 'Day 1', isRead: false }],
+  };
+  let saved: Record<string, unknown>;
+  let tree: { update: (element: React.ReactElement) => void; unmount: () => void } | null = null;
+  let appStateListeners: Set<(state: AppStateStatus) => void>;
+  const appStateListen = jest.mocked(AppState.addEventListener);
+  const defaultAppStateListen = appStateListen.getMockImplementation();
+
+  async function renderToday() {
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+    await settle();
+  }
+
+  async function settle() {
+    await act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+  }
+
+  async function foreground() {
+    act(() => {
+      [...appStateListeners].forEach((listener) => listener('active'));
+    });
+    await settle();
+  }
+
+  function cardProps() {
+    return mockDevotionalCardProps as {
+      state: { type: string; onResume?: () => void };
+      nonblockingResume: { onResume: () => void } | null;
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers({ now: new Date(2026, 9, 9, 7, 0) });
+    saved = { ...mockTodayStoreState };
+    mockIsTodayFocused = true;
+    mockStableRouter = { push: mockRouterPush, replace: mockRouterReplace, navigate: jest.fn(), setParams: jest.fn() };
+    mockTodayStoreState.devotionals = [];
+    mockTodayStoreState.currentDevotionalId = null;
+    mockTodayStoreState.getJournalEntry = () => undefined;
+    mockMmkvItems.set(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(record));
+    mockPollJobStatus.mockRejectedValue(serverDown);
+    appStateListeners = new Set();
+    appStateListen.mockImplementation((_type, listener) => {
+      const handler = listener as (state: AppStateStatus) => void;
+      appStateListeners.add(handler);
+      return { remove: () => appStateListeners.delete(handler) } as unknown as NativeEventSubscription;
+    });
+  });
+
+  afterEach(() => {
+    if (tree) act(() => tree!.unmount());
+    tree = null;
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+    mockStableRouter = null;
+    mockMmkvItems.clear();
+    mockPollJobStatus.mockReset();
+    appStateListen.mockImplementation(defaultAppStateListen);
+    jest.useRealTimers();
+  });
+
+  it('offers to continue the wait instead of an empty Today', async () => {
+    await renderToday();
+
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(1);
+    expect(mockPollJobStatus.mock.calls[0][0]).toBe('job-1');
+    expect(cardProps().state.type).toBe('pending-initial-resume');
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+
+    // Continue goes back to /generating, which resumes the kept record.
+    act(() => cardProps().state.onResume!());
+    expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+  });
+
+  it('asks again on foreground, at most once per cooldown, and resumes once the server answers', async () => {
+    await renderToday();
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(1);
+
+    // The card stays up while the check is out.
+    mockPollJobStatus.mockImplementationOnce(() => new Promise(() => {}));
+    await foreground();
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(2);
+    expect(cardProps().state.type).toBe('pending-initial-resume');
+
+    await foreground();
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      jest.advanceTimersByTime(10_000);
+    });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    await foreground();
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(3);
+    expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+  });
+
+  it('drops the card once the record is gone', async () => {
+    await renderToday();
+    expect(cardProps().state.type).toBe('pending-initial-resume');
+
+    mockMmkvItems.clear();
+    await foreground();
+
+    expect(cardProps().state.type).toBe('empty');
+    expect(cardProps().nonblockingResume).toBeNull();
+  });
+
+  it('offers the inline resume beside a readable series, until the new series lands', async () => {
+    mockTodayStoreState.devotionals = [olderSeries];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    await renderToday();
+
+    expect(cardProps().state.type).not.toBe('pending-initial-resume');
+    expect(cardProps().nonblockingResume).not.toBeNull();
+    act(() => cardProps().nonblockingResume!.onResume());
+    expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+
+    // The new series reaches the store while the server is still down.
+    mockTodayStoreState.devotionals = [olderSeries, { ...olderSeries, id: 'series-new', title: 'New Series' }];
+    mockTodayStoreState.currentDevotionalId = 'series-new';
+    await act(async () => {
+      tree!.update(<HomeScreen />);
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(cardProps().nonblockingResume).toBeNull();
   });
 });
 
