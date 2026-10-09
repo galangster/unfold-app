@@ -17,7 +17,7 @@ import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
-import { bindReplacementSeries } from '@/lib/series-replacement';
+import { bindReplacementSeries, clearReplacementBinding } from '@/lib/series-replacement';
 import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
@@ -252,8 +252,6 @@ export default function GeneratingScreen() {
       leftForHome: leftForHomeRef.current,
       ...(requestId ? { requestId } : {}),
     });
-    // A "Start a new series" choice waits for this series: only its result ends the old one.
-    if (devotionalId) bindReplacementSeries(devotionalId);
   }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
   // against a status we don't understand.
@@ -543,7 +541,13 @@ export default function GeneratingScreen() {
     // the shared helper (Today lands the same job the same way after "Go home").
     let applied;
     try {
-      applied = applyInitialArcResult(result, { user, devotionalLength, session });
+      const requestId = answeredRequestIdRef.current;
+      applied = applyInitialArcResult(result, {
+        user,
+        devotionalLength,
+        session,
+        answersCurrentRequest: requestId !== null && requestId === readInitialGenerationRequestId(),
+      });
     } catch (err) {
       if (isGenerationSessionInvalidatedError(err)) return;
       throw err;
@@ -837,6 +841,9 @@ export default function GeneratingScreen() {
         // the session starts so Today, which re-reads the record when the
         // session changes, never sees the session without the record.
         recordJob(jobId, devotionalId);
+        // A "Start a new series" choice waits for the series the server named
+        // for this request: only its result ends the old one.
+        bindReplacementSeries(devotionalId);
         startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
         logger.log('[generating] Job submitted:', jobId);
 
@@ -1004,6 +1011,7 @@ export default function GeneratingScreen() {
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
           recordJob(jobId, devotionalId);
+          bindReplacementSeries(devotionalId);
           startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
@@ -1038,6 +1046,9 @@ export default function GeneratingScreen() {
     // submission's own write replaces it.
     supersedeInflightGenerationJob(pendingJobId);
     clearInitialGenerationRequestId();
+    // A waiting "Start a new series" choice stays, now for the series the
+    // new answers generate, not the one just abandoned.
+    clearReplacementBinding();
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');

@@ -418,6 +418,34 @@ describe('settleInflightInitialArcWatch', () => {
     expect(readInitialGenerationRequestId()).toBe('22222222-2222-4222-8222-222222222222');
   });
 
+  // 2026-10-09 release audit round 4: a job /generating adopted carries no
+  // binding, but it answered the request made after the choice.
+  it('ends a waiting replaced series with the job that answered the stored request, and only that job', () => {
+    replaceSyncOutbox([]);
+    const old = {
+      id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+      updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+    } as unknown as Devotional;
+    const landed = { kind: 'complete' as const, result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } };
+    const archivedAt = () => useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt;
+
+    useUnfoldStore.setState({ devotionals: [old], currentDevotionalId: 'old-series' });
+    recordReplacedSeries('old-series', '');
+    ensureInitialGenerationRequestId(() => '33333333-3333-4333-8333-333333333333');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId: 'an-earlier-request' });
+    settleInflightInitialArcWatch(landed, { jobId: 'job-1', session: captureSyncSession() });
+    expect(archivedAt()).toBeFalsy();
+    expect(readReplacedSeries()).toBe('old-series');
+
+    resetStore();
+    useUnfoldStore.setState({ devotionals: [old], currentDevotionalId: 'old-series' });
+    const current = ensureInitialGenerationRequestId(() => '44444444-4444-4444-8444-444444444444');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId: current });
+    settleInflightInitialArcWatch(landed, { jobId: 'job-1', session: captureSyncSession() });
+    expect(archivedAt()).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
   it('keeps the record and fails the session when the server could not be reached', () => {
     settleInflightInitialArcWatch({ kind: 'unreachable', message: 'Unable to connect' }, { jobId: 'job-1', session: captureSyncSession() });
 

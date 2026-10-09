@@ -16,7 +16,7 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { clearReplacedSeries, readReplacedSeries, readReplacedSeriesState, readReplacementSeries } from '@/lib/series-replacement';
+import { bindReplacementSeries, clearReplacedSeries, readReplacedSeries, readReplacedSeriesState, readReplacementSeries } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -39,6 +39,11 @@ interface InitialArcResultContext {
   devotionalLength: number;
   /** Originating reset session. Required so a late apply cannot recapture. */
   session: number;
+  /**
+   * The job answered the stored generation request, so a waiting "Start a
+   * new series" choice is waiting for this series.
+   */
+  answersCurrentRequest?: boolean;
 }
 
 interface AppliedInitialArcResult {
@@ -147,7 +152,7 @@ function writeLandedSeriesToDisk(): void {
  */
 export function applyInitialArcResult(
   result: InitialArcResult,
-  { user, devotionalLength, session }: InitialArcResultContext,
+  { user, devotionalLength, session, answersCurrentRequest = false }: InitialArcResultContext,
 ): AppliedInitialArcResult {
   assertSyncSessionCurrent(session, 'apply initial arc');
   const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
@@ -159,6 +164,7 @@ export function applyInitialArcResult(
   // First, so Today moves off the old series: to this one when a sync pull
   // already landed it, otherwise to the shell added below.
   // Only the series the reader started in its place ends it.
+  if (answersCurrentRequest) bindReplacementSeries(devotionalId);
   const replacedId = readReplacedSeries() && readReplacementSeries() === devotionalId ? readReplacedSeries() : null;
   if (replacedId && replacedId !== devotionalId && replacementStillEnds(replacedId, devotionalId)) {
     useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
@@ -265,6 +271,10 @@ export function settleInflightInitialArcWatch(
   if (!isSyncSessionCurrent(session)) return;
 
   const store = useUnfoldStore.getState();
+  const inflight = readInflightGenerationJob();
+  const answered = inflight?.jobId === jobId
+    ? requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId())
+    : null;
 
   if (outcome.kind === 'complete') {
     try {
@@ -273,6 +283,7 @@ export function settleInflightInitialArcWatch(
         user,
         devotionalLength: user?.devotionalLength ?? 7,
         session,
+        answersCurrentRequest: answered !== null && answered === readInitialGenerationRequestId(),
       });
       void logBugEvent('generation', 'server-generation-complete', {
         devotionalId: applied.devotionalId,
@@ -306,10 +317,6 @@ export function settleInflightInitialArcWatch(
   // The server ruled on this job, and resubmitting the request it answered
   // only returns the same job, so Today's Try again would loop on it. That
   // request is retired with the job. A newer request stays.
-  const inflight = readInflightGenerationJob();
-  const answered = inflight?.jobId === jobId
-    ? requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId())
-    : null;
   clearInflightGenerationJob();
   if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
   store.failGenerationSession(outcome.message);

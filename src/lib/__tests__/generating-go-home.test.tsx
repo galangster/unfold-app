@@ -176,7 +176,7 @@ import {
 } from '../initial-generation-request';
 import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
 import { mmkvStorage } from '../mmkv-storage';
-import { readReplacementSeries, recordReplacedSeries } from '../series-replacement';
+import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordReplacedSeries } from '../series-replacement';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
@@ -257,6 +257,7 @@ beforeEach(() => {
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   mmkvStorage.removeItem('auto-trial-series-intent-v1');
+  clearReplacedSeries();
   // The reveal guard is session state; an earlier test's key must not mark this mount as a repeat.
   useUIState.getState().setAutoTrialRevealGuardKey(null);
   useUIState.getState().setSeriesRevealMountedIntentId(null);
@@ -746,6 +747,52 @@ describe('Go home after the server ruled on the first series', () => {
     mounted.push(tree);
 
     expect(readReplacementSeries()).toBe('devo-1');
+  });
+
+  // 2026-10-09 release audit round 4: an adopted job was recorded under the
+  // session's series, which can be the replaced one or none, so its result
+  // never ended the series it replaced.
+  it.each([
+    ['polled to completion', false],
+    ['recovered at once', true],
+  ])('ends a waiting replaced series with the result of a job the submission adopted (%s)', async (_label, recovered) => {
+    const landed = { devotionalId: 'devo-1', seriesTitle: 'New', totalDays: 3, devotionalDay: { dayNumber: 1, title: 'Day one' } };
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+      generationSession: { status: 'running', devotionalId: 'old-series', totalDays: 3, generatedDayNumbers: [] },
+    });
+    recordReplacedSeries('old-series');
+    mockSubmitGenerationJob.mockRejectedValue(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    if (recovered) {
+      (jest.requireMock('@/lib/generation-api') as { recoverCompletedGenerationResult: jest.Mock })
+        .recoverCompletedGenerationResult.mockResolvedValueOnce(landed);
+    }
+    mockPollJobStatus.mockResolvedValue({ status: 'complete', result: landed });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await act(async () => { jest.advanceTimersByTime(3_000); });
+    await flush();
+
+    expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
+  it('keeps a waiting "Start a new series" choice through Start over, for the series the new answers generate', async () => {
+    recordReplacedSeries('old-series');
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const tree = await renderSubmittedJob();
+    expect(readReplacementSeries()).toBe('devo-1');
+
+    await press(tree, 'Start over with new answers');
+
+    expect(readReplacedSeries()).toBe('old-series');
+    expect(readReplacementSeries()).toBeNull();
   });
 
   it('retires the request id after a verdict on the job its submission adopted', async () => {
