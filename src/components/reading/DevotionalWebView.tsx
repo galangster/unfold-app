@@ -42,13 +42,17 @@ export interface HighlightsChangedEvent {
   primarySerial: string;
   /** True for undo replays — reconcile the store, show no toast. */
   silent: boolean;
+  /** The document that produced the change. Undo replays it into that document only. */
+  docId: string;
 }
 
 /** Imperative handle for the reader screen (undo). */
 export interface DevotionalWebViewCommands {
   /** Apply the inverse of a reported change to the document. The resulting
-   *  diff comes back through `onHighlightsChanged` with `silent: true`. */
-  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
+   *  diff comes back through `onHighlightsChanged` with `silent: true`. The
+   *  change replays by character position, so it is dropped once the
+   *  document that produced it is gone (new text for the same day). */
+  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => void;
   /** Flash and report the y of a stored highlight in the live document
    *  (reader Highlights sheet). Resolves through `onTargetHighlightLocated`. */
   scrollToHighlight: (highlight: Highlight) => void;
@@ -2506,6 +2510,9 @@ export function DevotionalWebView({
   // truth. appliedJson tracks the values the document is showing so that an
   // unchanged theme is never pushed twice.
   const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
+  // The document on screen now, for commands that must not reach a newer one.
+  const liveDocIdRef = useRef(webViewDocument.docId);
+  liveDocIdRef.current = webViewDocument.docId;
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2621,6 +2628,7 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
+        if (change.docId !== liveDocIdRef.current) return;
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {
@@ -2739,6 +2747,7 @@ export function DevotionalWebView({
           added: Array.isArray(data.added) ? data.added : [],
           primarySerial: typeof data.primarySerial === 'string' ? data.primarySerial : '',
           silent: !!data.silent,
+          docId: data.docId,
         });
       } else if (data.type === 'HIGHLIGHT_FAILED') {
         onHighlightFailed?.();
