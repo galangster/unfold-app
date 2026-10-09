@@ -209,18 +209,18 @@ describe('ambient overlay timer notice', () => {
     jest.mocked(listPendingAnnouncementPages).mockReturnValue([
       { id: 'companion-v1', kind: 'companion', title: 'Companion', body: 'Meet your Companion.' },
     ]);
-    jest.mocked(canAnnounceFeatures).mockImplementation((input) => input.returningReader && input.pendingCount > 0);
+    jest.mocked(canAnnounceFeatures).mockImplementation((input) => input.hasSeenTodayTour && input.pendingCount > 0);
     const current = () => jest.mocked(FeatureAnnouncement).mock.calls.at(-1)![0];
 
     mockHasSeenHomeTooltips = false;
     const view = render(<AmbientSoundOverlay />);
-    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].returningReader).toBe(false);
+    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].hasSeenTodayTour).toBe(false);
     expect(current().visible).toBe(false);
     view.unmount();
 
     mockHasSeenHomeTooltips = true;
     render(<AmbientSoundOverlay />);
-    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].returningReader).toBe(true);
+    expect(jest.mocked(canAnnounceFeatures).mock.calls.at(-1)![0].hasSeenTodayTour).toBe(true);
     expect(current().visible).toBe(true);
   });
 });

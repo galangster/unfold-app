@@ -68,7 +68,7 @@ export type FeatureAnnouncementGateInput = {
    * True once the reader has finished the Today tour. "What's new" is for
    * readers who used an earlier version. A fresh install meets the tour first.
    */
-  returningReader: boolean;
+  hasSeenTodayTour: boolean;
   isTodayHome: boolean;
   todayReadingAvailable: boolean;
   soundOff: boolean;
@@ -146,7 +146,7 @@ export function settleAnnouncementsForNewReader(): void {
 
 export function canAnnounceFeatures(input: FeatureAnnouncementGateInput): boolean {
   return (
-    input.returningReader
+    input.hasSeenTodayTour
     && input.todayReadingAvailable
     && input.isTodayHome
     && input.soundOff

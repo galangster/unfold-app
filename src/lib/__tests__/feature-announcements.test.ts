@@ -34,7 +34,7 @@ jest.mock('../../../assets/audio/previews/still-waters.m4a', () => 99, { virtual
 const allAvailable = { bookshelf: true, companion: true, music: true, reflection: true };
 
 const openGate = {
-  returningReader: true,
+  hasSeenTodayTour: true,
   isTodayHome: true,
   todayReadingAvailable: true,
   soundOff: true,
@@ -151,8 +151,8 @@ describe('feature announcements', () => {
   });
 
   it('waits for the Today tour, so a fresh install goes straight to the tour', () => {
-    expect(canAnnounceFeatures({ ...openGate, returningReader: false })).toBe(false);
-    expect(canAnnounceFeatures({ ...openGate, returningReader: true })).toBe(true);
+    expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: false })).toBe(false);
+    expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: true })).toBe(true);
   });
 
   it('settles every current page for a new reader and keeps what was already seen', () => {

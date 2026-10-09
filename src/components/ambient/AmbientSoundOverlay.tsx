@@ -110,7 +110,7 @@ function EnabledAmbientSoundOverlay() {
   const todayReadingAvailable = useAmbientSoundChrome((chrome) => chrome.todayReadingAvailable);
   const setPlayerDockHeight = useAmbientSoundChrome((chrome) => chrome.setPlayerDockHeight);
   const premiumPolicy = usePremiumAccessPolicy();
-  const returningReader = useUnfoldStore((state) => state.hasSeenHomeTooltips);
+  const hasSeenTodayTour = useUnfoldStore((state) => state.hasSeenHomeTooltips);
   const audioEnabled = isAmbientAudioEnabled();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [announcementPages, setAnnouncementPages] = useState<FeatureAnnouncementPage[]>([]);
@@ -191,7 +191,7 @@ function EnabledAmbientSoundOverlay() {
     }).filter((page) => !announcedThisVisit.current.has(page.id));
     if (
       canAnnounceFeatures({
-        returningReader,
+        hasSeenTodayTour,
         isTodayHome: todayHome,
         todayReadingAvailable,
         soundOff: !audioEnabled || status === 'off',
@@ -215,7 +215,7 @@ function EnabledAmbientSoundOverlay() {
     keyboardVisible,
     narrationActive,
     premiumPolicy,
-    returningReader,
+    hasSeenTodayTour,
     sheet,
     status,
     timerStatus,
