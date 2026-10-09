@@ -353,6 +353,30 @@ describe('reveal for a series this device does not hold yet', () => {
     expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
   });
 
+  it('judges the pushed series by a newer resume a sync lands after the pull', async () => {
+    // The pull saw the series paused; a full sync then lands its newer resume
+    // before the reader lifts the curtain.
+    const pausedAt = '2026-10-09T10:00:00.000Z';
+    const pulled = pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z', archivedAt: pausedAt, archivedStateAt: pausedAt },
+    ]);
+    Object.assign(pulled.devotional, { archivedAt: pausedAt, archivedStateAt: pausedAt });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulled);
+    await openReadyPush(PULLED_ID);
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        devotionals: state.devotionals.map((row) => (row.id === PULLED_ID
+          ? { ...row, archivedAt: null, archivedStateAt: '2026-10-09T11:00:00.000Z' }
+          : row)),
+      }));
+    });
+    pressReveal();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(PULLED_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBeUndefined();
+  });
+
   it('holds both swipes while the pull is out, then frees the one the layout uses', async () => {
     let resolvePull: (value: ReturnType<typeof pulledSeries>) => void = () => {};
     mockPullDevotionalContent.mockImplementation(() => new Promise((resolve) => { resolvePull = resolve; }));

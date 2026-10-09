@@ -37,6 +37,7 @@ import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotio
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import type { ActiveSeriesCandidate } from '@/lib/devotional-active-selection';
+import { mergeDevotionalLifecycle } from '@/lib/devotional-lifecycle';
 import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
 import { Typography } from '@/constants/typography';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -81,6 +82,25 @@ async function pullRevealSeries(
     logger.warn('[Reveal] could not pull the series a ready push names:', err instanceof Error ? err.message : err);
   }
   return pulledSeries;
+}
+
+/**
+ * The pushed series as the winner check should see it. A pulled row gives the
+ * server's mode and creation time: the shell built from a pull is always
+ * marked progressive. Pause and resume come from whichever copy is newer, as
+ * a sync merges them: a sync can land a newer one after the reveal's pull.
+ */
+function revealTargetCandidate(
+  local: ActiveSeriesCandidate | undefined,
+  pulled: ActiveSeriesCandidate | undefined,
+): ActiveSeriesCandidate | undefined {
+  if (!local || !pulled) return pulled ?? local;
+  return {
+    id: local.id,
+    createdAt: pulled.createdAt ?? local.createdAt,
+    generationMode: pulled.generationMode ?? local.generationMode,
+    ...mergeDevotionalLifecycle({ local, incoming: pulled }),
+  };
 }
 
 /**
@@ -271,10 +291,12 @@ export default function RevealScreen() {
     // newer resume of one it holds (applied later, by the full sync). Every
     // pulled row counts beside the local ones, so only the series the server
     // would pick becomes current: either copy of a sibling can block it. The
-    // server's copy of the target goes first, because the check reads the
-    // target's first row and a pulled shell is always marked progressive.
-    const pulledTarget = pulledSeriesRef.current.filter((row) => row.id === revealTarget.devotionalId);
-    const candidates = [...pulledTarget, ...latestDevotionals, ...pulledSeriesRef.current];
+    // check reads the target's first row, so the merged target goes first.
+    const target = revealTargetCandidate(
+      latestDevotionals.find((row) => row.id === revealTarget.devotionalId),
+      pulledSeriesRef.current.find((row) => row.id === revealTarget.devotionalId),
+    );
+    const candidates = [...(target ? [target] : []), ...latestDevotionals, ...pulledSeriesRef.current];
     const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);
