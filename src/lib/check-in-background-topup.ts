@@ -6,7 +6,9 @@
  * the same question the foreground hook asks, then calls
  * `runCheckInNotificationSync` — the same cancel-then-write, the same
  * 14-day builder, the same identifier space. It never touches the trial
- * ending notice.
+ * ending notice. The same wake refills the morning reading reminder
+ * (`runDailyReminderBackgroundTopup`), whose dated horizon drains the same
+ * way.
  *
  * Fail closed: recovery session, a reset in flight, an unhydrated store,
  * or an unanswered RevenueCat read are no-ops. They must not cancel a
@@ -27,6 +29,7 @@ import {
 } from '@/lib/revenuecatClient';
 import { logger } from '@/lib/logger';
 import { runCheckInNotificationSync } from '@/lib/check-in-notification-sync';
+import { runDailyReminderBackgroundTopup } from '@/lib/daily-reminder-sync';
 
 const DEFAULT_HYDRATION_WAIT_MS = 5_000;
 let hydrationWaitMs = DEFAULT_HYDRATION_WAIT_MS;
@@ -126,11 +129,14 @@ export async function runCheckInBackgroundTopup(): Promise<BackgroundFetch.Backg
     }
 
     const outcome = await runCheckInNotificationSync('background');
-    if (outcome.kind === 'synced' || outcome.kind === 'cancelled') {
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-    if (outcome.kind === 'retry') {
+    // Every reader with a reminder, premium or not: the reminder decides its
+    // own owner from the policy resolved above.
+    const reminder = shouldAbortBackgroundTopup() ? 'skipped' : await runDailyReminderBackgroundTopup();
+    if (outcome.kind === 'retry' || reminder === 'failed') {
       return BackgroundFetch.BackgroundFetchResult.Failed;
+    }
+    if (outcome.kind === 'synced' || outcome.kind === 'cancelled' || reminder === 'written') {
+      return BackgroundFetch.BackgroundFetchResult.NewData;
     }
     return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch (error) {

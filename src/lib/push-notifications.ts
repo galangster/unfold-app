@@ -34,6 +34,7 @@ import {
   buildNotificationPreferenceRequestBody,
   buildPushRegistrationRequestBody,
   createNotificationNavigationCoordinator,
+  notificationResponseKey,
   shouldHydrateNotificationResponse,
 } from '@/lib/push-notification-helpers';
 import {
@@ -90,12 +91,6 @@ function isSamePushRegistrationOwner(
 export function resetPushRegistrationSession(): void {
   registeredOwner = null;
   inFlightRegistration = null;
-}
-
-function getNotificationResponseKey(
-  response: Notifications.NotificationResponse | null | undefined,
-): string | undefined {
-  return response?.notification?.request?.identifier;
 }
 
 async function hydrateLastNotificationResponse(): Promise<void> {
@@ -354,7 +349,7 @@ function handleNotificationResponse(
   if (handleNotificationAction(response)) return false;
   logger.log(`[push] Notification tapped (${start}), data:`, data);
   logNotificationOpened(response, start);
-  return notificationNavigationCoordinator.queueFromData(data, getNotificationResponseKey(response));
+  return notificationNavigationCoordinator.queueFromData(data, notificationResponseKey(response));
 }
 
 function notificationTypeOf(response: Notifications.NotificationResponse): string {

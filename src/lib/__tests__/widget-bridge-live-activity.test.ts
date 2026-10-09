@@ -36,6 +36,8 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 
 jest.mock('@/lib/widget-timeline', () => ({
   getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
+  getTodayReadingProps: jest.requireActual('@/lib/widget-timeline').getTodayReadingProps,
+  getNextMidnight: jest.requireActual('@/lib/widget-timeline').getNextMidnight,
   buildWidgetTimelineEntries: jest.fn(() => []),
   getWeeklyProgress: jest.fn(() => '0,0,0,0,0,0,0'),
 }));
