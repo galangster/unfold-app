@@ -19,9 +19,9 @@ describe('reading highlight undo source contract', () => {
 
   it('applies an Undo only on the page its change came from', () => {
     const toastBlock = readingSource.match(/const page = highlightPageRef\.current;[\s\S]{0,500}?\n {4}\}\);/)?.[0] ?? '';
+    // The toast closes after the guard, so a dropped Undo still dismisses it.
     expect(toastBlock).toMatch(
-      /if \(highlightPageRef\.current === page\) \{\s*highlightCommandRef\.current\?\.applyInverse\(/,
+      /if \(highlightPageRef\.current === page\) \{\s*highlightCommandRef\.current\?\.applyInverse\(\{[^}]*\}\);\s*\}\s*setHighlightToast\(null\);/,
     );
-    expect(toastBlock).toContain('setHighlightToast(null);');
   });
 });
