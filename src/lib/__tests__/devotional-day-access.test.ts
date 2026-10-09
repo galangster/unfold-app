@@ -4,6 +4,7 @@ import {
   getReadingDayLabel,
   getDayMenuPresentation,
   getLatestReadDayNumberToday,
+  BLOCKED_FORWARD_MESSAGES,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -11,6 +12,8 @@ import {
   isDevotionalDaySelectable,
   isPausedSeries,
   isPausedSeriesUnpreparedDay,
+  blockedForwardMessage,
+  resolveBlockedForwardReason,
   resolveInitialReadingDayNumber,
 } from '../devotional-day-access';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
@@ -592,5 +595,88 @@ describe('read days with only a local copy', () => {
     expect(getLockedTodayDayNumber(heldToday, now)).toBe(2);
     expect(resolveInitialReadingDayNumber(heldToday, 3, now)).toBe(2);
     expect(canOpenDevotionalDay(heldToday, 3, now)).toBe(false);
+  });
+});
+
+describe('resolveBlockedForwardReason', () => {
+  it('says the series is finished on its last day, even with today read', () => {
+    const series = devotional({
+      currentDay: 7,
+      days: [day({ dayNumber: 7, isRead: true, readAt: todayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 7, 7, false, now)).toBe('series-finished');
+    expect(BLOCKED_FORWARD_MESSAGES['series-finished']).toBe('This is the last day of this series');
+  });
+
+  it('names the daily pace when today\'s reading holds the next day until midnight', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [
+        day({ dayNumber: 5, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 6, isRead: false }),
+      ],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, false, now)).toBe('daily-pace');
+    expect(BLOCKED_FORWARD_MESSAGES['daily-pace']).toBe("Tomorrow's reading unlocks after midnight");
+  });
+
+  it('says the next day is not ready when nothing read today holds it back', () => {
+    const series = devotional({
+      currentDay: 5,
+      days: [day({ dayNumber: 5, isRead: true, readAt: yesterdayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, false, now)).toBe('not-ready');
+  });
+
+  it('says a paused series will not get its missing next day, even with today read', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [day({ dayNumber: 5, isRead: true, readAt: todayIso })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('paused');
+    // The day may be on the server, so the toast does not say it was never prepared.
+    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe("This series is paused, and its next day isn't on this device");
+  });
+
+  it('keeps the daily pace for a paused series whose next day is here', () => {
+    const series = devotional({
+      currentDay: 6,
+      days: [
+        day({ dayNumber: 5, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 6, isRead: false }),
+      ],
+    });
+
+    expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('daily-pace');
+  });
+
+  it('asks the reader to finish this day when the next day is already here', () => {
+    const series = devotional({
+      currentDay: 1,
+      days: [day({ dayNumber: 1 }), day({ dayNumber: 2 })],
+    });
+
+    expect(resolveBlockedForwardReason(series, 1, 7, false, now)).toBe('finish-current');
+    expect(blockedForwardMessage(series, 1, 7, false, now)).toBe('Finish this reading to open the next day');
+  });
+
+  it('names the unfinished day when the reader is on a later day already read', () => {
+    const series = devotional({
+      currentDay: 2,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2 }),
+        day({ dayNumber: 3, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 5 }),
+      ],
+    });
+
+    expect(getSelectableDayLimit(series, now)).toBe(4);
+    expect(blockedForwardMessage(series, 4, 7, false, now)).toBe('Finish Day 2 to open the next day');
   });
 });
