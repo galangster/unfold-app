@@ -369,6 +369,8 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
   };
 }
 
+const HOOK_HEADLINE = 'Ever open your Bible and not know where to start?';
+
 const ALL_STEPS = [
   // HOOK: Opening question — problem-naming with an obvious "yes"
   { id: 'hook', question: '', subtext: '', type: 'hook' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
@@ -2002,14 +2004,18 @@ export default function OnboardingScreen() {
           >
             {/* Heading — left-aligned, scatter letter animation */}
             <View style={{ flexGrow: 1, justifyContent: 'center' }}>
-              <ScatterTitle
-                text="Ever open your Bible and not know where to start?"
-                fontSize={32}
-                baseDelay={400}
-                stagger={60}
-                color={colors.text}
-                onComplete={() => setScreenReady(true)}
-              />
+              {/* Each letter is its own element, so VoiceOver spelled the
+                  heading out. One label carries the whole sentence. */}
+              <View accessible accessibilityLabel={HOOK_HEADLINE}>
+                <ScatterTitle
+                  text={HOOK_HEADLINE}
+                  fontSize={32}
+                  baseDelay={400}
+                  stagger={60}
+                  color={colors.text}
+                  onComplete={() => setScreenReady(true)}
+                />
+              </View>
 
               {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
               <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
@@ -3979,6 +3985,7 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               activeOpacity={1}
               onPress={handleNext}
+              accessibilityRole="button"
               style={{
                 backgroundColor: colors.accent,
                 paddingVertical: Spacing['4'],
