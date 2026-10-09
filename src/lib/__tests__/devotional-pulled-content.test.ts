@@ -5,6 +5,7 @@ import {
 } from '@/lib/devotional-pulled-content';
 import type { PulledDevotionalContent } from '@/lib/devotional-sync-pull';
 import type { Devotional, DevotionalDay } from '@/lib/store';
+import { replaceSyncOutbox } from '@/lib/sync-outbox';
 
 const dayTwo: DevotionalDay = {
   id: 'day-devotional-1-2',
@@ -53,6 +54,28 @@ function pulledContent(overrides: Partial<PulledDevotionalContent> = {}): Pulled
 }
 
 describe('pulled devotional content application', () => {
+  afterEach(() => replaceSyncOutbox([]));
+
+  // 2026-10-09 release audit round 6: an old ready push pulled a series the
+  // reader had deleted, before the delete reached the server, and restored it.
+  it('applies nothing for a series whose delete still waits in the outbox', () => {
+    replaceSyncOutbox([{
+      table: 'devotionals', id: 'devotional-1', data: {}, clientUpdatedAt: '2026-04-25T12:30:00.000Z', deleted: true,
+    }]);
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
+
   it('applies pulled days and metadata through the shared callbacks', () => {
     const updateDevotionalDays = jest.fn();
     const updateDevotionals = jest.fn();

@@ -213,15 +213,20 @@ export function applyInitialArcResult(
     store.addDevotional(newDevotional);
     // addDevotional makes the new series current. Beside a newer live series,
     // such as the replaced one resumed elsewhere after the choice, the server
-    // writes that one, so Today keeps it. Without a server date the new
+    // writes that one, so Today takes it. Without a server date the new
     // series' start is this phone's guess, so it takes Today only in place of
-    // no chosen series or a finished one.
+    // no chosen series or a finished one, and its guess ranks nothing.
     const landedState = useUnfoldStore.getState();
     const previousCurrent = landedState.devotionals.find((d) => d.id === previousCurrentId);
     const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals)
       || (!serverAnchor && !holdsNoChosenSeries(previousCurrent) && !isSeriesComplete(previousCurrent));
     if (keepsPrevious) {
-      useUnfoldStore.setState({ currentDevotionalId: previousCurrentId });
+      // Only the series the server would pick takes Today, else Today stays empty.
+      const rivals = serverAnchor
+        ? landedState.devotionals
+        : landedState.devotionals.filter((d) => d.id !== devotionalId);
+      const winner = rivals.find((d) => isStrictActiveSeriesWinner(d.id, rivals));
+      useUnfoldStore.setState({ currentDevotionalId: winner?.id ?? null });
     }
   }
 
