@@ -291,14 +291,18 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   // the same id. Every save addresses savedEntryIdRef and writes the editor's
   // own copy. So the ref follows the store's entry for the day as soon as the
   // store changes, before any pending autosave, and whatever the pull brought
-  // in is rebased into the editor's copy.
+  // in is rebased into the editor's copy. An editor that opened before the day
+  // had an entry follows the first one that arrives, and its pending draft is
+  // rebased onto it as onto an empty entry: the save that follows would
+  // otherwise find that entry and drop the draft.
   useEffect(() => useUnfoldStore.subscribe((state, previous) => {
     const followedId = savedEntryIdRef.current;
-    if (!followedId) return;
     const live = state.journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber);
     if (!live) return;
     if (live.id !== followedId) savedEntryIdRef.current = live.id;
-    const before = previous.journalEntries.find((e) => e.id === followedId);
+    const before = followedId
+      ? previous.journalEntries.find((e) => e.id === followedId)
+      : { ...live, content: '', soapResponses: undefined, questionResponses: [] };
     if (!before || before === live) return;
     // Answers save on every keystroke, so the editor's answers hold nothing the
     // store lacks. They take each answer the store changed, edits or not.

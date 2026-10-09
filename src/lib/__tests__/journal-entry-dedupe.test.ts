@@ -45,7 +45,7 @@ import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFie
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
-import { OUTBOX_KEY } from '../sync-outbox';
+import { OUTBOX_KEY, peekSyncOutbox } from '../sync-outbox';
 
 const DAY_ID = canonicalJournalEntryId('dev-1', 1);
 
@@ -218,6 +218,21 @@ describe('mergeJournalEntryDuplicates', () => {
     ]);
   });
 
+  it('keeps the later prayer decision time when both copies agree on the answer', () => {
+    const prayer = (isAnswered: boolean, over: { answeredAt?: string; answerChangedAt?: string }) => ({
+      id: 'p', text: 'Healing', createdAt: '2026-09-01T10:00:00.000Z', isAnswered, ...over,
+    });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'legacy-a', content: 'Day.', prayerRequests: [prayer(true, { answeredAt: '2026-09-02T10:05:00.000Z', answerChangedAt: '2026-09-02T10:05:00.000Z' })], updatedAt: '2026-09-02T10:05:00.000Z' }),
+      entry({ id: 'legacy-b', content: 'Day.', prayerRequests: [prayer(true, { answeredAt: '2026-09-02T09:00:00.000Z' })], updatedAt: '2026-09-02T10:10:00.000Z' }),
+      entry({ id: DAY_ID, content: 'Day.', prayerRequests: [prayer(false, { answerChangedAt: '2026-09-02T09:30:00.000Z' })], updatedAt: '2026-09-02T10:20:00.000Z' }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([
+      expect.objectContaining({ isAnswered: true, answerChangedAt: '2026-09-02T10:05:00.000Z' }),
+    ]);
+  });
+
   it('keeps every prayer under its own id when two older prayers share their text', () => {
     const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
     const merged = mergeJournalEntryDuplicates([
@@ -373,6 +388,47 @@ describe('prayer answers', () => {
     expect(cleared.isAnswered).toBe(false);
     expect(cleared.answeredAt).toBeUndefined();
     expect(cleared.answerChangedAt).toEqual(expect.any(String));
+  });
+
+  it('stamps a toggle past a decision time this phone\'s clock is behind', () => {
+    const store = useUnfoldStore.getState();
+    const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'text', journalMode: 'freewrite' });
+    store.addPrayerRequest(id, 'Healing');
+    const ahead = '2099-01-01T00:00:00.000Z';
+    useUnfoldStore.setState((state) => ({
+      journalEntries: state.journalEntries.map((e) => (e.id === id
+        ? { ...e, prayerRequests: e.prayerRequests!.map((p) => ({ ...p, isAnswered: true, answeredAt: ahead, answerChangedAt: ahead })) }
+        : e)),
+    }));
+    const prayerId = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0].id;
+
+    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
+
+    const cleared = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
+    expect(cleared.isAnswered).toBe(false);
+    expect(cleared.answerChangedAt! > ahead).toBe(true);
+  });
+});
+
+describe('journal edit clock', () => {
+  it('stamps an edit past a repair the outbox holds ahead of the entry', () => {
+    const store = useUnfoldStore.getState();
+    const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'Before.', journalMode: 'freewrite' });
+    // A crash left a clock-ahead repair queued while the entry on disk kept its older clock.
+    const ahead = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    mmkvStorage.setItem(OUTBOX_KEY, JSON.stringify([{
+      table: 'journal_entries',
+      id,
+      data: { id, devotionalId: 'dev-1', dayNumber: 1, content: 'Before.\n\nRepair.' },
+      clientUpdatedAt: ahead,
+      deleted: false,
+    }]));
+
+    useUnfoldStore.getState().updateJournalEntry(id, 'Edited offline.');
+
+    const queued = peekSyncOutbox().find((change) => change.table === 'journal_entries' && change.id === id);
+    expect(queued?.data).toEqual(expect.objectContaining({ content: 'Edited offline.' }));
+    expect(queued!.clientUpdatedAt > ahead).toBe(true);
   });
 });
 
