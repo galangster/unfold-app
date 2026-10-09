@@ -98,6 +98,9 @@ export function buildNotificationPreferenceRequestBody({
   };
 }
 
+/** A daily reminder for a day the device does not hold yet. It opens Today. */
+export const DAILY_REMINDER_TODAY_TYPE = 'daily_reminder';
+
 export function buildDevotionalReadyNotificationData(
   devotional: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'days'>,
   dayNumber: number,
@@ -127,6 +130,21 @@ export function shouldHandleNotificationData(
 ): boolean {
   if (!data || data.type !== 'devotional_ready') return false;
   return Boolean(data.devotionalId) && data.dayNumber != null;
+}
+
+/**
+ * One key per delivery. Reminders and snoozes reuse their identifier every
+ * time they are scheduled, so the identifier alone would mark the next
+ * delivery as already handled. The delivery date tells deliveries apart and
+ * stays the same when one launch response is reported twice.
+ */
+export function notificationResponseKey(
+  response: { notification?: { date?: number; request?: { identifier?: string } } } | null | undefined,
+): string | undefined {
+  const identifier = response?.notification?.request?.identifier;
+  if (!identifier) return undefined;
+  const date = response?.notification?.date;
+  return typeof date === 'number' && Number.isFinite(date) ? `${identifier}:${date}` : identifier;
 }
 
 export function shouldHydrateNotificationResponse({
@@ -321,6 +339,12 @@ export function buildNotificationNavigationRoute(
 
   // Lapse re-entry: the series is waiting on Today.
   if (data?.type === 'lapse_reentry') {
+    return { pathname: '/(tabs)/(today)' };
+  }
+
+  // A daily reminder for a day the device does not hold yet: Today shows the
+  // day once it arrives.
+  if (data?.type === DAILY_REMINDER_TODAY_TYPE) {
     return { pathname: '/(tabs)/(today)' };
   }
 

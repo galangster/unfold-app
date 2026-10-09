@@ -15,39 +15,85 @@ export interface DailyReminderFingerprintInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   pushRegistered?: boolean;
-  /** A read today changes the trigger (see getDailyReminderTrigger). */
+  /** A read today changes the schedule (see buildDailyReminderSchedule). */
   readToday?: boolean;
 }
 
 export type DailyReminderOwner = 'local' | 'server';
 
-export type DailyReminderTrigger =
-  | { kind: 'daily' }
-  | { kind: 'date'; date: Date };
+/**
+ * How many days ahead the morning reminder is pre-rolled. Same horizon as
+ * the check-ins (check-in-schedule.ts), and the same budget: two check-in
+ * slots plus this stay well inside the 64 pending requests iOS keeps, with
+ * room for the act reminder and the trial-ending notice.
+ */
+export const DAILY_REMINDER_HORIZON_DAYS = 14;
+
+export interface BuildDailyReminderScheduleArgs {
+  clock: { hour: number; minute: number };
+  owner: DailyReminderOwner;
+  /** The reader finished a reading today, so today's slot stays quiet. */
+  readToday: boolean;
+  /** When the reader last finished a day of the current series, if ever. */
+  lastReadAt: Date | null;
+  now: Date;
+  horizonDays?: number;
+}
 
 /**
- * A DAILY trigger cannot skip one occurrence. When the reader has already
- * read today and today's fire time is still ahead, the reminder would
- * announce tomorrow's reading on a day they already finished. Schedule a
- * one-shot for tomorrow instead; the next foreground sync (any open of the
- * app) restores the DAILY floor.
+ * The mornings the local reminder fires, soonest first: one dated request
+ * per day, built the same way as the check-ins.
+ *
+ * A DAILY trigger cannot skip one occurrence, and a one-shot leaves nothing
+ * behind once it fires. A dated horizon does both jobs: it skips today when
+ * the reader already read (the reminder would otherwise announce a day the
+ * app keeps locked until tomorrow), and every later morning stays queued
+ * until an open or the BGAppRefresh task rolls it forward.
+ *
+ * When the server owns the slot, it owns one morning: the one on which the
+ * day after the latest read opens, which its ready push takes. Every other
+ * morning stays local, so one ignored push no longer silences the reminder.
+ * That morning is anchored to the read, not to `now`, so a refill two days
+ * later keeps today.
+ *
+ * The anchor matches the backend's ready-push send time (push-timing.ts,
+ * readyPushSendAt) in the normal case, where the next day generates
+ * overnight. When the push lands on a later morning, that morning gets two
+ * banners: the local one here, and the server's, because the profile flag
+ * says the local queue does not hold the handed-off morning. That happens
+ * when generation slips past the morning the day opens, when a resumed
+ * series has no recent read, or when the owner is 'server' with no read in
+ * the series yet (`lastReadAt` null, so nothing is skipped). These are
+ * failure paths; skipping more mornings to cover them would bring back the
+ * silence this horizon exists to end.
+ *
+ * Dates are absolute instants built from the device's zone at `now`. The
+ * callers rewrite the horizon when that zone changes (see
+ * `withDeviceTimezone` in daily-reminder-sync.ts).
  */
-export function getDailyReminderTrigger({
-  readToday,
+export function buildDailyReminderSchedule({
   clock,
-  now = new Date(),
-}: {
-  readToday: boolean;
-  clock: { hour: number; minute: number };
-  now?: Date;
-}): DailyReminderTrigger {
-  if (!readToday) return { kind: 'daily' };
-  const todayFire = new Date(now);
-  todayFire.setHours(clock.hour, clock.minute, 0, 0);
-  if (todayFire <= now) return { kind: 'daily' };
-  const tomorrow = new Date(todayFire);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return { kind: 'date', date: tomorrow };
+  owner,
+  readToday,
+  lastReadAt,
+  now,
+  horizonDays = DAILY_REMINDER_HORIZON_DAYS,
+}: BuildDailyReminderScheduleArgs): Date[] {
+  const serverMorning = owner === 'server' && lastReadAt
+    ? new Date(lastReadAt.getFullYear(), lastReadAt.getMonth(), lastReadAt.getDate() + 1).toDateString()
+    : null;
+  const dates: Date[] = [];
+
+  for (let offset = 0; offset < horizonDays; offset += 1) {
+    const fireAt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    fireAt.setHours(clock.hour, clock.minute, 0, 0);
+    if (fireAt.getTime() <= now.getTime()) continue;
+    if (offset === 0 && readToday) continue;
+    if (fireAt.toDateString() === serverMorning) continue;
+    dates.push(fireAt);
+  }
+
+  return dates;
 }
 
 export interface DailyReminderOwnerInput {
@@ -58,15 +104,16 @@ export interface DailyReminderOwnerInput {
 }
 
 /**
- * Who fires the morning reminder.
+ * Who fires the morning the next day opens.
  *
- * The local DAILY trigger bakes its copy at schedule time. When the next day
- * is not on the device yet (the normal bedtime state for a progressive
- * series) that copy can only say "your next reading is waiting". The server
- * generates that day overnight and knows its quotable line, so when it can
- * reach the device it owns the slot and the client schedules nothing. Every
- * other state keeps the local reminder: it is the only guaranteed channel,
- * and its copy is specific whenever the day is already on device.
+ * A local reminder bakes its copy at schedule time. When the next day is not
+ * on the device yet (the normal bedtime state for a progressive series) that
+ * copy can only say "your next reading is waiting". The server generates
+ * that day overnight and knows its quotable line, so when it can reach the
+ * device its ready push takes that one morning. The server pushes only when
+ * a day finishes generating, so every later morning stays local
+ * (buildDailyReminderSchedule): the local queue is the only guaranteed
+ * channel, and its copy is specific whenever the day is already on device.
  */
 export function getDailyReminderOwner({
   currentDevotional,
