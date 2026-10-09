@@ -257,13 +257,14 @@ jest.mock('@/lib/devotional-pulled-content', () => ({ applyPulledDevotionalConte
 jest.mock('@/lib/sync-outbox', () => ({ drainSyncOutbox: jest.fn() }));
 jest.mock('@/lib/bug-logger', () => ({
   logBugEvent: (...args: unknown[]) => mockLogBugEvent(...args),
+  logBugError: jest.fn(),
 }));
 jest.mock('@/lib/bible-db', () => ({
   getBibleDbStatus: jest.fn(() => 'ready'),
   downloadBibleDb: jest.fn(async () => undefined),
 }));
 
-import HomeScreen, { applyTodayAutoTrialFocus } from '@/app/(tabs)/(today)/index';
+import HomeScreen, { applyTodayAutoTrialFocus, resumeGeneratingRoute } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { commitDevotionalPullCursor } from '@/lib/devotional-sync-pull';
@@ -272,6 +273,7 @@ import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import { beginLocalResetSession, endLocalResetSession, resetSyncSessionFenceForTesting } from '@/lib/sync-session-fence';
 import {
+  AUTO_TRIAL_INTENT_KEY,
   abandonPurchasedIntentBeforeNewSeries,
   buildRevealGuardKey,
   reconcileAutoTrialIntentOnLaunch,
@@ -789,6 +791,9 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     mockTodayStoreState.devotionals = [];
     mockTodayStoreState.currentDevotionalId = null;
     mockTodayStoreState.getJournalEntry = () => undefined;
+    mockTodayStoreState.failGenerationSession = (error: string) => {
+      mockTodayStoreState.generationSession = { status: 'error', devotionalId: null, title: null, error };
+    };
     mockMmkvItems.set(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(record));
     mockPollJobStatus.mockRejectedValue(serverDown);
     appStateListeners = new Set();
@@ -846,6 +851,68 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
   });
 
+  it('asks again when the reader returns while the first check is still out', async () => {
+    mockPollJobStatus.mockImplementationOnce(() => new Promise(() => {}));
+    await renderToday();
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(1);
+    expect(cardProps().state.type).toBe('empty');
+
+    await foreground();
+
+    expect(mockPollJobStatus).toHaveBeenCalledTimes(2);
+    expect(cardProps().state.type).toBe('pending-initial-resume');
+  });
+
+  it.each([
+    ['a failed job', () => mockPollJobStatus.mockResolvedValue({ status: 'failed', error: 'Generation failed' })],
+    ['a job the server no longer holds', () => mockPollJobStatus.mockRejectedValue(
+      Object.assign(new Error('Not found'), { status: 404 }),
+    )],
+  ])('replaces the waiting card with the failed card for %s', async (_label, answer) => {
+    await renderToday();
+    expect(cardProps().state.type).toBe('pending-initial-resume');
+
+    answer();
+    await foreground();
+
+    expect(mockMmkvItems.has(INFLIGHT_GENERATION_JOB_KEY)).toBe(false);
+    expect(cardProps().state.type).toBe('first-series-failed');
+    expect(cardProps().nonblockingResume).toBeNull();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it('keeps the inline resume for a record that names no series', async () => {
+    // /generating can adopt a running job before the server names its series.
+    const { devotionalId: _unnamed, ...adopted } = record;
+    mockMmkvItems.set(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(adopted));
+    mockTodayStoreState.devotionals = [olderSeries];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    await renderToday();
+
+    expect(cardProps().nonblockingResume).not.toBeNull();
+  });
+
+  it('resumes without the older trial a landed intent still names', async () => {
+    mockMmkvItems.set(AUTO_TRIAL_INTENT_KEY, JSON.stringify(intent({
+      status: 'landed',
+      jobId: 'older-trial-job',
+      devotionalId: 'today-series',
+      revealedAt: '2026-10-01T08:00:00.000Z',
+    })));
+    mockTodayStoreState.devotionals = [olderSeries];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    await renderToday();
+
+    act(() => cardProps().nonblockingResume!.onResume());
+    expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+    mockRouterReplace.mockClear();
+
+    // Once the server answers, the resume takes the same route.
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    await foreground();
+    expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+  });
+
   it('drops the card once the record is gone', async () => {
     await renderToday();
     expect(cardProps().state.type).toBe('pending-initial-resume');
@@ -877,6 +944,17 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     await settle();
 
     expect(cardProps().nonblockingResume).toBeNull();
+  });
+});
+
+describe('resumeGeneratingRoute', () => {
+  it('names the auto-trial intent only for its own job', () => {
+    expect(resumeGeneratingRoute('job-1', { intentId: INTENT_ID, jobId: 'job-1' }))
+      .toEqual({ pathname: '/generating', params: { autoTrialIntentId: INTENT_ID } });
+    // A trial that landed earlier must not take over the new series' wait.
+    expect(resumeGeneratingRoute('job-1', { intentId: INTENT_ID, jobId: 'older-trial-job' }))
+      .toEqual({ pathname: '/generating' });
+    expect(resumeGeneratingRoute('job-1', null)).toEqual({ pathname: '/generating' });
   });
 });
 

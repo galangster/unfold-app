@@ -180,6 +180,18 @@ function generatingRoute(autoTrialIntentId?: string | null): {
     : { pathname: '/generating' };
 }
 
+/**
+ * The /generating route that resumes an app-kill record. The auto-trial
+ * intent goes along only for its own job: a landed or submitted trial left in
+ * storage would otherwise send /generating back to that older series.
+ */
+export function resumeGeneratingRoute(
+  jobId: string,
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'jobId'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent?.jobId === jobId ? intent.intentId : null);
+}
+
 export function applyTodayAutoTrialFocus(i: {
   intent: AutoTrialIntentV1 | null;
   deviceId: string;
@@ -548,6 +560,7 @@ export default function HomeScreen() {
   // it a new reader sat on an empty Today until something else changed.
   const [keptInflightJob, setKeptInflightJob] = useState<InflightGenerationJob | null>(null);
   const [inflightRecheckKey, setInflightRecheckKey] = useState(0);
+  const inflightCheckPendingRef = useRef(false);
   const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
   const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
 
@@ -626,6 +639,7 @@ export default function HomeScreen() {
     const { jobId, devotionalId } = decision.job;
     // A re-check of the kept job keeps its card up until the server answers.
     setKeptInflightJob((prev) => (prev?.jobId === jobId ? prev : null));
+    inflightCheckPendingRef.current = true;
     let cancelled = false;
     const session = captureSyncSession();
     void (async () => {
@@ -642,6 +656,7 @@ export default function HomeScreen() {
         );
       }
       if (cancelled || !isSyncSessionCurrent(session)) return;
+      inflightCheckPendingRef.current = false;
       const resume = resolveInflightResume(poll);
       setKeptInflightJob((prev) => {
         if (resume !== 'keep') return null;
@@ -651,7 +666,7 @@ export default function HomeScreen() {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+        router.replace(resumeGeneratingRoute(jobId, readAutoTrialIntent()));
         return;
       }
       if (resume === 'discard') {
@@ -670,19 +685,23 @@ export default function HomeScreen() {
     })();
     return () => {
       cancelled = true;
+      inflightCheckPendingRef.current = false;
     };
   }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId, inflightRecheckKey]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
 
   // iOS keeps Today mounted and focused while the app is suspended, so the
-  // check above would not run again on its own. A kept record is asked about
-  // again on foreground, at most once per cooldown.
+  // check above would not run again on its own. A return to the foreground
+  // asks again, at most once per cooldown, while a record is kept or a check
+  // is still out: a return during the first check would otherwise be missed.
   const lastInflightRecheckAtRef = useRef<number | null>(null);
-  const hasKeptInflightJob = keptInflightJob != null;
+  const keptInflightJobRef = useRef(keptInflightJob);
+  keptInflightJobRef.current = keptInflightJob;
   useEffect(() => {
-    if (!isTodayFocused || !hasKeptInflightJob) return;
+    if (!isTodayFocused) return;
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
+      if (!inflightCheckPendingRef.current && !keptInflightJobRef.current) return;
       const now = Date.now();
       const lastRecheckAt = lastInflightRecheckAtRef.current;
       if (lastRecheckAt !== null && now - lastRecheckAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
@@ -690,7 +709,7 @@ export default function HomeScreen() {
       setInflightRecheckKey((key) => key + 1);
     });
     return () => subscription.remove();
-  }, [isTodayFocused, hasKeptInflightJob]);
+  }, [isTodayFocused]);
 
   // The series failed after the reader left for Today (the watch below
   // settled on a failure, or the submission itself failed). The session holds
@@ -703,6 +722,12 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
   }, [router]);
+  const keptInflightJobId = keptInflightJob?.jobId ?? null;
+  const handleResumeKeptInflight = useCallback(() => {
+    if (!keptInflightJobId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace(resumeGeneratingRoute(keptInflightJobId, readAutoTrialIntent()));
+  }, [router, keptInflightJobId]);
   const handleResumePendingInitial = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/generating' });
@@ -896,11 +921,13 @@ export default function HomeScreen() {
     && !hasInflightSeriesLanded(generationSessionDevotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
   // A kept record gets the pending card. Continue re-enters /generating on
-  // the record, as the check does once the server answers.
-  const keptInflightResume = keptInflightJob != null
-    && !isInflightSeriesFailed
-    && !hasInflightSeriesLanded(keptInflightJob.devotionalId, landedSeries, hasLandedCurrentSeries)
-    ? { onResume: handleRetryInflightSeries }
+  // the record, as the check does once the server answers. Only a series the
+  // record names counts as landed: a record without one (an adopted job)
+  // says nothing about the series already here.
+  const keptSeriesId = keptInflightJob?.devotionalId;
+  const keptSeriesLanded = keptSeriesId != null && landedSeries.some((row) => row.id === keptSeriesId);
+  const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
+    ? { onResume: handleResumeKeptInflight }
     : null;
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
