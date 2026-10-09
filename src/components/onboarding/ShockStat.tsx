@@ -118,8 +118,9 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
           gap: Spacing['8'],
         }}
       >
-        {/* 93% — top-left, desire */}
-        <View>
+        {/* 93% — top-left, desire. The number types in one character at a
+            time, so each stat carries its whole sentence for VoiceOver. */}
+        <View accessible accessibilityLabel="93% of Christians want a deeper relationship with God.">
           <TypewriterNumber
             text="93%"
             startDelay={200}
@@ -142,7 +143,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
         </View>
 
         {/* 11% — bottom-right, reality (extra 1s pause after first stat) */}
-        <View style={{ alignItems: 'flex-end' }}>
+        <View accessible accessibilityLabel="11% read the Bible daily." style={{ alignItems: 'flex-end' }}>
           <TypewriterNumber
             text="11%"
             startDelay={3000}
