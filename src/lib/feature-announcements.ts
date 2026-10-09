@@ -64,11 +64,6 @@ export type FeatureAnnouncementRecord = {
 };
 
 export type FeatureAnnouncementGateInput = {
-  /**
-   * True once the reader has finished the Today tour. "What's new" is for
-   * readers who used an earlier version. A fresh install meets the tour first.
-   */
-  hasSeenTodayTour: boolean;
   isTodayHome: boolean;
   todayReadingAvailable: boolean;
   soundOff: boolean;
@@ -79,14 +74,6 @@ export type FeatureAnnouncementGateInput = {
   appActive: boolean;
   pendingCount: number;
 };
-
-// Records a failed storage write could not keep. They hold for this app
-// session, so a page settled while storage is unavailable stays closed.
-const unsavedRecords: Record<string, FeatureAnnouncementRecord> = {};
-
-function readRecords(): Record<string, FeatureAnnouncementRecord> {
-  return { ...readRaw(), ...unsavedRecords };
-}
 
 function readRaw(): Record<string, FeatureAnnouncementRecord> {
   try {
@@ -113,28 +100,26 @@ export function isKnownAnnouncementId(id: string): boolean {
 }
 
 export function hasSeenAnnouncement(id: string): boolean {
-  return !!readRecords()[id];
+  return !!readRaw()[id];
 }
 
 export function recordAnnouncement(id: string, status: string): void {
   if (!KNOWN_IDS.has(id) || !KNOWN_STATUSES.has(status)) return;
-  const record = { status, at: Date.now() };
   const next = {
-    ...readRecords(),
-    [id]: record,
+    ...readRaw(),
+    [id]: { status, at: Date.now() },
   };
   try {
     mmkvStorage.setItem(FEATURE_ANNOUNCEMENTS_KEY, JSON.stringify(next));
   } catch {
-    // This visit still remembers the record when storage is unavailable.
-    unsavedRecords[id] = record;
+    // This visit still remembers dismissal when storage is unavailable.
   }
 }
 
 export function listPendingAnnouncementPages(
   availability: FeatureAnnouncementAvailability,
 ): FeatureAnnouncementPage[] {
-  const records = readRecords();
+  const records = readRaw();
   return FEATURE_ANNOUNCEMENT_CATALOG.filter((page) => availability[page.kind] && !records[page.id]);
 }
 
@@ -145,19 +130,9 @@ export function dismissAnnouncementPages(ids: readonly string[]): void {
   }
 }
 
-/**
- * A reader who meets the Today tour is new to this version. Records every
- * current page as settled without showing it, so only pages added in a later
- * version can announce to this reader.
- */
-export function settleAnnouncementsForNewReader(): void {
-  dismissAnnouncementPages(FEATURE_ANNOUNCEMENT_CATALOG.map((page) => page.id));
-}
-
 export function canAnnounceFeatures(input: FeatureAnnouncementGateInput): boolean {
   return (
-    input.hasSeenTodayTour
-    && input.todayReadingAvailable
+    input.todayReadingAvailable
     && input.isTodayHome
     && input.soundOff
     && input.timerIdle

@@ -25,7 +25,7 @@ import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
 import { TAB_BAR_HORIZONTAL_PADDING, titleForVisibleTab } from '@/lib/visible-tabs';
 import { useUnfoldStore } from '@/lib/store';
-import { COMPANION_FALLBACK_NAME, resolveCompanionDisplayName } from '@/lib/support-clarity';
+import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 // Expo Router owns its tab navigator types in SDK 56+. Use structural typing
 // here so this custom tab bar stays decoupled from router internals.
 type TabBarProps = {
@@ -408,8 +408,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="(ask)"
           options={{
-            title: companionName ?? COMPANION_FALLBACK_NAME,
-            tabBarAccessibilityLabel: companionName ? `${companionName}, your companion` : COMPANION_FALLBACK_NAME,
+            title: companionName ?? 'Companion',
+            tabBarAccessibilityLabel: companionName ? `${companionName}, your companion` : 'Companion',
           }}
         />
         <Tabs.Screen
