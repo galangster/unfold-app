@@ -1338,6 +1338,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     );
 
     if (event.silent) {
+      // A replay saves a change the reader made on the page a font switch
+      // replaced. It was not an Undo, and its own event was never logged.
+      if (event.reason === 'replay') return;
       const name = event.reason === 'heal' ? AnalyticsEvents.HIGHLIGHT_HEALED : AnalyticsEvents.HIGHLIGHT_UNDONE;
       logEvent(name, { added: event.added.length, removed: event.removed.length });
       if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: effectiveDevotionalId, day: viewingDay, count: event.added.length });
@@ -1351,7 +1354,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       logEvent(AnalyticsEvents.HIGHLIGHT_CREATED, { color: primary?.color ?? 'yellow', chars: primary?.text.length ?? 0, recolor: event.reason === 'recolor' });
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '' }[event.reason];
+    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '', replay: '' }[event.reason];
     const page = highlightPageRef.current;
     setHighlightToast({
       message,

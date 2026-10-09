@@ -643,7 +643,7 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain("postHighlightsChanged('create', before, primarySerial, false)");
     expect(script).toContain("postHighlightsChanged('remove', before, '', false)");
     expect(script).toContain("postHighlightsChanged('recolor', before, primarySerial, false)");
-    expect(script).toContain("postHighlightsChanged('undo', before, '', true)");
+    expect(script).toContain("postHighlightsChanged(change && change.reason === 'replay' ? 'replay' : 'undo', before, '', true)");
     // Nothing applied on the page ⇒ nothing stored: a failure is reported instead.
     expect(script).toContain("type: 'HIGHLIGHT_FAILED'");
     expect(script).not.toContain("type: 'QUOTE_SELECTED'");
@@ -882,7 +882,7 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
       expect(onHighlightsChanged).not.toHaveBeenCalled();
       const replays = mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
       expect(replays).toHaveLength(1);
-      expect(String(replays[0][0])).toContain(JSON.stringify({ added: [], removed: added }));
+      expect(String(replays[0][0])).toContain(JSON.stringify({ added: [], removed: added, reason: 'replay' }));
     } finally {
       mockDevotionalWebFont = savedFont;
     }
@@ -1838,6 +1838,30 @@ describe('DevotionalWebView selection bar (the page, in jsdom)', () => {
 
   afterEach(() => {
     while (openPages.length) openPages.pop()?.window.close();
+  });
+
+  // 2026-10-09 release audit round 3: a change an older page of the same words
+  // posted too late is replayed on the live page. A rebuilt page gives the
+  // marks it restores new ids, so a replayed removal finds its mark by where it is.
+  it('replays a late create, then a late removal whose serial carries another page\'s id', async () => {
+    const tree = renderPage();
+    const oldPage = await openPage(tree);
+    await highlightWords(oldPage, 'Grace meets you', 'yellow');
+    const created = lastMessage(oldPage, 'HIGHLIGHTS_CHANGED').added[0];
+    const parts = created.serial.split('$');
+    parts[2] = '7';
+    const oldSerial = parts.join('$');
+
+    const livePage = await openPage(tree);
+    livePage.window.__unfoldApplyInverse({ added: [], removed: [{ ...created, serial: oldSerial }], reason: 'replay' });
+    expect(livePage.document.querySelector('mark.highlight-yellow')?.textContent).toBe('Grace meets you');
+    expect(lastMessage(livePage, 'HIGHLIGHTS_CHANGED')).toMatchObject({ reason: 'replay', silent: true, removed: [], docId: getDocId(tree) });
+
+    livePage.window.__unfoldApplyInverse({ added: [{ ...created, serial: oldSerial }], removed: [], reason: 'replay' });
+    expect(livePage.document.querySelector('mark')).toBeNull();
+    const removal = lastMessage(livePage, 'HIGHLIGHTS_CHANGED');
+    expect(removal).toMatchObject({ reason: 'replay', added: [] });
+    expect(removal.removed).toEqual([expect.objectContaining({ text: 'Grace meets you' })]);
   });
 
   it('shows the bar above a new selection with Highlight, Bookmark, Share, and Copy', async () => {

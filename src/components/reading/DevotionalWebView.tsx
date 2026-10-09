@@ -34,8 +34,12 @@ import { TAP_MAX_MS, TAP_SLOP_PX } from './useSelectionBarOutsideTap';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
+/** A change sent to the live page: an Undo, or (reason `replay`) a late change replayed forward. */
+type PageChange = Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> & { reason?: 'replay' };
+
 export interface HighlightsChangedEvent {
-  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal';
+  /** `replay`: a change an older page of the same content posted too late, applied here. */
+  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal' | 'replay';
   removed: LiveHighlight[];
   added: LiveHighlight[];
   /** Serial of the highlight the person acted on (create / recolor). */
@@ -269,10 +273,18 @@ const HIGHLIGHTS_SCRIPT = `
         return out;
       }
 
+      // A serial is start$end$id$class$container. The id is per page: a
+      // highlight restored on a rebuilt page gets a new one, so a highlight
+      // is found by where it is and what it is.
+      function serialPosition(serial) {
+        var parts = String(serial || '').split('$');
+        return [parts[0], parts[1], parts[3], parts[4] || ''].join('$');
+      }
       function findBySerial(serial) {
         var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        var wanted = serialPosition(serial);
         for (var i = 0; i < hs.length; i++) {
-          if (getRangySerial(hs[i]) === serial) return hs[i];
+          if (serialPosition(getRangySerial(hs[i])) === wanted) return hs[i];
         }
         return null;
       }
@@ -450,7 +462,7 @@ const HIGHLIGHTS_SCRIPT = `
           console.log('Undo failed:', err);
         }
         closeBar(false);
-        postHighlightsChanged('undo', before, '', true);
+        postHighlightsChanged(change && change.reason === 'replay' ? 'replay' : 'undo', before, '', true);
       };
 
       // Tap-to-edit's X: remove the highlight the mark belongs to.
@@ -2538,7 +2550,7 @@ export function DevotionalWebView({
   // Highlight changes for the live page, in order, while no page is ready (a
   // font still loading unmounts it): an Undo, or a change an older page with
   // the same content posted. Each waits for the next page's first report.
-  const pendingPageChangesRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>[]>([]);
+  const pendingPageChangesRef = useRef<PageChange[]>([]);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2652,7 +2664,7 @@ export function DevotionalWebView({
 
   // Undoes `change` on the live page when that page shows the same content.
   // The page then posts the result as a silent change, which the reader saves.
-  const sendInverseToLivePage = useCallback((change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => {
+  const sendInverseToLivePage = useCallback((change: PageChange) => {
     if (!showsSameContent(change.docId)) return;
     // A change from the page on screen proves that page runs its scripts.
     const pageReady = Boolean(webViewRef.current) && (
@@ -2662,7 +2674,7 @@ export function DevotionalWebView({
       pendingPageChangesRef.current.push(change);
       return;
     }
-    callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+    callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed, reason: change.reason });
   }, [callPage, showsSameContent]);
 
   useEffect(() => {
@@ -2788,6 +2800,7 @@ export function DevotionalWebView({
               added: Array.isArray(data.removed) ? data.removed : [],
               removed: Array.isArray(data.added) ? data.added : [],
               docId: data.docId,
+              reason: 'replay',
             });
           }
           return;
@@ -2844,7 +2857,7 @@ export function DevotionalWebView({
           pendingPageChangesRef.current = [];
           for (const change of pendingChanges) {
             if (showsSameContent(change.docId)) {
-              callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+              callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed, reason: change.reason });
             }
           }
           if (layoutGeneration > 0) {
