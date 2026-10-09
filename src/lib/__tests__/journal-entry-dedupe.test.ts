@@ -453,6 +453,14 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('', 'My prayer, continued', 'My prayer')).toBe('My prayer, continued');
   });
 
+  it('does not repeat an edit both devices made the same way', () => {
+    expect(rebaseJournalDraft('Old.', 'New.\n\nTablet note.', 'New.')).toBe('New.\n\nTablet note.');
+  });
+
+  it('still appends a draft the merge does not hold when the base is gone', () => {
+    expect(rebaseJournalDraft('Old.', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
+  });
+
   it('still keeps a deletion when the merge added words after it', () => {
     expect(rebaseJournalDraft('Hope is', 'Hope is here today', 'Hope')).toBe('Hope here today');
   });
