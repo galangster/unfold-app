@@ -300,6 +300,59 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(mockNavigate).toHaveBeenCalledTimes(2);
   });
 
+  it('offers one link beside Begin the Next Study after a finished series', async () => {
+    const onChooseOther = jest.fn();
+    const tree = await mount({ variant: 'completion', onChooseOther });
+    const { Text } = require('react-native');
+    const labels = tree.root.findAllByType(Text).map((node: { props: { children: unknown } }) => node.props.children);
+
+    expect(labels).toContain('Begin the Next Study');
+    expect(labels).toContain('Create your own series');
+    expect(labels).not.toContain('Choose another direction');
+    const link = tree.root.findByProps({ accessibilityLabel: 'Create your own series' });
+    act(() => link.props.onPress());
+    expect(onChooseOther).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the create-your-own link on the completion card while the recommendation loads', async () => {
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockFetch.mockReturnValue(new Promise(() => undefined));
+    const onChooseOther = jest.fn();
+    const tree = await mount({ variant: 'completion', onChooseOther });
+
+    expect(tree.root.findByProps({ accessibilityLabel: 'Finding a recommended devotional series' })).toBeTruthy();
+    act(() => tree.root.findByProps({ accessibilityLabel: 'Create your own series' }).props.onPress());
+    expect(onChooseOther).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['is rejected', () => mockFetch.mockRejectedValue(new Error('offline'))],
+    ['returns an error status', () => mockFetch.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) })],
+  ])('shows the completion fallback once when the request %s', async (_case, failRequest) => {
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    failRequest();
+    const { Text, TouchableOpacity } = jest.requireActual('react-native');
+    const onCreateNew = jest.fn();
+    const tree = await mount({
+      variant: 'completion',
+      renderFallback: () => (
+        <TouchableOpacity accessibilityLabel="Create a new devotional series" onPress={onCreateNew}>
+          <Text>Create Series</Text>
+        </TouchableOpacity>
+      ),
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const texts = renderedTexts(tree);
+    expect(texts.filter((text) => text === 'Create Series')).toHaveLength(1);
+    expect(texts).not.toContain('Create your own series');
+    expect(texts).not.toContain('Finding your next thread.');
+    act(() => tree.root.findByProps({ accessibilityLabel: 'Create a new devotional series' }).props.onPress());
+    expect(onCreateNew).toHaveBeenCalledTimes(1);
+  });
+
   it('skips the recommendation fetch when storedPick is present', async () => {
     const tree = await mount({
       storedPick,

@@ -207,14 +207,26 @@ export function RecommendedSeriesCard({
   }
 
   const isCompletion = variant === 'completion';
+  // After a finished series, this link is the only other next step on Today,
+  // so the completion card shows it while the recommendation loads too.
+  const otherLabel = isCompletion ? 'Create your own series' : 'Choose another direction';
+  const otherAction = (
+    <TouchableOpacity
+      activeOpacity={0.72}
+      onPress={onChooseOther}
+      accessibilityRole="button"
+      accessibilityLabel={isCompletion ? otherLabel : 'Choose a different devotional direction'}
+      accessibilityHint="Opens the new series setup instead of this recommendation"
+      style={styles.secondaryAction}
+    >
+      <Text style={[styles.secondaryText, { color: colors.textMuted }]}>{otherLabel}</Text>
+    </TouchableOpacity>
+  );
 
   if (loading) {
     return (
       <Animated.View entering={entering(FadeIn.duration(200).easing(Ease.out))}>
         <GlassSurface
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel="Finding a recommended devotional series"
           radius={Radius.xl}
           style={[
             styles.card,
@@ -222,25 +234,34 @@ export function RecommendedSeriesCard({
             { shadowColor: colors.accent },
           ]}
         >
-          <Text style={[styles.loadingTitle, { color: colors.text }]}>Finding your next thread.</Text>
-          <Text style={[styles.loadingCopy, { color: colors.textMuted }]}>Unfold is matching a devotional to your story and rhythm.</Text>
+          <View accessible accessibilityRole="progressbar" accessibilityLabel="Finding a recommended devotional series">
+            <Text style={[styles.loadingTitle, { color: colors.text }]}>Finding your next thread.</Text>
+            <Text style={[styles.loadingCopy, { color: colors.textMuted }]}>Unfold is matching a devotional to your story and rhythm.</Text>
 
-          <View style={styles.loadingMetaRow}>
-            {[0, 1].map((index) => (
-              <View
-                key={index}
-                style={[
-                  styles.loadingPill,
-                  {
-                    backgroundColor: alpha(colors.accent, index === 0 ? 0.12 : 0.075),
-                    borderColor: alpha(colors.accent, index === 0 ? 0.2 : 0.12),
-                  },
-                ]}
-              />
-            ))}
+            <View style={styles.loadingMetaRow}>
+              {[0, 1].map((index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.loadingPill,
+                    {
+                      backgroundColor: alpha(colors.accent, index === 0 ? 0.12 : 0.075),
+                      borderColor: alpha(colors.accent, index === 0 ? 0.2 : 0.12),
+                    },
+                  ]}
+                />
+              ))}
+            </View>
           </View>
 
-          <ActivityIndicator color={colors.accent} size="small" style={styles.loadingSpinner} />
+          <ActivityIndicator
+            color={colors.accent}
+            size="small"
+            style={styles.loadingSpinner}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+          {isCompletion ? otherAction : null}
         </GlassSurface>
       </Animated.View>
     );
@@ -302,16 +323,7 @@ export function RecommendedSeriesCard({
             <Text style={[styles.primaryArrow, { color: colors.accent }]}>→</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.72}
-            onPress={onChooseOther}
-            accessibilityRole="button"
-            accessibilityLabel="Choose a different devotional direction"
-            accessibilityHint="Opens the new series setup instead of this recommendation"
-            style={styles.secondaryAction}
-          >
-            <Text style={[styles.secondaryText, { color: colors.textMuted }]}>Choose another direction</Text>
-          </TouchableOpacity>
+          {otherAction}
         </View>
       </GlassSurface>
     </Animated.View>

@@ -4,7 +4,8 @@ import { INPUT_LIMITS } from '@/lib/validation';
 
 export const COMPANION_NAME_MAX_LENGTH = 30;
 export const PERSONAL_CONTEXT_MAX_LENGTH = INPUT_LIMITS.LONG_TEXT.max;
-export const DEFAULT_COMPANION_NAME = 'Grace';
+/** The name the tab, the tour, and the Settings name field show until the reader names the Companion. */
+export const COMPANION_FALLBACK_NAME = 'Companion';
 
 export const COMPANION_INTRO_BODY =
   "Your Companion is here to talk through Scripture, pray with you, and help you reflect. Choose the style that feels right for you.";
@@ -77,11 +78,20 @@ export function resolveCompanionDisplayName(
   return named || null;
 }
 
-export function resolveCompanionNameToPersist(
-  input: string,
-  fallback = DEFAULT_COMPANION_NAME,
+/** The saved name, or "Companion" when the reader has not named it. */
+export function resolveCompanionLabel(
+  userCompanionName?: string | null,
+  storeCompanionName?: string | null,
 ): string {
-  return input.trim() || fallback;
+  return resolveCompanionDisplayName(userCompanionName, storeCompanionName) ?? COMPANION_FALLBACK_NAME;
+}
+
+/**
+ * The name to save. A blank answer saves no name, so the app calls the
+ * Companion "Companion" instead of a name the reader never chose.
+ */
+export function resolveCompanionNameToPersist(input: string): string {
+  return input.trim();
 }
 
 export function createPersonalContextDraft(
