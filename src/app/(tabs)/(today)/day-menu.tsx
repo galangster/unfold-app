@@ -40,6 +40,9 @@ const GENERIC_UNLOCK_LABEL = 'Unlocks as you continue your reading';
 // settles back to its resting opacity.
 const TAP_EMPHASIS_MS = 900;
 
+// Counts the day menu's choices, so the reader can tell a new one apart.
+let lastDayRequest = 0;
+
 export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const router = useRouter();
   const calendarNow = useCalendarNow();
@@ -100,11 +103,15 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Reuse the reader below the sheet instead of stacking a second reader.
+    // The reader applies a route's day once, and a swipe does not change the
+    // route, so each choice carries a new request: picking the day the route
+    // already names still opens it.
     router.dismissTo({
       pathname: resolveStackRoute(hostTab, 'reading'),
       params: {
         devotionalId: devotional.id,
         dayNumber: dayNumber.toString(),
+        dayRequest: String(++lastDayRequest),
         ...(params.from ? { from: params.from } : {}),
         ...(params.readOnly ? { readOnly: params.readOnly } : {}),
       },

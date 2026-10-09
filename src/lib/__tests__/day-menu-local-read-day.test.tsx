@@ -123,6 +123,17 @@ describe.each([
     expect(open).toHaveBeenCalledWith(2);
   });
 
+  it('sends a new request with each choice, so the reader opens a day its route already names', () => {
+    const picker = render(<DayMenuScreen />);
+
+    fireEvent.press(picker.getByText('Day 3 title'));
+    fireEvent.press(picker.getByText('Day 3 title'));
+    const requests = mockDismissTo.mock.calls.map(([route]) => route.params.dayRequest);
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toEqual(expect.any(String));
+    expect(requests[1]).not.toBe(requests[0]);
+  });
+
   it('keeps the days after it open in the day picker', () => {
     const picker = render(<DayMenuScreen />);
 
