@@ -26,6 +26,7 @@ import { newId } from './sync-ids';
 import { recordReplacedSeries } from './series-replacement';
 import { allocateBibleReadingId } from './bible-reading-ids';
 import { answerDecidedAt, canonicalJournalEntryId } from './journal-entry-merge';
+import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
@@ -1097,23 +1098,56 @@ function logRefusedSeriesSelection(reason: 'archived' | 'missing'): void {
   );
 }
 
-/**
- * The clock for a write to a journal entry: now, or just after the entry's
- * own clock when that is later. A pulled row can be dated ahead of this
- * phone, and a merge repair is stamped past the rows it folds. A write
- * stamped before either would lose to it in the outbox and on the server.
- */
 /** A prayer toggle's time: now, or just past the copy's last decision when this clock is behind it. */
 function laterDecisionTime(previous: string | undefined, now: string): string {
   if (!previous || previous < now) return now;
   return new Date(Date.parse(previous) + 1).toISOString();
 }
 
+/**
+ * The clock for a write to a journal entry: now, or just after the entry's
+ * own clock when that is later. A pulled row can be dated ahead of this
+ * phone, and a merge repair is stamped past the rows it folds. A write
+ * stamped before either would lose to it in the outbox and on the server.
+ */
 function journalWriteClock(entry: JournalEntry, now: string): string {
   const after = entry.updatedAt ? Date.parse(entry.updatedAt) + 1 : Number.NaN;
   if (!Number.isFinite(after)) return now;
   const next = new Date(after).toISOString();
   return next > now ? next : now;
+}
+
+/**
+ * The entry a journal write builds on, and its clock. The outbox is written
+ * at once and the store a moment later, so after a crash in between the
+ * outbox can hold a newer change for the entry than its stored row: a
+ * clock-ahead repair, a delete, or a write the v42 migration re-keyed. The
+ * write is stamped past both, so it wins in the outbox and on the server. A
+ * newer live copy's writing is the base, so the edit keeps what the copy
+ * carries, such as a repair's merged fields.
+ */
+function journalWriteBase(stored: JournalEntry, now: string): { entry: JournalEntry; updatedAt: string } {
+  const queued = peekSyncOutbox()
+    .find((change) => change.table === 'journal_entries' && change.id === stored.id);
+  if (!queued || !(queued.clientUpdatedAt > (stored.updatedAt ?? ''))) {
+    return { entry: stored, updatedAt: journalWriteClock(stored, now) };
+  }
+  const updatedAt = journalWriteClock({ updatedAt: queued.clientUpdatedAt } as JournalEntry, now);
+  if (queued.deleted) return { entry: stored, updatedAt };
+  const data = queued.data ?? {};
+  const list = <T>(value: unknown): T[] | undefined => (Array.isArray(value) ? value as T[] : undefined);
+  return {
+    entry: {
+      ...stored,
+      content: typeof data.content === 'string' ? data.content : '',
+      journalMode: normalizeJournalMode(data.journalMode),
+      soapResponses: normalizeSoapResponses(data.soapResponses),
+      prayerRequests: list<PrayerRequest>(data.prayerRequests),
+      questionResponses: list<{ question: string; response: string }>(data.questionResponses),
+      deeperQuestions: list<string>(data.deeperQuestions),
+    },
+    updatedAt,
+  };
 }
 
 function enqueueDevotionalRow(devotional: Devotional): void {
@@ -1596,9 +1630,10 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== id) return e;
-            changed = { ...e, content, updatedAt: journalWriteClock(e, now) };
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== id) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
+            changed = { ...e, content, updatedAt };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
@@ -1610,9 +1645,10 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== id) return e;
-            changed = { ...e, journalMode: mode, updatedAt: journalWriteClock(e, now) };
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== id) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
+            changed = { ...e, journalMode: mode, updatedAt };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
@@ -1624,13 +1660,14 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== id) return e;
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== id) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
             const soap = e.soapResponses ?? { scripture: '', observation: '', application: '', prayer: '' };
             changed = {
               ...e,
               soapResponses: { ...soap, [field]: value },
-              updatedAt: journalWriteClock(e, now),
+              updatedAt,
             };
             return changed;
           });
@@ -1643,8 +1680,9 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== entryId) return e;
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== entryId) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
             const prayers = e.prayerRequests ?? [];
             changed = {
               ...e,
@@ -1657,7 +1695,7 @@ export const useUnfoldStore = create<UnfoldState>()(
                   createdAt: now,
                 },
               ],
-              updatedAt: journalWriteClock(e, now),
+              updatedAt,
             };
             return changed;
           });
@@ -1670,8 +1708,9 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== entryId) return e;
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== entryId) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
             changed = {
               ...e,
               prayerRequests: (e.prayerRequests ?? []).map((p) =>
@@ -1684,7 +1723,7 @@ export const useUnfoldStore = create<UnfoldState>()(
                   }
                   : p
               ),
-              updatedAt: journalWriteClock(e, now),
+              updatedAt,
             };
             return changed;
           });
@@ -1697,8 +1736,9 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== entryId) return e;
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== entryId) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
             const existing = e.questionResponses ?? [];
             const idx = existing.findIndex((qr) => qr.question === question);
             let updated: { question: string; response: string }[];
@@ -1707,7 +1747,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             } else {
               updated = [...existing, { question, response }];
             }
-            changed = { ...e, questionResponses: updated, updatedAt: journalWriteClock(e, now) };
+            changed = { ...e, questionResponses: updated, updatedAt };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
@@ -1719,9 +1759,10 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const now = new Date().toISOString();
           let changed: JournalEntry | null = null;
-          const journalEntries = state.journalEntries.map((e) => {
-            if (e.id !== entryId) return e;
-            changed = { ...e, deeperQuestions: questions, updatedAt: journalWriteClock(e, now) };
+          const journalEntries = state.journalEntries.map((stored) => {
+            if (stored.id !== entryId) return stored;
+            const { entry: e, updatedAt } = journalWriteBase(stored, now);
+            changed = { ...e, deeperQuestions: questions, updatedAt };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
