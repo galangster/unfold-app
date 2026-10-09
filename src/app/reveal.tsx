@@ -36,6 +36,7 @@ import {
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
+import type { ActiveSeriesCandidate } from '@/lib/devotional-active-selection';
 import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
 import { Typography } from '@/constants/typography';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -51,16 +52,17 @@ const CURTAIN_SPRING = { damping: 30, stiffness: 200, mass: 1 };
 
 /**
  * Pull the series a ready push names onto this device. A failure leaves the
- * store as it was, and the reveal then sends the reader to Today.
+ * store as it was, and the reveal then sends the reader to Today. Returns the
+ * series rows the pull saw, which can include series this device lacks.
  */
 async function pullRevealSeries(
   devotionalId: string,
   updateDevotionalDays: Parameters<typeof applyPulledDevotionalContent>[0]['updateDevotionalDays'],
-): Promise<void> {
+): Promise<readonly ActiveSeriesCandidate[] | null> {
   const session = captureSyncSession();
   try {
     const pulled = await pullDevotionalContent(devotionalId, { timeoutMs: REVEAL_SERIES_PULL_TIMEOUT_MS });
-    if (!isSyncSessionCurrent(session)) return;
+    if (!isSyncSessionCurrent(session)) return null;
     applyPulledDevotionalContent({
       devotionalId,
       pulled,
@@ -69,10 +71,12 @@ async function pullRevealSeries(
     });
     // The cursor moves only once the rows are on disk, as on Today.
     await flushUnfoldStorePersistAsync();
-    if (!isSyncSessionCurrent(session)) return;
+    if (!isSyncSessionCurrent(session)) return null;
     commitDevotionalPullCursor(pulled);
+    return pulled.canonicalSeries ?? [];
   } catch (err) {
     logger.warn('[Reveal] could not pull the series a ready push names:', err instanceof Error ? err.message : err);
+    return null;
   }
 }
 
@@ -119,6 +123,7 @@ export default function RevealScreen() {
   // The series being pulled, if any. The curtain holds until the pull settles.
   const [pullingSeriesId, setPullingSeriesId] = useState<string | null>(null);
   const seriesPullAttemptsRef = useRef(new Set<string>());
+  const pulledSeriesRef = useRef<readonly ActiveSeriesCandidate[]>([]);
 
   const revealedDay = devotionals
     .find((row) => row.id === revealTarget?.devotionalId)?.days
@@ -223,7 +228,11 @@ export default function RevealScreen() {
     if (missingSeriesId && !seriesPullAttemptsRef.current.has(missingSeriesId)) {
       seriesPullAttemptsRef.current.add(missingSeriesId);
       setPullingSeriesId(missingSeriesId);
-      void pullRevealSeries(missingSeriesId, updateDevotionalDays).finally(() => setPullingSeriesId(null));
+      void pullRevealSeries(missingSeriesId, updateDevotionalDays)
+        .then((pulledSeries) => {
+          if (pulledSeries) pulledSeriesRef.current = pulledSeries;
+        })
+        .finally(() => setPullingSeriesId(null));
       return;
     }
     hasNavigated.current = true;
@@ -255,7 +264,13 @@ export default function RevealScreen() {
     // Mark this day as revealed — teaser card won't show again
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
     const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
-    const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, latestDevotionals);
+    // A pull can show a newer series this device does not hold yet. It counts
+    // too, so only the series the server would pick becomes current.
+    const candidates = [
+      ...latestDevotionals,
+      ...pulledSeriesRef.current.filter((series) => !latestDevotionals.some((row) => row.id === series.id)),
+    ];
+    const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);
       setResumeContext({

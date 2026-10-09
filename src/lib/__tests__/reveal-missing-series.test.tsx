@@ -44,15 +44,25 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
+// Each detector renders a marker that carries whether its swipe is enabled:
+// the curtain's first, then the prompt's nested inside it.
 jest.mock('react-native-gesture-handler', () => {
+  // Bracket access keeps the NativeWind transform off this factory.
+  const mockReact = require('react');
   const pan = () => {
     const gesture: Record<string, unknown> = {};
-    for (const method of ['enabled', 'onBegin', 'onUpdate', 'onEnd', 'onFinalize']) gesture[method] = () => gesture;
+    for (const method of ['onBegin', 'onUpdate', 'onEnd', 'onFinalize']) gesture[method] = () => gesture;
+    gesture.enabled = (value: boolean) => {
+      gesture.isEnabled = value;
+      return gesture;
+    };
     return gesture;
   };
   return {
     Gesture: { Pan: pan },
-    GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+    GestureDetector: ({ gesture, children }: { gesture: { isEnabled?: boolean }; children: React.ReactNode }) => (
+      mockReact['createElement']('reveal-pan', { testID: 'reveal-pan', gestureEnabled: gesture.isEnabled === true }, children)
+    ),
   };
 });
 
@@ -155,6 +165,19 @@ function pulledSeries() {
   };
 }
 
+// A pull that also carries the account's series rows.
+function pulledWithSeries(rows: { id: string; createdAt: string }[]) {
+  // The pulled series started after the one here (a pulled shell dates
+  // itself by its start).
+  const pulled = pulledSeries();
+  pulled.devotional.createdAt = '2026-10-09T09:00:00.000Z';
+  pulled.devotional.seriesStartDate = '2026-10-09T09:00:00.000Z';
+  return {
+    ...pulled,
+    canonicalSeries: rows.map((row) => ({ ...row, generationMode: 'progressive' as const, updatedAt: row.createdAt })),
+  };
+}
+
 function nothingPulled() {
   return { days: [], timestamp: NOW };
 }
@@ -177,6 +200,20 @@ async function openReadyPush(devotionalId: string, dayNumber = '1') {
   };
   await act(async () => { tree = renderer.create(<RevealScreen />); });
   await settle();
+}
+
+function panStates(): boolean[] {
+  return tree.root
+    .findAll((node: any) => node.props.testID === 'reveal-pan' && typeof node.type === 'string')
+    .map((node: any) => node.props.gestureEnabled);
+}
+
+function layOut(viewport: number, content: number) {
+  const scroll = tree.root.findAll((node: any) => typeof node.props.onContentSizeChange === 'function')[0];
+  act(() => {
+    scroll.props.onLayout({ nativeEvent: { layout: { height: viewport } } });
+    scroll.props.onContentSizeChange(0, content);
+  });
 }
 
 function pressReveal() {
@@ -218,6 +255,55 @@ describe('reveal for a series this device does not hold yet', () => {
       pathname: '/(tabs)/(today)/reading',
       params: expect.objectContaining({ devotionalId: PULLED_ID, dayNumber: '1' }),
     }));
+  });
+
+  it('makes the pulled series current only when the server would pick it', async () => {
+    // The pull brings a series newer than the one here: it is the winner.
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(PULLED_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBeUndefined();
+    act(() => tree.unmount());
+    tree = null;
+
+    // An older push: the account has a newer series this device lacks, so the
+    // pulled one opens read-only and Today keeps its series.
+    jest.clearAllMocks();
+    useUnfoldStore.setState({ devotionals: [localSeries], currentDevotionalId: LOCAL_ID, resumeContext: null });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      { id: 'newest-series', createdAt: '2026-10-09T10:00:00.000Z' },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
+    expect(mockRouterReplace.mock.calls[0][0]).toEqual({
+      pathname: '/(tabs)/(today)/reading',
+      params: { devotionalId: PULLED_ID, dayNumber: '1', readOnly: '1' },
+    });
+  });
+
+  it('holds both swipes while the pull is out, then frees the one the layout uses', async () => {
+    let resolvePull: (value: ReturnType<typeof pulledSeries>) => void = () => {};
+    mockPullDevotionalContent.mockImplementation(() => new Promise((resolve) => { resolvePull = resolve; }));
+    await openReadyPush(PULLED_ID);
+    expect(panStates()).toEqual([false, false]);
+
+    // Content taller than the screen moves the swipe to the prompt.
+    layOut(500, 900);
+    expect(panStates()).toEqual([false, false]);
+
+    await act(async () => { resolvePull(pulledSeries()); });
+    await settle();
+    expect(panStates()).toEqual([false, true]);
+
+    layOut(500, 300);
+    expect(panStates()).toEqual([true, false]);
   });
 
   it('sends the reader to Today once when the pull fails or finds nothing', async () => {
