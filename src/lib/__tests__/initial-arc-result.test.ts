@@ -40,6 +40,7 @@ jest.mock('../mmkv-storage', () => {
 import {
   createAutoTrialIntent,
   readAutoTrialIntent,
+  settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
 } from '../auto-trial-intent';
 import { withOnboardingFirstReadingArc } from '../auto-trial-series';
@@ -913,6 +914,27 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
       { user, devotionalLength: 3, session: captureSyncSession() },
     );
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('newer-series');
+  });
+
+  // Round 7 again: retiring the current sample handed Today to the trial
+  // before the winner check ran.
+  it('leaves Today empty when an older trial retires the current sample beside a newer live series', () => {
+    const intent = seedSubmittedIntent();
+    const row = (id: string, createdAt: string, days: DevotionalDay[] = []) => ({
+      id, title: id, totalDays: 3, currentDay: 1, days, createdAt, updatedAt: createdAt, generationMode: 'progressive',
+    } as unknown as Devotional);
+    useUnfoldStore.setState({
+      devotionals: [
+        row('onboarding-sample-1', '2026-09-08T16:00:00.000Z'),
+        row('devo-1', '2026-09-08T17:00:00.000Z', [{ ...day1, devotionalId: 'devo-1', id: 'devo-1:1' }]),
+        row('newer-series', '2026-10-09T08:00:00.000Z'),
+      ],
+      currentDevotionalId: 'onboarding-sample-1',
+    });
+
+    settleLandedAutoTrialSeries(intent, 'devo-1');
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 
   it('settles the matching id in the else branch', () => {

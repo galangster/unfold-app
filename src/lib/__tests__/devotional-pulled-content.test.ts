@@ -63,7 +63,7 @@ describe('pulled devotional content application', () => {
   // 2026-10-09 release audit round 7: a sync applied another device's delete
   // while a pull of the same series was out, and the pull then restored it.
   it('applies nothing for a series a sync deleted while the pull was out', () => {
-    rememberDeletedSeries('devotional-1');
+    rememberDeletedSeries('devotional-1', '2026-04-25T13:30:00.000Z');
     const updateDevotionalDays = jest.fn();
     const updateDevotionals = jest.fn();
 
@@ -76,6 +76,24 @@ describe('pulled devotional content application', () => {
 
     expect(updateDevotionals).not.toHaveBeenCalled();
     expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
+
+  // Round 7 again: a delete that lost to a newer server row left the series
+  // blocked from every later pull.
+  it('applies a copy the server kept past a delete that lost', () => {
+    rememberDeletedSeries('devotional-1', '2026-04-25T13:00:00.000Z');
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).toHaveBeenCalledTimes(1);
+    expect(updateDevotionalDays).toHaveBeenCalledTimes(1);
   });
 
   // 2026-10-09 release audit round 6: an old ready push pulled a series the

@@ -1330,6 +1330,30 @@ describe('pulled series lifecycle', () => {
     resetDeletedSeriesForTesting();
   });
 
+  // Round 7 again: a full sync that was out when the delete applied answered
+  // with the older live row, and inserted it.
+  it('inserts no row older than a delete applied here, and a newer one again', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+    useUnfoldStore.getState().removeDevotional('series-1');
+    const deletedAtMs = Date.parse(peekSyncOutbox().find((change) => change.deleted && change.id === 'series-1')?.clientUpdatedAt ?? '');
+    replaceSyncOutbox([]);
+    const at = (offsetMs: number) => new Date(deletedAtMs + offsetMs).toISOString();
+    const liveRow = (updatedAt: string) => ({
+      id: 'series-1',
+      updatedAt,
+      deleted: false,
+      data: { title: 'Stillness', totalDays: 14, currentDay: 4, createdAt: '2026-09-01T00:00:00.000Z', generationMode: 'progressive', clientUpdatedAt: updatedAt },
+    });
+
+    applyPulledUserData({ timestamp: at(1_000), changes: { devotionals: [liveRow(at(-60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(false);
+
+    applyPulledUserData({ timestamp: at(120_000), changes: { devotionals: [liveRow(at(60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
   it('does not restore a stale remote resume or steal a different live selection', () => {
     useUnfoldStore.setState({
       devotionals: [

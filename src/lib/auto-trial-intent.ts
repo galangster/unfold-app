@@ -502,11 +502,15 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   const series = store.devotionals.find((row) => row.id === devotionalId);
   if (!series || !series.days.some((day) => day.dayNumber === 1)) return;
 
-  store.retireOnboardingSamples({ keepId: devotionalId });
   // The trial takes Today only as the series the server writes. A newer live
-  // series that reached this phone first keeps it.
-  if (isStrictActiveSeriesWinner(devotionalId, useUnfoldStore.getState().devotionals)) {
+  // series that reached this phone first keeps it, and a sample the trial
+  // retires leaves Today empty rather than on the trial.
+  const trialWins = isStrictActiveSeriesWinner(devotionalId, store.devotionals);
+  store.retireOnboardingSamples({ keepId: devotionalId });
+  if (trialWins) {
     store.setCurrentDevotional(devotionalId);
+  } else if (useUnfoldStore.getState().currentDevotionalId === devotionalId) {
+    useUnfoldStore.setState({ currentDevotionalId: null });
   }
 
   const inflight = readInflightGenerationJob();

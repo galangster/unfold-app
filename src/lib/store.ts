@@ -1234,13 +1234,13 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       removeDevotional: (devotionalId) =>
         set((state) => {
-          rememberDeletedSeries(devotionalId);
           // The UI promises "This cannot be undone", so the server rows must
           // die with the local ones. Without tombstones a later pull (second
           // device, reinstall, account restore) resurrects the series and the
           // journal text under it.
           const devotional = state.devotionals.find((d) => d.id === devotionalId);
           const now = new Date().toISOString();
+          rememberDeletedSeries(devotionalId, now);
           // A delete carries no data: buildPersonalDataSyncChange drops it for
           // tombstones, so the sibling pattern of passing *SyncData(row) here
           // would only be discarded.

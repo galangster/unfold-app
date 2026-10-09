@@ -250,8 +250,8 @@ export function applyPulledDevotionalContent({
   assertBoundPulledSession(pulled);
   // A deleted series stays deleted. The server returns its live copy until a
   // delete made here lands, and a pull already out when a delete applied
-  // answers with it too.
-  if (wasSeriesDeleted(devotionalId)) return;
+  // answers with it too. A copy the server kept past the delete is live.
+  if (wasSeriesDeleted(devotionalId, pulled.devotional?.updatedAt)) return;
   if (pulled.devotional || pulled.days.length > 0 || pulledSeriesBesides(pulled, devotionalId).length > 0) {
     updateDevotionals(
       (devotionals, currentDevotionalId) => applyPulledDevotionalContentToDevotionals(

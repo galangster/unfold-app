@@ -14,7 +14,7 @@ import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
 import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
-import { rememberDeletedSeries } from './deleted-series';
+import { rememberDeletedSeries, wasSeriesDeleted } from './deleted-series';
 import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
@@ -769,7 +769,7 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       if (record.deleted) {
         if (!contentShouldApply) continue;
         acceptedSeriesDeletes.add(record.id);
-        rememberDeletedSeries(record.id);
+        rememberDeletedSeries(record.id, record.updatedAt);
         devotionals = devotionals.filter((item) => item.id !== record.id);
         continue;
       }
@@ -790,6 +790,9 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
           continue;
         }
         if (!shouldInsertPulledDevotional(next, hasAutoTrialSeries)) continue;
+        // A reply that left the server before a delete applied here is older
+        // than the delete and does not bring the series back.
+        if (wasSeriesDeleted(record.id, record.updatedAt)) continue;
         devotionals = [next, ...devotionals];
         continue;
       }
