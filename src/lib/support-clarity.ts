@@ -4,7 +4,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 
 export const COMPANION_NAME_MAX_LENGTH = 30;
 export const PERSONAL_CONTEXT_MAX_LENGTH = INPUT_LIMITS.LONG_TEXT.max;
-/** What the tab, the tour, and Settings call the Companion until the reader names it. */
+/** The name the tab, the tour, and the Settings name field show until the reader names the Companion. */
 export const COMPANION_FALLBACK_NAME = 'Companion';
 
 export const COMPANION_INTRO_BODY =

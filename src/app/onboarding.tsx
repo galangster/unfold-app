@@ -1396,7 +1396,8 @@ export default function OnboardingScreen() {
     const pendingAuth = pendingAuthDataRef.current ?? {};
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
-    // An empty field saves no name, never a default.
+    // An empty field sends no name, never a default. Omitting the field keeps
+    // a name saved on another device that this one has not loaded yet.
     const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined;
     // A blank or skipped life answer keeps the saved context.
     const wroteSituation = hasLifeContextAnswer(data.currentSituation);

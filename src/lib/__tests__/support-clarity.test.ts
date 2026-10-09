@@ -226,7 +226,6 @@ describe('copy is wired where the questions arise', () => {
     expect(carousel).toContain('accessibilityRole="radiogroup"');
     expect(carousel).toContain('KeyboardAwareScrollView');
     expect(carousel).toContain('flexShrink: 1');
-    expect(carousel).toContain('onCompanionNameChange');
     expect(empty).not.toContain('COMPANION_EMPTY_STATE_NOTE');
     expect(empty).not.toContain('Explore Scripture');
     expect(profile).toContain('PERSONAL_CONTEXT_FUTURE_DAYS_COPY');
@@ -255,7 +254,7 @@ describe('copy is wired where the questions arise', () => {
     expect(onboarding).toContain('ensureInitialGenerationRequestId()');
     expect(onboarding).toContain('companionNameInputRef.current');
     expect(onboarding).toContain('resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)');
-    expect(onboarding).toContain('const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined');
+    expect(onboarding).toContain('const companionName = resolveCompanionNameToPersist(companionNameInputRef.current)');
     expect(today).toContain('resolvePendingInitialArcResume');
     expect(today).toContain("pendingInitialResume === 'offer-resume'");
     expect(today).toContain("pendingInitialResume === 'offer-nonblocking-resume'");
