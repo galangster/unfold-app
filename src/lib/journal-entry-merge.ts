@@ -167,18 +167,35 @@ function mergeStringList(
  * the merged text. When the base cannot be found, the draft follows the
  * merged text, so nothing is dropped.
  */
+/** A letter, a digit, or a combining mark (an accent belongs to its word). */
+const WORD_CHARACTER = /^[\p{L}\p{N}\p{M}]$/u;
+
+/** The whole character that ends at `end` in `text`, a surrogate pair included. */
+function characterBefore(text: string, end: number): string {
+  const code = text.charCodeAt(end - 1);
+  const pair = code >= 0xdc00 && code <= 0xdfff && end >= 2;
+  return text.slice(pair ? end - 2 : end - 1, end);
+}
+
+/** The whole character that starts at `start` in `text`. */
+function characterAt(text: string, start: number): string {
+  const point = text.codePointAt(start);
+  return point === undefined ? '' : String.fromCodePoint(point);
+}
+
 /**
  * Whether `text` holds `part` as whole words: at an end of `part` that is a
- * letter or digit, no letter or digit runs on outside it. An end that is a
- * space or a mark already separates the words.
+ * letter, digit or accent, no such character runs on outside it. An end that
+ * is a space or punctuation already separates the words. Characters are read
+ * whole, so a character outside the basic plane counts as one.
  */
 function holdsWholeWords(text: string, part: string): boolean {
-  const wordCharacter = /[\p{L}\p{N}]/u;
-  const startsInWord = wordCharacter.test(part[0] ?? '');
-  const endsInWord = wordCharacter.test(part[part.length - 1] ?? '');
+  if (!part) return false;
+  const startsInWord = WORD_CHARACTER.test(characterAt(part, 0));
+  const endsInWord = WORD_CHARACTER.test(characterBefore(part, part.length));
   for (let at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
-    const runsOnBefore = startsInWord && wordCharacter.test(text[at - 1] ?? '');
-    const runsOnAfter = endsInWord && wordCharacter.test(text[at + part.length] ?? '');
+    const runsOnBefore = startsInWord && at > 0 && WORD_CHARACTER.test(characterBefore(text, at));
+    const runsOnAfter = endsInWord && WORD_CHARACTER.test(characterAt(text, at + part.length));
     if (!runsOnBefore && !runsOnAfter) return true;
   }
   return false;

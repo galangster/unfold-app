@@ -465,6 +465,12 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('My', 'My prayer continued', 'My prayer ')).toBe('My prayer continued');
   });
 
+  it('reads accents and characters outside the basic plane as parts of words', () => {
+    expect(rebaseJournalDraft('Old.', 'cafe\u0301s', 'cafe\u0301')).toBe('cafe\u0301s\n\ncafe\u0301');
+    expect(rebaseJournalDraft('Old.', 'a\u{20BB7}b', '\u{20BB7}')).toBe('a\u{20BB7}b\n\n\u{20BB7}');
+    expect(rebaseJournalDraft('Old.', 'New cafe\u0301.\n\nTablet note.', 'New cafe\u0301.')).toBe('New cafe\u0301.\n\nTablet note.');
+  });
+
   it('keeps a first draft that only appears inside another word of the merge', () => {
     expect(rebaseJournalDraft('', 'banana', 'a')).toBe('banana\n\na');
   });
