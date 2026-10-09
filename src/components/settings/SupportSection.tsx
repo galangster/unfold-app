@@ -30,26 +30,9 @@ import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
-import {
-  getRevenueCatSupportId,
-  subscribeRevenueCatIdentityEpoch,
-  subscribeRevenueCatIdentityVerified,
-} from '@/lib/revenuecatClient';
+import { getRevenueCatSupportId, subscribeRevenueCatIdentityState } from '@/lib/revenuecatClient';
 import { SettingsSectionHeader, getSettingsCardStyle } from './SettingsSectionHeader';
 import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
-
-/**
- * The Support ID can verify after Settings opens, and it changes with the
- * account. Either event re-renders the row.
- */
-function subscribeSupportId(onChange: () => void): () => void {
-  const stopVerified = subscribeRevenueCatIdentityVerified(onChange);
-  const stopEpoch = subscribeRevenueCatIdentityEpoch(onChange);
-  return () => {
-    stopVerified();
-    stopEpoch();
-  };
-}
 
 /** Enough of a long Support ID to recognize it. The clipboard always gets the full ID. */
 function shortenSupportId(id: string): string {
@@ -61,7 +44,8 @@ export function SupportSection() {
   const isPremium = usePremiumAccessPolicy() === 'granted';
   const reducedMotion = useReducedMotion();
   const { copied: supportIdCopied, copy: copySupportId } = useCopyConfirmation();
-  const supportId = useSyncExternalStore(subscribeSupportId, getRevenueCatSupportId);
+  // The ID can verify, fail, or reset while Settings is open. The row reads it again each time.
+  const supportId = useSyncExternalStore(subscribeRevenueCatIdentityState, getRevenueCatSupportId);
 
   const [isExportingData, setIsExportingData] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);

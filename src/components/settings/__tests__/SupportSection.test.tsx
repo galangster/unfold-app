@@ -95,18 +95,24 @@ jest.mock('@/lib/api-config', () => ({
 
 jest.mock('@/lib/device-credential');
 
-const mockIdentityListeners = new Set<() => void>();
-function mockSubscribeIdentity(listener: () => void) {
-  mockIdentityListeners.add(listener);
+// The client fires this one event whenever the identity behind the Support ID changes.
+const mockIdentityStateListeners = new Set<() => void>();
+function mockSubscribeIdentityState(listener: () => void) {
+  mockIdentityStateListeners.add(listener);
   return () => {
-    mockIdentityListeners.delete(listener);
+    mockIdentityStateListeners.delete(listener);
   };
+}
+function mockIdentityStateChanged(id: string | null) {
+  mockSupport.id = id;
+  act(() => {
+    mockIdentityStateListeners.forEach((listener) => listener());
+  });
 }
 
 jest.mock('@/lib/revenuecatClient', () => ({
   getRevenueCatSupportId: () => mockSupport.id,
-  subscribeRevenueCatIdentityVerified: mockSubscribeIdentity,
-  subscribeRevenueCatIdentityEpoch: mockSubscribeIdentity,
+  subscribeRevenueCatIdentityState: mockSubscribeIdentityState,
 }));
 
 jest.mock('../SettingsSectionHeader', () => ({
@@ -185,12 +191,20 @@ describe('SupportSection Support ID', () => {
     const tree = createSection();
     expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('For help with your account');
 
-    mockSupport.id = 'anon_22222222-2222-4222-8222-222222222222';
-    act(() => {
-      mockIdentityListeners.forEach((listener) => listener());
-    });
+    mockIdentityStateChanged('anon_22222222-2222-4222-8222-222222222222');
 
     expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('anon_22222…222222');
+  });
+
+  it('drops a shown Support ID when the account check later fails', () => {
+    const tree = createSection();
+    expect(sectionText(tree.root.findByProps({ testID: 'support-id-row' }))).toContain('anon_11111…111111');
+
+    mockIdentityStateChanged(null);
+
+    const rowText = sectionText(tree.root.findByProps({ testID: 'support-id-row' }));
+    expect(rowText).toContain('For help with your account');
+    expect(rowText).not.toContain('anon_11111…111111');
   });
 
   it('explains when a trusted Support ID is unavailable without touching the clipboard', async () => {
