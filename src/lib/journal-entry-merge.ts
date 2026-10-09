@@ -73,8 +73,28 @@ function mergeQuestionResponses(
   return merged;
 }
 
-function samePrayer(left: PrayerRequest, right: PrayerRequest): boolean {
-  return left.id === right.id || left.text.trim() === right.text.trim();
+/**
+ * Pairs each older prayer with a distinct newer one: by id first, then by
+ * text. No newer prayer stands for two older ones, so a merge keeps every
+ * prayer's own id.
+ */
+function pairPrayers(existing: PrayerRequest[], incoming: PrayerRequest[]): Map<PrayerRequest, PrayerRequest> {
+  const pairs = new Map<PrayerRequest, PrayerRequest>();
+  const taken = new Set<PrayerRequest>();
+  const matchers = [
+    (left: PrayerRequest, right: PrayerRequest) => left.id === right.id,
+    (left: PrayerRequest, right: PrayerRequest) => left.text.trim() === right.text.trim(),
+  ];
+  for (const matches of matchers) {
+    for (const prayer of existing) {
+      if (pairs.has(prayer)) continue;
+      const newer = incoming.find((candidate) => !taken.has(candidate) && matches(prayer, candidate));
+      if (!newer) continue;
+      pairs.set(prayer, newer);
+      taken.add(newer);
+    }
+  }
+  return pairs;
 }
 
 function mergePrayerRequests(
@@ -83,15 +103,14 @@ function mergePrayerRequests(
 ): PrayerRequest[] | undefined {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
+  const pairs = pairPrayers(existing, incoming);
   // The newer list already holds every older prayer: keep it as it is.
-  if (existing.every((prayer) => incoming.some((candidate) => samePrayer(prayer, candidate)))) return incoming;
+  if (pairs.size === existing.length) return incoming;
   // A prayer in both keeps the newer entry's copy, so an answer marked later
   // stays marked.
-  const merged = existing.map((prayer) => incoming.find((candidate) => samePrayer(prayer, candidate)) ?? prayer);
-  for (const prayer of incoming) {
-    if (merged.some((p) => samePrayer(p, prayer))) continue;
-    merged.push(prayer);
-  }
+  const merged = existing.map((prayer) => pairs.get(prayer) ?? prayer);
+  const paired = new Set(pairs.values());
+  for (const prayer of incoming) if (!paired.has(prayer)) merged.push(prayer);
   return merged;
 }
 

@@ -148,6 +148,26 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].createdAt).toBe('2026-09-01T10:00:00.000Z');
   });
 
+  it('keeps every prayer under its own id when two older prayers share their text', () => {
+    const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'a', prayerRequests: [prayer('p1', 'Healing'), prayer('p2', 'Healing'), prayer('p3', 'Work')], updatedAt: '2026-09-01T10:00:00.000Z' }),
+      entry({ id: 'b', prayerRequests: [prayer('q1', 'Healing', true)], updatedAt: '2026-09-02T10:00:00.000Z' }),
+    ]);
+    const prayers = merged[0].prayerRequests ?? [];
+    expect(prayers.map((item) => item.id)).toEqual(['q1', 'p2', 'p3']);
+    expect(prayers[0].isAnswered).toBe(true);
+  });
+
+  it('keeps an older prayer when the newer list holds only one of two with its text', () => {
+    const prayer = (id: string, text: string) => ({ id, text, isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'a', prayerRequests: [prayer('p1', 'Healing'), prayer('p2', 'Healing')], updatedAt: '2026-09-01T10:00:00.000Z' }),
+      entry({ id: 'b', prayerRequests: [prayer('q1', 'Healing')], updatedAt: '2026-09-02T10:00:00.000Z' }),
+    ]);
+    expect((merged[0].prayerRequests ?? []).map((item) => item.id)).toEqual(['q1', 'p2']);
+  });
+
   it('does not repeat text when rows the day already folded in arrive together again', () => {
     // The day's entry holds A, C and B in clock order; A and B are its legacy rows.
     const merged = mergeJournalEntryDuplicates([
