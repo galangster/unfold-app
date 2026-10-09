@@ -106,7 +106,11 @@ jest.mock('@/lib/remote-config', () => ({ refreshRemoteConfig: jest.fn() }));
 jest.mock('@/lib/auto-trial-exit', () => ({
   resolveLaterEntryExit: () => ({ kind: 'fallback', reason: 'switch_off' }),
 }));
-jest.mock('@/lib/notification-ask', () => ({ requestLaterEntryNotifyAsk: jest.fn() }));
+jest.mock('@/lib/notification-ask', () => ({
+  requestLaterEntryNotifyAsk: jest.fn(),
+  askNotificationPermissionInContext: jest.fn(async () => 'granted'),
+  readNotificationPermissionState: jest.fn(async () => 'granted'),
+}));
 jest.mock('@/lib/ui-state', () => ({
   useUIState: { getState: () => ({ setPendingPaywallGrant: jest.fn() }) },
 }));
