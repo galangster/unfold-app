@@ -875,6 +875,112 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(inverseCalls()).toHaveLength(1);
   });
 
+  describe('an Undo across reader page rebuilds', () => {
+    const removed = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
+    const inverseCalls = () => mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
+    let savedFont: typeof mockDevotionalWebFont;
+    beforeEach(() => { savedFont = mockDevotionalWebFont; });
+    afterEach(() => { mockDevotionalWebFont = savedFont; });
+
+    function mount(commandRef: { current: any }, shownDay: typeof day = day) {
+      let tree: any;
+      act(() => {
+        tree = renderer.create(<DevotionalWebView day={shownDay} fontSize="medium" commandRef={commandRef} />);
+      });
+      reportHeight(tree);
+      return tree;
+    }
+
+    function switchFont(tree: any, commandRef: { current: any }, family: string | null, shownDay: typeof day = day) {
+      mockDevotionalWebFont = family === null ? null : { family, css: '' };
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...shownDay }} fontSize="medium" commandRef={commandRef} />);
+      });
+      if (family !== null) reportHeight(tree);
+    }
+
+    it('replays after a font switch over the same text', () => {
+      const commandRef = { current: null as any };
+      const tree = mount(commandRef);
+      const oldDocId = getDocId(tree);
+      switchFont(tree, commandRef, 'Lora');
+      expect(getDocId(tree)).not.toBe(oldDocId);
+
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+      expect(inverseCalls()).toHaveLength(1);
+    });
+
+    it('replays after the day records an act and the font switches', () => {
+      const commandRef = { current: null as any };
+      const tree = mount(commandRef);
+      const oldDocId = getDocId(tree);
+      const actRecorded = { ...day, actOutcome: 'done' as const, updatedAt: '2026-10-09T09:00:00.000Z' };
+      act(() => {
+        tree.update(<DevotionalWebView day={actRecorded} fontSize="medium" commandRef={commandRef} />);
+      });
+      expect(getDocId(tree)).toBe(oldDocId);
+      switchFont(tree, commandRef, 'Lora', actRecorded);
+      expect(getDocId(tree)).not.toBe(oldDocId);
+
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+      expect(inverseCalls()).toHaveLength(1);
+    });
+
+    it('holds an Undo tapped while the new font loads and sends it once the page is ready', () => {
+      const commandRef = { current: null as any };
+      const tree = mount(commandRef);
+      const oldDocId = getDocId(tree);
+      switchFont(tree, commandRef, null);
+      expect(tree.root.findAllByType('WebView')).toHaveLength(0);
+
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+      expect(inverseCalls()).toHaveLength(0);
+
+      switchFont(tree, commandRef, 'Lora');
+      expect(inverseCalls()).toHaveLength(1);
+    });
+
+    it('drops a held Undo when the reader moves to another series showing the same words', () => {
+      const commandRef = { current: null as any };
+      let tree: any;
+      act(() => {
+        tree = renderer.create(<DevotionalWebView day={day} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
+      });
+      reportHeight(tree);
+      const oldDocId = getDocId(tree);
+      mockDevotionalWebFont = null;
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
+      });
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+
+      mockDevotionalWebFont = { family: 'Lora', css: '' };
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-b" fontSize="medium" commandRef={commandRef} />);
+      });
+      reportHeight(tree);
+      expect(inverseCalls()).toHaveLength(0);
+    });
+
+    it('still replays after many font previews', () => {
+      const commandRef = { current: null as any };
+      const tree = mount(commandRef);
+      const oldDocId = getDocId(tree);
+      for (const family of ['Lora', 'Georgia', 'Lora', 'Georgia', 'Lora', 'Georgia']) {
+        switchFont(tree, commandRef, null);
+        switchFont(tree, commandRef, family);
+      }
+
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+      expect(inverseCalls()).toHaveLength(1);
+    });
+  });
+
   it('keeps the exact source when the day object is replaced with identical content (e.g. marked read)', () => {
     let tree: any;
     act(() => {
