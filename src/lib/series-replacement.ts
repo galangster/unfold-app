@@ -27,9 +27,35 @@ export const REPLACED_SERIES_KEY = 'replaced-series-v1';
  */
 export const REPLACED_SERIES_STATE_KEY = 'replaced-series-state-v1';
 
+/**
+ * The new series that replaces it: the first one the server names for the
+ * request made after the choice, in the submission's response or in the
+ * result of the job that answered that request. Only its result ends the
+ * replaced series. An older job that lands meanwhile (a notification for an
+ * earlier attempt) leaves it alone.
+ */
+export const REPLACEMENT_SERIES_KEY = 'replaced-series-replacement-v1';
+
 export function recordReplacedSeries(devotionalId: string, seenStateAt = ''): void {
   mmkvStorage.setItem(REPLACED_SERIES_KEY, devotionalId);
   mmkvStorage.setItem(REPLACED_SERIES_STATE_KEY, seenStateAt);
+  clearReplacementBinding();
+}
+
+/** Binds a pending replacement to the first series the server names for the current request. */
+export function bindReplacementSeries(replacementId: string): void {
+  if (!readReplacedSeries() || readReplacementSeries()) return;
+  mmkvStorage.setItem(REPLACEMENT_SERIES_KEY, replacementId);
+}
+
+/** "Start over with new answers": the choice now waits for the series those answers generate. */
+export function clearReplacementBinding(): void {
+  mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
+}
+
+export function readReplacementSeries(): string | null {
+  const stored = mmkvStorage.getItem(REPLACEMENT_SERIES_KEY) as string | null;
+  return stored || null;
 }
 
 /** The lifecycle clock recorded with the choice, or null for an older build's record. */
@@ -46,6 +72,7 @@ export function readReplacedSeries(): string | null {
 export function clearReplacedSeries(): void {
   mmkvStorage.removeItem(REPLACED_SERIES_KEY);
   mmkvStorage.removeItem(REPLACED_SERIES_STATE_KEY);
+  mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
 }
 
 /**

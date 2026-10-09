@@ -60,7 +60,7 @@ import { captureSyncSession } from '../generation-session';
 import { mmkvStorage } from '../mmkv-storage';
 import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type UserProfile } from '../store';
 import { peekSyncOutbox, replaceSyncOutbox } from '../sync-outbox';
-import { readReplacedSeries, readReplacedSeriesState, recordReplacedSeries } from '../series-replacement';
+import { bindReplacementSeries, readReplacedSeries, readReplacedSeriesState, recordReplacedSeries } from '../series-replacement';
 import { ensureInitialGenerationRequestId, readInitialGenerationRequestId } from '../initial-generation-request';
 
 const NOW = 1_800_000_000_000;
@@ -254,6 +254,33 @@ describe('applyInitialArcResult', () => {
       updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive', ...over,
     } as Devotional);
 
+    // 2026-10-09 release audit round 4: a notification for an earlier attempt
+    // can land that job while the reader answers the new questionnaire.
+    it('leaves it to the series started in its place when an unrelated job lands first', () => {
+      useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
+      recordReplacedSeries('old-series', '');
+      applyInitialArcResult({ ...result, devotionalId: 'earlier-attempt', seriesStartDate: '2026-10-08T07:00:00.000Z' }, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeFalsy();
+      expect(peekSyncOutbox().filter((c) => c.table === 'devotionals' && c.id === 'old-series')).toEqual([]);
+      // Both stay live, and Today follows the newer one, the series the server writes.
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe('earlier-attempt');
+      expect(readReplacedSeries()).toBe('old-series');
+
+      bindReplacementSeries('devo-1');
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+      expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+      expect(readReplacedSeries()).toBeNull();
+    });
+
+    it('keeps Today on a chosen series when a result without server dates lands', () => {
+      useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.map((d) => d.id)).toContain('devo-1');
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe('old-series');
+    });
+
     it('records the replaced series\' lifecycle clock when the reader confirms the replacement', () => {
       useUnfoldStore.setState({ devotionals: [replaced({ archivedStateAt: '2026-10-08T07:00:00.000Z' } as Partial<Devotional>)], currentDevotionalId: 'old-series' });
       useUnfoldStore.getState().archiveCurrentDevotional();
@@ -265,6 +292,7 @@ describe('applyInitialArcResult', () => {
     it('ends it when nothing newer was decided about it', () => {
       useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
       recordReplacedSeries('old-series', '');
+      bindReplacementSeries('devo-1');
       applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
       expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
@@ -275,6 +303,7 @@ describe('applyInitialArcResult', () => {
       const resumedAt = '2026-10-09T09:00:00.000Z';
       useUnfoldStore.setState({ devotionals: [replaced({ archivedAt: null, archivedStateAt: resumedAt } as Partial<Devotional>)], currentDevotionalId: 'old-series' });
       recordReplacedSeries('old-series', '');
+      bindReplacementSeries('devo-1');
       // The new series started before that resume, so the server writes the resumed one.
       applyInitialArcResult({ ...result, seriesStartDate: '2026-10-09T08:30:00.000Z' }, { user, devotionalLength: 7, session: captureSyncSession() });
 
@@ -290,6 +319,7 @@ describe('applyInitialArcResult', () => {
       const earlierResume = '2099-01-01T00:00:00.000Z';
       useUnfoldStore.setState({ devotionals: [replaced({ archivedAt: null, archivedStateAt: earlierResume } as Partial<Devotional>)], currentDevotionalId: 'old-series' });
       recordReplacedSeries('old-series', earlierResume);
+      bindReplacementSeries('devo-1');
       applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
       expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
@@ -299,6 +329,7 @@ describe('applyInitialArcResult', () => {
       const paused = { ...replaced({ id: 'devo-1', title: 'New', currentDay: 1 }), archivedAt: '2026-10-09T09:00:00.000Z', archivedStateAt: '2026-10-09T09:00:00.000Z' } as Devotional;
       useUnfoldStore.setState({ devotionals: [replaced(), paused], currentDevotionalId: 'old-series' });
       recordReplacedSeries('old-series', '');
+      bindReplacementSeries('devo-1');
       applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
       expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeFalsy();
@@ -315,6 +346,7 @@ describe('applyInitialArcResult', () => {
       return original(key, value);
     });
     recordReplacedSeries('old-series');
+    bindReplacementSeries('devo-1');
     try {
       expect(() => applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() })).not.toThrow();
     } finally {
@@ -384,6 +416,34 @@ describe('settleInflightInitialArcWatch', () => {
       { jobId: 'job-2', session: captureSyncSession() },
     );
     expect(readInitialGenerationRequestId()).toBe('22222222-2222-4222-8222-222222222222');
+  });
+
+  // 2026-10-09 release audit round 4: a job /generating adopted carries no
+  // binding, but it answered the request made after the choice.
+  it('ends a waiting replaced series with the job that answered the stored request, and only that job', () => {
+    replaceSyncOutbox([]);
+    const old = {
+      id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+      updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+    } as unknown as Devotional;
+    const landed = { kind: 'complete' as const, result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } };
+    const archivedAt = () => useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt;
+
+    useUnfoldStore.setState({ devotionals: [old], currentDevotionalId: 'old-series' });
+    recordReplacedSeries('old-series', '');
+    ensureInitialGenerationRequestId(() => '33333333-3333-4333-8333-333333333333');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId: 'an-earlier-request' });
+    settleInflightInitialArcWatch(landed, { jobId: 'job-1', session: captureSyncSession() });
+    expect(archivedAt()).toBeFalsy();
+    expect(readReplacedSeries()).toBe('old-series');
+
+    resetStore();
+    useUnfoldStore.setState({ devotionals: [old], currentDevotionalId: 'old-series' });
+    const current = ensureInitialGenerationRequestId(() => '44444444-4444-4444-8444-444444444444');
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000, requestId: current });
+    settleInflightInitialArcWatch(landed, { jobId: 'job-1', session: captureSyncSession() });
+    expect(archivedAt()).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
   });
 
   it('keeps the record and fails the session when the server could not be reached', () => {
