@@ -110,37 +110,6 @@ export function getLockScreenProps(
   };
 }
 
-type TodayReadingProps = Pick<
-  WidgetSharedProps,
-  'dayTitle' | 'dayNumber' | 'scriptureReference' | 'scriptureText' | 'quotableLine' | 'nextDayTitle'
->;
-
-/**
- * The UnfoldToday and UnfoldDashboard reading fields. Like the Lock Screen,
- * they name the day Today shows: finishing a reading calls `advanceDay`, so
- * `currentDay` alone is tomorrow's locked day. A day whose content is not on
- * the device yet is named by its number. The timeline and the sync
- * fingerprint both use this, so a change the widget shows always triggers a
- * push.
- */
-export function getTodayReadingProps(
-  devotional: Devotional | null | undefined,
-  forDate: Date
-): TodayReadingProps {
-  const todayDay = getTodayDay(devotional, forDate);
-  const dayNumber = todayDay?.dayNumber ?? devotional?.currentDay ?? 0;
-  const nextDay = devotional?.days?.find((d) => d.dayNumber === dayNumber + 1);
-  const missingDayTitle = devotional ? `Day ${dayNumber} isn’t available yet` : 'Start your series';
-  return {
-    dayTitle: todayDay?.title ?? missingDayTitle,
-    dayNumber,
-    scriptureReference: todayDay?.scriptureReference ?? '',
-    scriptureText: todayDay?.scriptureText ?? '',
-    quotableLine: todayDay?.quotableLine ?? '',
-    nextDayTitle: nextDay?.title ?? '',
-  };
-}
-
 /** Snapshot of widget props as they should appear AT forDate. */
 export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): WidgetSharedProps {
   const devotional = slice.currentDevotional;
@@ -150,23 +119,26 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     now: forDate,
   });
 
-  const reading = getTodayReadingProps(devotional, forDate);
+  const currentDay = devotional?.days?.find((d) => d.dayNumber === devotional.currentDay);
+  const nextDay = devotional?.days?.find(
+    (d) => d.dayNumber === (devotional?.currentDay ?? 0) + 1
+  );
   return {
     streakCount: slice.streakCurrent,
     streakLongest: slice.streakLongest,
     hasReadToday,
     devotionalTitle: devotional?.title ?? 'Unfold',
-    dayTitle: reading.dayTitle,
-    dayNumber: reading.dayNumber,
+    dayTitle: currentDay?.title ?? 'Start your series',
+    dayNumber: devotional?.currentDay ?? 0,
     totalDays: getServerOwnedSeriesTotalDays(devotional),
-    scriptureReference: reading.scriptureReference,
-    scriptureText: reading.scriptureText,
+    scriptureReference: currentDay?.scriptureReference ?? '',
+    scriptureText: currentDay?.scriptureText ?? '',
     ...getLockScreenProps(devotional, forDate),
-    quotableLine: reading.quotableLine,
+    quotableLine: currentDay?.quotableLine ?? '',
     readingMinutes: slice.readingDuration,
     weeklyProgress: getWeeklyProgress(slice.allDevotionals, forDate),
     weekTodayIndex: (forDate.getDay() + 6) % 7,
-    nextDayTitle: reading.nextDayTitle,
+    nextDayTitle: nextDay?.title ?? '',
   };
 }
 
