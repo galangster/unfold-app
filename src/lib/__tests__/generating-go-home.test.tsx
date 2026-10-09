@@ -1219,4 +1219,43 @@ describe('a finished job for a series deleted here', () => {
       resetDeletedSeriesForTesting();
     }
   });
+
+  // 2026-10-09 release audit round 8 review: the trial hook settled the trial
+  // a second time without the undated guard and handed it Today.
+  it('keeps an undated trial off Today beside a chosen series the phone holds', async () => {
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: '2026-09-08T17:00:00.000Z',
+      expiresAt: '2026-09-11T17:00:00.000Z',
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: '2026-09-08T17:00:00.000Z',
+      nowMs: 1_800_000_000_000,
+    });
+    transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
+    writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+      devotionals: [{
+        id: 'held-series', title: 'Held', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-05T08:00:00.000Z',
+        updatedAt: '2026-10-05T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'held-series',
+      generationSession: { status: 'running', devotionalId: 'devo-trial', totalDays: 3, generatedDayNumbers: [] },
+    });
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-trial'));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settlePoll();
+
+    expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(true);
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-trial');
+  });
 });

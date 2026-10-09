@@ -346,7 +346,10 @@ export function useAutoTrialGeneration(intentId: string | null): {
             return;
           }
         }
-        if (intent?.devotionalId) {
+        // A landed payload for this trial was already settled inside
+        // applyInitialArcResult, which knows whether an undated result may
+        // take Today. Settling it again here would ignore that.
+        if (intent?.devotionalId && payload?.devotionalId !== intent.devotionalId) {
           settleLandedAutoTrialSeries(intent, intent.devotionalId);
         }
         const landedId = payload?.devotionalId ?? intent?.devotionalId;
