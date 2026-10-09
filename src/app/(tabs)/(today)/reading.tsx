@@ -452,6 +452,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationOwnerRef = useRef<string | null>(null);
+  // Series whose pull failed: offline, a 5xx. That says nothing about the
+  // series, so the screen offers Try again instead of saying it is not here.
+  const missingDevotionalPullFailedRef = useRef<Record<string, true>>({});
+  const [missingDevotionalRetryKey, setMissingDevotionalRetryKey] = useState(0);
   const readingMountedRef = useRef(true);
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
@@ -2103,6 +2107,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             retryAfterSeconds: err.retryAfterSeconds,
           }, 'warn');
         } else {
+          missingDevotionalPullFailedRef.current[devotionalId] = true;
           void logBugError('reading-sync-recovery', err, {
             phase: 'missing-devotional-hydration',
             devotionalId,
@@ -2115,7 +2120,24 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
       }
     })();
-  }, [effectiveDevotionalId, currentDevotional, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays]);
+  }, [effectiveDevotionalId, currentDevotional, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays, missingDevotionalRetryKey]);
+
+  const retryMissingDevotionalPull = useCallback((devotionalId: string) => {
+    delete missingDevotionalHydrationAttemptRef.current[devotionalId];
+    delete missingDevotionalPullFailedRef.current[devotionalId];
+    setMissingDevotionalRetryKey((key) => key + 1);
+  }, []);
+
+  // Coming back to the reader asks again after a failed pull. This runs on a
+  // focus change only: a retry while the screen stays open would repeat a
+  // failing pull in a loop.
+  useEffect(() => {
+    if (!isReadingFocused) return;
+    const devotionalId = effectiveDevotionalIdRef.current;
+    if (devotionalId && missingDevotionalPullFailedRef.current[devotionalId]) {
+      retryMissingDevotionalPull(devotionalId);
+    }
+  }, [isReadingFocused, retryMissingDevotionalPull]);
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
@@ -2153,7 +2175,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     // While the series is hydrating, show a serif-toned reader skeleton instead
     // of a bare spinner so the screen reads as "your reading is arriving" rather
     // than an empty/crashed state. After hydration finishes empty, say what
-    // happened and how to leave.
+    // happened and how to leave. After a failed pull, offer Try again.
+    const missingDevotionalPullFailed = Boolean(
+      effectiveDevotionalId && missingDevotionalPullFailedRef.current[effectiveDevotionalId],
+    );
     if (shouldShowMissingSeriesRecovery) {
       return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -2190,8 +2215,55 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 marginBottom: 14,
               }}
             >
-              This series isn’t on the device.
+              {missingDevotionalPullFailed ? 'This series couldn’t load.' : 'This series isn’t on the device.'}
             </Text>
+            {missingDevotionalPullFailed && effectiveDevotionalId ? (
+              <>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    marginBottom: 22,
+                  }}
+                >
+                  Check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    retryMissingDevotionalPull(effectiveDevotionalId);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  accessibilityHint="Checks for this series again"
+                  style={{
+                    backgroundColor: retryCtaButtonBg,
+                    paddingVertical: 18,
+                    paddingHorizontal: Spacing['7'],
+                    borderRadius: Radius.card,
+                    borderWidth: 1,
+                    borderColor: retryCtaButtonBorder,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 200,
+                    marginBottom: Spacing['3'],
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: 15,
+                      color: btnText,
+                    }}
+                  >
+                    Try again
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => {

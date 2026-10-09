@@ -2070,4 +2070,101 @@ describe('reader swipe cancellation', () => {
     });
     act(() => tree!.unmount());
   });
+
+  // What the server holds for a series this device lacks: Day 1.
+  function pulledMissingSeries(devotionalId: string) {
+    const startedAt = '2026-09-14T17:00:00.000Z';
+    return {
+      devotional: {
+        id: devotionalId,
+        title: 'A series from the server',
+        totalDays: 7,
+        currentDay: 1,
+        createdAt: startedAt,
+        seriesStartDate: startedAt,
+        updatedAt: startedAt,
+        generationMode: 'progressive' as const,
+      },
+      days: [makeDay(1, { id: canonicalGeneratedDayId(devotionalId, 1), devotionalId, isRead: false })],
+      timestamp: TYPING_AT,
+    };
+  }
+
+  async function renderMissingSeries(devotionalId: string) {
+    seedReader();
+    useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
+    routeParams.devotionalId = devotionalId;
+    routeParams.dayNumber = '1';
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    return tree!;
+  }
+
+  it('offers Try again after a failed series pull, and says the series is missing only once a pull finds nothing', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(new Error('Network request failed'));
+    const tree = await renderMissingSeries('missing-offline');
+
+    let screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series couldn’t load.');
+    expect(screenText).toContain('Check your connection and try again.');
+    expect(screenText).not.toContain('This series isn’t on the device.');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    let resolveRetry: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
+    mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve; }));
+    await act(async () => {
+      (tree.root.findByProps({ accessibilityLabel: 'Try again' }).props.onPress as () => void)();
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-offline');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveRetry?.(emptyPull());
+      await flushEffects();
+    });
+    screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series isn’t on the device.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('asks again after a failed pull when the reader comes back, not while it stays open, and shows what it brings', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }));
+    const tree = await renderMissingSeries('missing-5xx');
+    expect(JSON.stringify(tree.toJSON())).toContain('This series couldn’t load.');
+
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = false;
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = true;
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledMissingSeries('missing-5xx'));
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-5xx');
+
+    // The retried pull brings the series: its reading replaces the error.
+    expect(tree.root.findAllByProps({ testID: 'devotional-reader-screen' }).length).toBeGreaterThan(0);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('This series couldn’t load.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
 });
