@@ -1794,6 +1794,22 @@ describe('Today while a new series replaces the current one', () => {
     expect(await cardStateType()).toBe('first-series-failed');
   });
 
+  // 2026-10-09 release 1.1.19 lane: the server can write the failed series'
+  // row without its first day. That series has not landed, so the failure stays.
+  it('shows the failed card when the failed series is here without its first day', async () => {
+    mockReplacedSeries = 'today-series';
+    const [current] = mockTodayStoreState.devotionals as Array<{ id: string }>;
+    mockTodayStoreState.devotionals = [current, { ...current, id: 'series-new', title: 'New Series', days: [] }];
+    mockTodayStoreState.generationSession = {
+      status: 'error',
+      devotionalId: 'series-new',
+      title: null,
+      error: 'Something went wrong',
+    };
+
+    expect(await cardStateType()).toBe('first-series-failed');
+  });
+
   it('keeps the current series when no new series replaces it', async () => {
     mockTodayStoreState.generationSession = { status: 'error', devotionalId: null, title: null, error: 'Something went wrong' };
 

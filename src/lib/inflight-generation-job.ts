@@ -208,20 +208,24 @@ export function markInflightJobLeftForHome(): InflightGenerationJob | null {
 
 /**
  * Pure: whether the series a job, or the session it started, names has
- * reached the store. Today drives its preparing and failed cards from this
- * rather than from "no devotional at all": a reader who taps "Start study" on
- * a finished journey and goes home still has that journey, and the card must
- * say the new one is being written instead of offering "Start study" again.
- * A record with no id (an adopted job whose devotional was never known) falls
- * back to the older test, whether any series is current.
+ * reached the store with its first day. Today drives its preparing and failed
+ * cards from this rather than from "no devotional at all": a reader who taps
+ * "Start study" on a finished journey and goes home still has that journey,
+ * and the card must say the new one is being written instead of offering
+ * "Start study" again. A sync can bring the series row before its first day,
+ * and that series has not landed yet. A record with no id (an adopted job
+ * whose devotional was never known) falls back to the older test, whether
+ * any series is current.
  */
 export function hasInflightSeriesLanded(
   devotionalId: string | null | undefined,
-  devotionals: readonly { id: string }[],
+  devotionals: readonly { id: string; days: readonly { dayNumber: number }[] }[],
   hasCurrentDevotional: boolean,
 ): boolean {
   if (!devotionalId) return hasCurrentDevotional;
-  return devotionals.some((devotional) => devotional.id === devotionalId);
+  return devotionals.some((devotional) => (
+    devotional.id === devotionalId && devotional.days.some((day) => day.dayNumber === 1)
+  ));
 }
 
 /** Title for the preparing card while the first series has no name yet. */
