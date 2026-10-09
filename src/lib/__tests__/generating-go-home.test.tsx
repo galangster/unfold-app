@@ -734,6 +734,57 @@ describe('Go home after the server ruled on the first series', () => {
     expect(todayCreateNewAction()).toBe('start-fresh');
   });
 
+  // 2026-10-09 release audit: a screen that resumed the job after a restart
+  // did not know the request behind it, so Go home kept the failed request
+  // and Today's next tap returned to the same failed job.
+  it('retires the request id after a verdict on a job the screen resumed after a restart', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const first = await renderScreen();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    // The app closes while the job runs.
+    await act(async () => { first.unmount(); });
+
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const resumed = await renderScreen();
+    mounted.push(resumed);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(resumed);
+
+    await press(resumed, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('retires the request id after a verdict on a job an older build saved without one', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const first = await renderScreen();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await act(async () => { first.unmount(); });
+    // The record as 1.1.18 saved it: no request id and no format stamp.
+    const saved = readInflightGenerationJob()!;
+    mmkvStorage.setItem(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify({
+      jobId: saved.jobId,
+      devotionalId: saved.devotionalId,
+      submittedAt: saved.submittedAt,
+    }));
+    expect(readInflightGenerationJob()).toEqual(expect.objectContaining({ savedByOlderBuild: true }));
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const resumed = await renderScreen();
+    mounted.push(resumed);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(resumed);
+
+    await press(resumed, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
   it('keeps the request id when the submission never got an answer', async () => {
     // The POST may have reached the server. The same id is what lets the next
     // submit find that job instead of writing a second series.

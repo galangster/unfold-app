@@ -26,6 +26,7 @@ import {
   markInflightJobLeftForHome,
   parseInflightGenerationJob,
   readInflightGenerationJob,
+  requestAnsweredByInflightJob,
   resolveInflightResume,
   resolvePreparingFirstSeriesTitle,
   resolveTodayInflightAction,
@@ -36,6 +37,8 @@ import {
 
 const NOW = 1_800_000_000_000;
 const fresh: InflightGenerationJob = { jobId: 'job-1', devotionalId: 'devo-1', submittedAt: NOW - 30_000 };
+/** A record as this build stores it, with its format stamp. */
+const stored = (job: object) => JSON.stringify({ ...job, format: 2 });
 
 beforeEach(() => {
   clearInflightGenerationJob();
@@ -67,20 +70,38 @@ describe('parseInflightGenerationJob', () => {
   // and the screen that reads it asks the server.
   it('has no expiry: a record hours old is still active', () => {
     const old = { ...fresh, submittedAt: NOW - 3 * 60 * 60 * 1000 };
-    expect(parseInflightGenerationJob(JSON.stringify(old))).toEqual(old);
+    expect(parseInflightGenerationJob(stored(old))).toEqual(old);
   });
 
   it('returns active for a fresh record and keeps only a true leftForHome marker', () => {
-    expect(parseInflightGenerationJob(JSON.stringify(fresh))).toEqual(fresh);
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: true }))).toEqual({ ...fresh, leftForHome: true });
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, leftForHome: 'yes' }))).toEqual(fresh);
+    expect(parseInflightGenerationJob(stored(fresh))).toEqual(fresh);
+    expect(parseInflightGenerationJob(stored({ ...fresh, leftForHome: true }))).toEqual({ ...fresh, leftForHome: true });
+    expect(parseInflightGenerationJob(stored({ ...fresh, leftForHome: 'yes' }))).toEqual(fresh);
+  });
+
+  it('reads a record without the format stamp as one an older build saved', () => {
+    expect(parseInflightGenerationJob(JSON.stringify(fresh))).toEqual({ ...fresh, savedByOlderBuild: true });
+  });
+});
+
+describe('requestAnsweredByInflightJob', () => {
+  it('names the record\'s own request, else the stored one only for an older build\'s record', () => {
+    expect(requestAnsweredByInflightJob({ ...fresh, requestId: 'req-own' }, 'req-stored')).toBe('req-own');
+    expect(requestAnsweredByInflightJob({ ...fresh, savedByOlderBuild: true }, 'req-stored')).toBe('req-stored');
+    // An auto-trial record from this build names no request and answers none.
+    expect(requestAnsweredByInflightJob(fresh, 'req-stored')).toBeNull();
+  });
+
+  it('keeps an older build\'s record unstamped when it is written again', () => {
+    writeInflightGenerationJob({ ...fresh, savedByOlderBuild: true, leftForHome: true });
+    expect(readInflightGenerationJob()).toEqual({ ...fresh, leftForHome: true, savedByOlderBuild: true });
   });
 });
 
 describe('readInflightGenerationJob', () => {
   it('reads the record under the shared key', () => {
     writeInflightGenerationJob(fresh);
-    expect(mmkvStorage.setItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(fresh));
+    expect(mmkvStorage.setItem).toHaveBeenCalledWith(INFLIGHT_GENERATION_JOB_KEY, stored(fresh));
     expect(readInflightGenerationJob()).toEqual(fresh);
   });
 
@@ -148,7 +169,7 @@ describe('markInflightJobLeftForHome', () => {
     expect(record).toEqual({ ...fresh, leftForHome: true });
     expect(mmkvStorage.setItem).toHaveBeenLastCalledWith(
       INFLIGHT_GENERATION_JOB_KEY,
-      JSON.stringify({ ...fresh, leftForHome: true }),
+      stored({ ...fresh, leftForHome: true }),
     );
     expect(resolveTodayInflightAction(readInflightGenerationJob(), 'running').action).toBe('watch-on-today');
   });
@@ -228,8 +249,8 @@ describe('supersedeInflightGenerationJob', () => {
   });
 
   it('parses the marker only when it is exactly true', () => {
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, superseded: true }))).toEqual({ ...fresh, superseded: true });
-    expect(parseInflightGenerationJob(JSON.stringify({ ...fresh, superseded: 'yes' }))).toEqual(fresh);
+    expect(parseInflightGenerationJob(stored({ ...fresh, superseded: true }))).toEqual({ ...fresh, superseded: true });
+    expect(parseInflightGenerationJob(stored({ ...fresh, superseded: 'yes' }))).toEqual(fresh);
   });
 
   it('is none on Today, whatever the session holds', () => {

@@ -37,6 +37,12 @@ export const GENERATING_SESSION_TITLE_PLACEHOLDER = 'Generating...';
 /** What the preparing card calls the series before the server names it. */
 export const PREPARING_FIRST_SERIES_FALLBACK_TITLE = 'your devotional';
 
+/**
+ * Stamped on every record this build writes. A record without it was saved
+ * by an older build, which kept no request id in the record.
+ */
+const INFLIGHT_RECORD_FORMAT = 2;
+
 export interface InflightGenerationJob {
   jobId: string;
   devotionalId?: string;
@@ -48,6 +54,14 @@ export interface InflightGenerationJob {
    * or watches it; it only marks the job's failure push as stale.
    */
   superseded?: boolean;
+  /**
+   * The request id the server answered with this job. A screen that resumes
+   * the job after a restart retires that request when the job fails, so the
+   * next submission does not return to the failed job.
+   */
+  requestId?: string;
+  /** Read from a record an older build saved. Never stored. */
+  savedByOlderBuild?: true;
 }
 
 function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
@@ -61,6 +75,8 @@ function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
     submittedAt: record.submittedAt,
     ...(record.leftForHome === true ? { leftForHome: true } : {}),
     ...(record.superseded === true ? { superseded: true } : {}),
+    ...(typeof record.requestId === 'string' && record.requestId.length > 0 ? { requestId: record.requestId } : {}),
+    ...(record.format === INFLIGHT_RECORD_FORMAT ? {} : { savedByOlderBuild: true as const }),
   };
 }
 
@@ -87,7 +103,24 @@ export function readInflightGenerationJob(): InflightGenerationJob | null {
 }
 
 export function writeInflightGenerationJob(job: InflightGenerationJob): void {
-  mmkvStorage.setItem(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify(job));
+  // A rewrite of an older build's record stays unstamped, so it still reads as one.
+  const { savedByOlderBuild, ...record } = job;
+  mmkvStorage.setItem(
+    INFLIGHT_GENERATION_JOB_KEY,
+    JSON.stringify(savedByOlderBuild ? record : { ...record, format: INFLIGHT_RECORD_FORMAT }),
+  );
+}
+
+/**
+ * The request a resumed job answered. An older build's record names none,
+ * and that build kept the stored request id until its job was done, so the
+ * stored id is the job's own.
+ */
+export function requestAnsweredByInflightJob(
+  job: InflightGenerationJob,
+  storedRequestId: string | null,
+): string | null {
+  return job.requestId ?? (job.savedByOlderBuild ? storedRequestId : null);
 }
 
 export function clearInflightGenerationJob(): void {

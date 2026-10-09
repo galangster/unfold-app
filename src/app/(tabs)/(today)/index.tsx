@@ -192,6 +192,18 @@ export function resumeGeneratingRoute(
   return generatingRoute(intent?.jobId === jobId ? intent.intentId : null);
 }
 
+/**
+ * The /generating route behind the failure card's Try again. A trial still in
+ * flight (purchased, submitted or failed) retries through its intent. A
+ * landed trial is finished, so the failure belongs to a later series: its
+ * intent would reopen the trial's reveal instead of submitting that series.
+ */
+export function retryFailedSeriesRoute(
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'status'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent && intent.status !== 'landed' ? intent.intentId : null);
+}
+
 export function applyTodayAutoTrialFocus(i: {
   intent: AutoTrialIntentV1 | null;
   deviceId: string;
@@ -720,7 +732,7 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+    router.replace(retryFailedSeriesRoute(readAutoTrialIntent()));
   }, [router]);
   const keptInflightJobId = keptInflightJob?.jobId ?? null;
   const handleResumeKeptInflight = useCallback(() => {

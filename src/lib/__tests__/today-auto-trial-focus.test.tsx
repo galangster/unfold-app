@@ -264,7 +264,7 @@ jest.mock('@/lib/bible-db', () => ({
   downloadBibleDb: jest.fn(async () => undefined),
 }));
 
-import HomeScreen, { applyTodayAutoTrialFocus, resumeGeneratingRoute } from '@/app/(tabs)/(today)/index';
+import HomeScreen, { applyTodayAutoTrialFocus, resumeGeneratingRoute, retryFailedSeriesRoute } from '@/app/(tabs)/(today)/index';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { commitDevotionalPullCursor } from '@/lib/devotional-sync-pull';
@@ -958,6 +958,35 @@ describe('resumeGeneratingRoute', () => {
   });
 });
 
+// 2026-10-09 release audit: a replacement's submission failed before it had a
+// job, and Try again forwarded the landed trial's intent, which reopened the
+// trial's reveal instead of submitting the replacement.
+describe('retryFailedSeriesRoute', () => {
+  it('names the auto-trial intent only while the trial is still in flight', () => {
+    for (const status of ['purchased', 'submitted', 'failed'] as const) {
+      expect(retryFailedSeriesRoute({ intentId: INTENT_ID, status }))
+        .toEqual({ pathname: '/generating', params: { autoTrialIntentId: INTENT_ID } });
+    }
+    expect(retryFailedSeriesRoute({ intentId: INTENT_ID, status: 'landed' })).toEqual({ pathname: '/generating' });
+    expect(retryFailedSeriesRoute(null)).toEqual({ pathname: '/generating' });
+  });
+
+  it('submits the replacement after a landed trial instead of handing off to it', () => {
+    const landed = intent({ status: 'landed', requestId: 'trial-request', jobId: 'trial-job', devotionalId: 'trial-series' });
+    const route = retryFailedSeriesRoute(landed);
+
+    const entry = resolveGeneratingEntry({
+      inflight: null,
+      params: route.params,
+      sessionDevotionalId: null,
+      autoTrialIntent: landed,
+      initialGenerationRequestId: 'replacement-request',
+    });
+
+    expect(entry).toEqual({ kind: 'submit' });
+  });
+});
+
 describe('Today midday check-in', () => {
   const TODAY_QUESTION = 'Where did trust meet you today?';
   const TODAY_CHIPS = ['In a hard talk'];
@@ -1540,7 +1569,7 @@ describe('H7 Today auto-trial focus', () => {
       todaySource.indexOf('const handleRetryInflightSeries'),
       todaySource.indexOf('const handleDismissInflightSeriesFailure'),
     );
-    expect(retry).toContain('generatingRoute(readAutoTrialIntent()?.intentId)');
+    expect(retry).toContain('retryFailedSeriesRoute(readAutoTrialIntent())');
     expect(retry).not.toContain("pathname: '/series-reveal'");
     expect(retry).not.toContain('submitGenerationJob');
   });

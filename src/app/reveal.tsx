@@ -36,6 +36,7 @@ import {
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
+import { peekSyncOutbox } from '@/lib/sync-outbox';
 import type { ActiveSeriesCandidate } from '@/lib/devotional-active-selection';
 import { mergeDevotionalLifecycle } from '@/lib/devotional-lifecycle';
 import { reportReadyPushForLockedDay } from '@/lib/day-unlock-telemetry';
@@ -91,11 +92,22 @@ async function pullRevealSeries(
  * select. Pause and resume come from whichever copy is newer, as a sync
  * merges them: a sync can land a newer one after the reveal's pull.
  */
+/** Series this device archived whose archive is still in the outbox, so the server has not seen it. */
+function seriesWithQueuedArchive(): Set<string> {
+  return new Set(peekSyncOutbox()
+    .filter((change) => change.table === 'devotionals' && !change.deleted && change.data.archivedAt != null)
+    .map((change) => change.id));
+}
+
 function revealTargetCandidate(
   local: ActiveSeriesCandidate | undefined,
   pulled: ActiveSeriesCandidate | undefined,
+  archiveQueued: boolean,
 ): ActiveSeriesCandidate | undefined {
   if (!local || !pulled) return pulled ?? local;
+  // The server still writes days for its live copy until the queued archive
+  // lands, so that copy keeps blocking.
+  if (archiveQueued && !pulled.archivedAt) return pulled;
   return {
     id: local.id,
     createdAt: pulled.createdAt ?? local.createdAt,
@@ -289,15 +301,22 @@ export default function RevealScreen() {
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
     const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
     // A pull can show a newer series this device does not hold yet, or a
-    // newer resume of one it holds (applied later, by the full sync). Every
-    // pulled row counts beside the local ones, so only the series the server
-    // would pick becomes current: either copy of a sibling can block it. The
-    // check reads the target's first row, so the merged target goes first.
-    const target = revealTargetCandidate(
-      latestDevotionals.find((row) => row.id === revealTarget.devotionalId),
-      pulledSeriesRef.current.find((row) => row.id === revealTarget.devotionalId),
-    );
-    const candidates = [...(target ? [target] : []), ...latestDevotionals, ...pulledSeriesRef.current];
+    // newer lifecycle of one it holds (applied later, by the full sync). Each
+    // series counts once, its local and pulled copies merged by the newer
+    // lifecycle, so only the series the server would pick becomes current:
+    // a sibling resumed elsewhere blocks it, and one archived elsewhere but
+    // still live here does not. One archived here still blocks while its
+    // archive waits in the outbox.
+    const pulledRows = pulledSeriesRef.current;
+    const seriesIds = [...new Set([...latestDevotionals, ...pulledRows].map((row) => row.id))];
+    const queuedArchives = seriesWithQueuedArchive();
+    const candidates = seriesIds
+      .map((id) => revealTargetCandidate(
+        latestDevotionals.find((row) => row.id === id),
+        pulledRows.find((row) => row.id === id),
+        queuedArchives.has(id),
+      ))
+      .filter((row): row is ActiveSeriesCandidate => row !== undefined);
     const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);

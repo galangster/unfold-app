@@ -123,6 +123,8 @@ jest.mock('@/lib/devotional-sync-pull', () => ({
 import RevealScreen from '../../app/reveal';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 import { REVEAL_SERIES_PULL_TIMEOUT_MS } from '@/lib/reveal-params';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+import { OUTBOX_KEY } from '@/lib/sync-outbox';
 /* eslint-enable import/first */
 
 const LOCAL_ID = 'local-series';
@@ -322,6 +324,68 @@ describe('reveal for a series this device does not hold yet', () => {
 
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
     expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
+  });
+
+  // 2026-10-09 release audit: a newer series this device holds was archived
+  // on another device. Only the pull carries that clock, and this pull does
+  // not end the current series, so the local copy stays live.
+  // A series this device archived blocks while its archive waits in the
+  // outbox: the server still writes days for its live copy.
+  it('keeps the current series when a newer series archived here has not reached the server', async () => {
+    const archivedHere = {
+      ...localSeries,
+      id: 'archived-here',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      seriesStartDate: '2026-10-09T10:00:00.000Z',
+      archivedAt: '2026-10-09T11:00:00.000Z',
+      archivedStateAt: '2026-10-09T11:00:00.000Z',
+    } as unknown as Devotional;
+    useUnfoldStore.setState({ devotionals: [localSeries, archivedHere], currentDevotionalId: LOCAL_ID, resumeContext: null });
+    mmkvStorage.setItem(OUTBOX_KEY, JSON.stringify([{
+      table: 'devotionals',
+      id: 'archived-here',
+      data: { id: 'archived-here', archivedAt: '2026-10-09T11:00:00.000Z', archivedStateAt: '2026-10-09T11:00:00.000Z' },
+      clientUpdatedAt: '2026-10-09T11:00:00.000Z',
+      deleted: false,
+    }]));
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      { id: 'archived-here', createdAt: '2026-10-09T10:00:00.000Z', archivedStateAt: '2026-10-09T10:00:00.000Z' },
+    ]));
+    try {
+      await openReadyPush(PULLED_ID);
+      pressReveal();
+    } finally {
+      mmkvStorage.removeItem(OUTBOX_KEY);
+    }
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
+  });
+
+  it('opens the pushed series when a newer series held here was archived elsewhere', async () => {
+    const endedElsewhere = {
+      ...localSeries,
+      id: 'ended-elsewhere',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      seriesStartDate: '2026-10-09T10:00:00.000Z',
+    } as unknown as Devotional;
+    useUnfoldStore.setState({ devotionals: [localSeries, endedElsewhere], currentDevotionalId: LOCAL_ID, resumeContext: null });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      {
+        id: 'ended-elsewhere',
+        createdAt: '2026-10-09T10:00:00.000Z',
+        archivedAt: '2026-10-09T11:00:00.000Z',
+        archivedStateAt: '2026-10-09T11:00:00.000Z',
+      },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(PULLED_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBeUndefined();
   });
 
   it('keeps the pulled rows when saving the pull fails', async () => {
