@@ -1,6 +1,6 @@
 import { useCallback, memo } from 'react';
 import { useIsFocused } from 'expo-router';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
@@ -20,11 +20,7 @@ import {
 } from '@/app/how-it-works';
 import type { FeatureCard } from '@/app/how-it-works';
 import type { ColorTheme } from '@/constants/colors';
-import {
-  COMPANION_INTRO_BODY,
-  COMPANION_NAME_LATER_HINT,
-  COMPANION_NAME_MAX_LENGTH,
-} from '@/lib/support-clarity';
+import { COMPANION_INTRO_BODY } from '@/lib/support-clarity';
 import { COMPANION_PERSONALITIES, type CompanionPersonality } from '@/lib/companion-personality';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -47,8 +43,6 @@ const ALL_PAGES = [
 
 interface Props {
   colors: ColorTheme;
-  companionName: string;
-  onCompanionNameChange: (name: string) => void;
   companionPersonality: CompanionPersonality;
   onCompanionPersonalityChange: (personality: CompanionPersonality) => void;
   currentPage: number;
@@ -58,8 +52,6 @@ interface Props {
 
 export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   colors,
-  companionName,
-  onCompanionNameChange,
   companionPersonality,
   onCompanionPersonalityChange,
   currentPage,
@@ -117,17 +109,17 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
           >
             <KeyboardAwareScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: isCompanionPage ? Spacing['3'] : Spacing['6'] }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}
               keyboardShouldPersistTaps="handled"
               bottomOffset={24}
             >
-              <View style={{ alignItems: 'center', gap: isCompanionPage ? 20 : 36, alignSelf: 'stretch' }}>
+              <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                 {/* Animation or companion orb */}
                 <View>
                   {isCompanionPage ? (
                     <CompanionOrb
                       accentColor={colors.accent}
-                      size={64}
+                      size={96}
                       isActive
                       showBadge={false}
                       expression="welcome"
@@ -190,38 +182,6 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                           </TouchableOpacity>
                         );
                       })}
-                    </Animated.View>
-                  )}
-
-                  {/* Companion name — optional, enters after the personality choices */}
-                  {isCompanionPage && (
-                    <Animated.View
-                      entering={reducedMotion ? undefined : FadeIn.delay(750).duration(Duration.slow).easing(Ease.out)}
-                      style={styles.nameGroup}
-                    >
-                      <Text key={`companion-name-label-${fontScale}`} style={[styles.nameLabel, { color: colors.textMuted }]}>Companion name (optional)</Text>
-                      <TextInput
-                        value={companionName}
-                        onChangeText={onCompanionNameChange}
-                        accessibilityLabel="Companion name"
-                        accessibilityHint={COMPANION_NAME_LATER_HINT}
-                        placeholder="e.g. Selah or Guide"
-                        placeholderTextColor={colors.textMuted}
-                        selectionColor={colors.accent}
-                        cursorColor={colors.accent}
-                        style={[
-                          styles.nameInput,
-                          {
-                            color: colors.text,
-                            backgroundColor: colors.inputBackground,
-                            borderColor: colors.border,
-                          },
-                        ]}
-                        maxLength={COMPANION_NAME_MAX_LENGTH}
-                        returnKeyType="done"
-                        submitBehavior="blurAndSubmit"
-                        onSubmitEditing={Keyboard.dismiss}
-                      />
                     </Animated.View>
                   )}
                 </View>
@@ -293,8 +253,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['1'],
   },
   personalityChoice: {
-    minHeight: 56,
-    paddingVertical: Spacing['2.5'],
+    minHeight: 64,
+    paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['4'],
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -310,21 +270,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     lineHeight: 20,
     flexShrink: 1,
-  },
-  nameGroup: {
-    marginTop: Spacing['4'],
-  },
-  nameLabel: {
-    ...Typography.cardMeta,
-    marginBottom: Spacing['2'],
-  },
-  nameInput: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.lg,
-    minHeight: 54,
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: Spacing['5'],
-    borderRadius: Radius.lg,
-    borderWidth: 1,
   },
 });
