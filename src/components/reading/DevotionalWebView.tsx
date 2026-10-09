@@ -312,6 +312,9 @@ const HIGHLIGHTS_SCRIPT = `
         after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
         postToApp({
           type: 'HIGHLIGHTS_CHANGED',
+          // Which document changed, so a message still in flight from a
+          // replaced document is not saved under the one that replaced it.
+          docId: document.documentElement.getAttribute('data-doc-id'),
           reason: reason,
           removed: removed,
           added: added,
@@ -2726,6 +2729,10 @@ export function DevotionalWebView({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
+        // A change still in flight from the previous document (same-key
+        // source swap) belongs to a page no longer open. Saving it, or
+        // offering its Undo, would land on this one.
+        if (data.docId !== webViewDocument.docId) return;
         onHighlightsChanged({
           reason: data.reason,
           removed: Array.isArray(data.removed) ? data.removed : [],
