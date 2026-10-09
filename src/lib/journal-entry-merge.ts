@@ -60,6 +60,10 @@ function mergeQuestionResponses(
 ): JournalEntry['questionResponses'] {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
+  // The newer list already holds every older response: keep it as it is.
+  if (existing.every((qr) => incoming.some((candidate) => (
+    candidate.question === qr.question && mergeText(qr.response, candidate.response) === candidate.response
+  )))) return incoming;
   const merged = existing.map((qr) => ({ ...qr }));
   for (const candidate of incoming) {
     const match = merged.find((qr) => qr.question === candidate.question);
@@ -69,17 +73,76 @@ function mergeQuestionResponses(
   return merged;
 }
 
+/**
+ * Pairs each older prayer with a distinct newer one: by id first, then by
+ * text. No newer prayer stands for two older ones, so a merge keeps every
+ * prayer's own id.
+ */
+function pairPrayers(existing: PrayerRequest[], incoming: PrayerRequest[]): Map<PrayerRequest, PrayerRequest> {
+  const pairs = new Map<PrayerRequest, PrayerRequest>();
+  const taken = new Set<PrayerRequest>();
+  const matchers = [
+    (left: PrayerRequest, right: PrayerRequest) => left.id === right.id,
+    (left: PrayerRequest, right: PrayerRequest) => left.text.trim() === right.text.trim(),
+  ];
+  for (const matches of matchers) {
+    for (const prayer of existing) {
+      if (pairs.has(prayer)) continue;
+      const newer = incoming.find((candidate) => !taken.has(candidate) && matches(prayer, candidate));
+      if (!newer) continue;
+      pairs.set(prayer, newer);
+      taken.add(newer);
+    }
+  }
+  return pairs;
+}
+
+/** When this copy last decided its answer: the reader's toggle, else the answer's own time. */
+export function answerDecidedAt(prayer: PrayerRequest): string | undefined {
+  return prayer.answerChangedAt ?? (prayer.isAnswered ? prayer.answeredAt : undefined);
+}
+
 function mergePrayerRequests(
   existing: PrayerRequest[] | undefined,
   incoming: PrayerRequest[] | undefined,
 ): PrayerRequest[] | undefined {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
-  const merged = [...existing];
-  for (const prayer of incoming) {
-    if (merged.some((p) => p.id === prayer.id || p.text.trim() === prayer.text.trim())) continue;
-    merged.push(prayer);
+  const pairs = pairPrayers(existing, incoming);
+  // A prayer in both keeps the newer entry's copy. The newer entry is not
+  // always the newer decision about the prayer: a text repair carries the
+  // prayer as it last saw it. So the later decision wins: a reader's toggle,
+  // or the answer itself, and its time travels with it even when both copies
+  // agree. A copy with no decision never undoes an answer, and a later "not
+  // answered" stands.
+  const olderByNewer = new Map([...pairs].map(([older, newer]) => [newer, older] as const));
+  const keepAnswer = (newer: PrayerRequest): PrayerRequest => {
+    const older = olderByNewer.get(newer);
+    if (!older) return newer;
+    const olderDecidedAt = answerDecidedAt(older);
+    const newerDecidedAt = answerDecidedAt(newer);
+    if (!olderDecidedAt || (newerDecidedAt && newerDecidedAt >= olderDecidedAt)) return newer;
+    if (older.isAnswered === newer.isAnswered
+      && older.answeredAt === newer.answeredAt
+      && older.answerChangedAt === newer.answerChangedAt) return newer;
+    return {
+      ...newer,
+      isAnswered: older.isAnswered,
+      answeredAt: older.answeredAt,
+      answerChangedAt: older.answerChangedAt,
+    };
+  };
+  // The newer list already holds every older prayer: keep it, answers kept.
+  if (pairs.size === existing.length) {
+    const kept = incoming.map(keepAnswer);
+    return kept.every((prayer, index) => prayer === incoming[index]) ? incoming : kept;
   }
+  const merged = existing.map((prayer) => {
+    const newer = pairs.get(prayer);
+    return newer ? keepAnswer(newer) : prayer;
+  });
+  const paired = new Set(pairs.values());
+  for (const prayer of incoming) if (!paired.has(prayer)) merged.push(prayer);
   return merged;
 }
 
@@ -89,9 +152,35 @@ function mergeStringList(
 ): string[] | undefined {
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
+  // The newer list already holds every older value: keep it, order included.
+  if (existing.every((value) => incoming.includes(value))) return incoming;
   const merged = [...existing];
   for (const value of incoming) if (!merged.includes(value)) merged.push(value);
   return merged;
+}
+
+/**
+ * Rebase an unsaved draft onto text a merge changed under it. `base` is the
+ * text the draft was edited from and `merged` is that text after the merge.
+ * The draft's edits take the base's place inside the merged text, so text
+ * the merge brought in survives the next save. A field with no edits takes
+ * the merged text. When the base cannot be found, the draft follows the
+ * merged text, so nothing is dropped.
+ */
+export function rebaseJournalDraft(base: string, merged: string, draft: string): string {
+  // The merged text already is the draft, as when the editor's own save comes back.
+  if (merged === draft) return draft;
+  if (merged === base) return draft;
+  if (draft === base) return merged;
+  // The merge already holds the draft's additions, as when another device
+  // saved the same words and more. Rebasing again would repeat them. A draft
+  // started on an empty field counts too: all of it is the reader's addition.
+  if (draft.trim() && draft.includes(base) && merged.includes(draft)) return merged;
+  const at = base.trim() ? merged.indexOf(base) : -1;
+  if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
+  if (!merged.trim()) return draft;
+  if (!draft.trim()) return merged;
+  return `${merged}\n\n${draft}`;
 }
 
 /** Fold `incoming` (the newer entry) into `base`, losing no user text. */
@@ -107,6 +196,40 @@ function mergePair(base: JournalEntry, incoming: JournalEntry): JournalEntry {
     createdAt: [base.createdAt, incoming.createdAt].filter(Boolean).sort()[0] ?? base.createdAt,
     updatedAt: [base.updatedAt, incoming.updatedAt].filter(Boolean).sort().pop() ?? base.updatedAt,
   };
+}
+
+const TEXT_FIELDS = ['content', 'soapResponses', 'questionResponses'] as const;
+
+const isBlank = (text: string | undefined | null) => !(text ?? '').trim();
+
+/**
+ * True when `merged` differs from `own` only by filling what `own` holds
+ * empty: its text, a SOAP field, an answer, or its prayer or prompt lists.
+ */
+export function onlyFillsEmptyFields(own: JournalEntry, merged: JournalEntry): boolean {
+  if (merged.journalMode !== own.journalMode) return false;
+  if ((merged.content ?? '') !== (own.content ?? '') && !isBlank(own.content)) return false;
+  const ownSoap = normalizeSoapResponses(own.soapResponses);
+  const mergedSoap = normalizeSoapResponses(merged.soapResponses);
+  for (const field of SOAP_FIELDS) {
+    if ((mergedSoap?.[field] ?? '') !== (ownSoap?.[field] ?? '') && !isBlank(ownSoap?.[field])) return false;
+  }
+  for (const answer of merged.questionResponses ?? []) {
+    const ownAnswer = own.questionResponses?.find((qr) => qr.question === answer.question)?.response;
+    if (answer.response !== (ownAnswer ?? '') && !isBlank(ownAnswer)) return false;
+  }
+  for (const [ownList, mergedList] of [
+    [own.prayerRequests, merged.prayerRequests],
+    [own.deeperQuestions, merged.deeperQuestions],
+  ] as const) {
+    if (ownList?.length && JSON.stringify(ownList) !== JSON.stringify(mergedList ?? [])) return false;
+  }
+  return true;
+}
+
+function addsNoTextTo(base: JournalEntry, incoming: JournalEntry): boolean {
+  const merged = mergePair(base, incoming);
+  return TEXT_FIELDS.every((field) => JSON.stringify(merged[field] ?? null) === JSON.stringify(base[field] ?? null));
 }
 
 /**
@@ -127,9 +250,26 @@ export function mergeJournalEntryDuplicates(entries: JournalEntry[]): JournalEnt
 
   const merged: JournalEntry[] = [];
   for (const group of groups.values()) {
-    const [oldest, ...rest] = [...group].sort(byUpdatedAtAscending);
+    const id = canonicalJournalEntryId(group[0].devotionalId, group[0].dayNumber);
+    const ordered = [...group].sort(byUpdatedAtAscending);
+    const [oldest, ...rest] = ordered;
     const folded = rest.reduce(mergePair, oldest);
-    merged.push({ ...folded, id: canonicalJournalEntryId(folded.devotionalId, folded.dayNumber) });
+    // A row whose text the day's entry already holds stays out of the text
+    // fold: folding it with the other rows first could join texts the entry
+    // holds apart, and the joined text would be added again. Every row still
+    // counts for the newest mode and prayer state, the lists and the dates.
+    const canonical = group.find((entry) => entry.id === id);
+    const [firstText, ...restText] = canonical
+      ? ordered.filter((entry) => entry === canonical || !addsNoTextTo(canonical, entry))
+      : ordered;
+    const text = restText.reduce(mergePair, firstText);
+    merged.push({
+      ...folded,
+      id,
+      content: text.content,
+      soapResponses: text.soapResponses,
+      questionResponses: text.questionResponses,
+    });
   }
   return merged;
 }
