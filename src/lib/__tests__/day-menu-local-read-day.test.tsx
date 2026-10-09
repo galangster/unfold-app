@@ -130,8 +130,10 @@ describe.each([
     fireEvent.press(picker.getByText('Day 3 title'));
     const requests = mockDismissTo.mock.calls.map(([route]) => route.params.dayRequest);
     expect(requests).toHaveLength(2);
-    expect(requests[0]).toEqual(expect.any(String));
     expect(requests[1]).not.toBe(requests[0]);
+    // Led by the time, so a request after the app starts again cannot repeat
+    // one a restored route still carries.
+    for (const request of requests) expect(request.startsWith(`${Date.now().toString(36)}-`)).toBe(true);
   });
 
   it('keeps the days after it open in the day picker', () => {

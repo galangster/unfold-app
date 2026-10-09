@@ -41,6 +41,8 @@ const GENERIC_UNLOCK_LABEL = 'Unlocks as you continue your reading';
 const TAP_EMPHASIS_MS = 900;
 
 // Counts the day menu's choices, so the reader can tell a new one apart.
+// The time in front keeps a request from repeating one a restored route
+// still carries after the app starts again.
 let lastDayRequest = 0;
 
 export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
@@ -111,7 +113,7 @@ export function DayMenuScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       params: {
         devotionalId: devotional.id,
         dayNumber: dayNumber.toString(),
-        dayRequest: String(++lastDayRequest),
+        dayRequest: `${Date.now().toString(36)}-${++lastDayRequest}`,
         ...(params.from ? { from: params.from } : {}),
         ...(params.readOnly ? { readOnly: params.readOnly } : {}),
       },
