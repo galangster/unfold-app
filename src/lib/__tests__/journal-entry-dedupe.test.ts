@@ -42,8 +42,10 @@ jest.mock('../mmkv-storage', () => {
 
 import { applyPulledUserData } from '../full-sync-pull';
 import { canonicalJournalEntryId, mergeJournalEntryDuplicates, rebaseJournalDraft } from '../journal-entry-merge';
+import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
+import { OUTBOX_KEY } from '../sync-outbox';
 
 const DAY_ID = canonicalJournalEntryId('dev-1', 1);
 
@@ -67,7 +69,9 @@ function serverJournalRow(id: string, data: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  // A real reset clears the store and the outbox together.
   useUnfoldStore.getState().reset();
+  mmkvStorage.removeItem(OUTBOX_KEY);
 });
 
 describe('one journal entry per day', () => {
