@@ -243,3 +243,46 @@ describe('journal screens with a sync-restored entry', () => {
     act(() => tree.unmount());
   });
 });
+
+describe('the journal editor when a merge moves its entry', () => {
+  beforeEach(() => {
+    useUnfoldStore.getState().reset();
+    useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('saves typing still pending when the entry moved to its canonical id', () => {
+    const legacyId = useUnfoldStore.getState().addJournalEntry({
+      devotionalId: 'dev-1',
+      dayNumber: 1,
+      content: 'Before the merge',
+      journalMode: 'freewrite',
+    });
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const input = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+
+    act(() => { input.props.onChangeText('Typed while the merge landed'); });
+    // A pull's collapse moves the day's entry to its canonical id.
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        journalEntries: state.journalEntries.map((entry) => (
+          entry.id === legacyId ? { ...entry, id: 'journal-canonical-1' } : entry
+        )),
+      }));
+    });
+    act(() => { jest.advanceTimersByTime(2_000); });
+
+    const entries = useUnfoldStore.getState().journalEntries
+      .filter((entry) => entry.devotionalId === 'dev-1' && entry.dayNumber === 1);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: 'journal-canonical-1', content: 'Typed while the merge landed' });
+    act(() => tree.unmount());
+  });
+});

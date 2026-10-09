@@ -284,6 +284,16 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
     }
   }, [existingEntry]);
 
+  // A sync merge can move this day's entry to its canonical id while the
+  // editor is open. Every save addresses savedEntryIdRef, and a save to the
+  // old id matches no entry and is dropped. The ref follows the store's entry
+  // for the day as soon as the store changes, before any pending autosave.
+  useEffect(() => useUnfoldStore.subscribe((state) => {
+    if (!savedEntryIdRef.current) return;
+    const live = state.journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber);
+    if (live && live.id !== savedEntryIdRef.current) savedEntryIdRef.current = live.id;
+  }), [devotionalId, dayNumber]);
+
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
   // Mirrors the draft so background/unmount flushes read the latest text
