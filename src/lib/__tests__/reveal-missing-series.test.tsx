@@ -460,6 +460,27 @@ describe('reveal for a series this device does not hold yet', () => {
     expect(panStates()).toEqual([true, false]);
   });
 
+  // 2026-10-09 release audit round 6: the delete could reach the server while
+  // the pull was out, and the pull's answer then restored the series.
+  it('does not pull a series this device deleted, and sends the reader to Today', async () => {
+    mmkvStorage.setItem(OUTBOX_KEY, JSON.stringify([{
+      table: 'devotionals',
+      id: PULLED_ID,
+      data: {},
+      clientUpdatedAt: '2026-10-09T11:00:00.000Z',
+      deleted: true,
+    }]));
+    try {
+      await openReadyPush(PULLED_ID);
+    } finally {
+      mmkvStorage.removeItem(OUTBOX_KEY);
+    }
+
+    expect(mockPullDevotionalContent).not.toHaveBeenCalled();
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === PULLED_ID)).toBe(false);
+    expect(mockRouterReplace.mock.calls).toEqual([['/(tabs)/(today)']]);
+  });
+
   it('sends the reader to Today once when the pull fails or finds nothing', async () => {
     mockPullDevotionalContent.mockRejectedValueOnce(new Error('Network request failed'));
     await openReadyPush(PULLED_ID);

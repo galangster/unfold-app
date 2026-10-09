@@ -34,7 +34,7 @@ import {
   REVEAL_SERIES_PULL_TIMEOUT_MS,
 } from '@/lib/reveal-params';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
-import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { applyPulledDevotionalContent, hasQueuedSeriesDelete } from '@/lib/devotional-pulled-content';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { peekSyncOutbox } from '@/lib/sync-outbox';
 import type { ActiveSeriesCandidate } from '@/lib/devotional-active-selection';
@@ -61,6 +61,9 @@ async function pullRevealSeries(
   devotionalId: string,
   updateDevotionalDays: Parameters<typeof applyPulledDevotionalContent>[0]['updateDevotionalDays'],
 ): Promise<readonly ActiveSeriesCandidate[] | null> {
+  // A series the reader deleted here is not pulled back. Its delete can reach
+  // the server while the pull is out, and the answer would still hold it.
+  if (hasQueuedSeriesDelete(devotionalId)) return null;
   const session = captureSyncSession();
   let pulledSeries: readonly ActiveSeriesCandidate[] | null = null;
   try {

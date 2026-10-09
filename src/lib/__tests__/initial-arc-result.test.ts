@@ -279,6 +279,36 @@ describe('applyInitialArcResult', () => {
       expect(readReplacedSeries()).toBeNull();
     });
 
+    // 2026-10-09 release audit round 6: a late older result put Today back on
+    // the previous series though a newer live series wins on the server.
+    it('leaves Today empty when a late older result lands beside a newer live series', () => {
+      const newer = replaced({ id: 'newer-series', title: 'Newer', createdAt: '2026-10-05T08:00:00.000Z' });
+      useUnfoldStore.setState({ devotionals: [replaced(), newer], currentDevotionalId: 'old-series' });
+      applyInitialArcResult({ ...result, seriesStartDate: '2026-10-03T08:00:00.000Z' }, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().devotionals.map((d) => d.id)).toContain('devo-1');
+      expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    });
+
+    // Round 6 again: an earlier result without server dates is stored with
+    // this phone's guess for its start, which outranks the chosen series here.
+    it('never moves Today to another held series when a late older result lands', () => {
+      const chosen = replaced({ id: 'chosen-series', title: 'Chosen', createdAt: '2026-10-05T08:00:00.000Z' });
+      const guessed = replaced({ id: 'guessed-series', title: 'Guessed', createdAt: '2026-10-09T08:00:00.000Z' });
+      useUnfoldStore.setState({ devotionals: [chosen, guessed], currentDevotionalId: 'chosen-series' });
+      applyInitialArcResult({ ...result, seriesStartDate: '2026-10-03T08:00:00.000Z' }, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('guessed-series');
+    });
+
+    it('leaves Today empty when no series wins on the server', () => {
+      const twin = replaced({ id: 'twin-series', title: 'Twin' });
+      useUnfoldStore.setState({ devotionals: [replaced(), twin], currentDevotionalId: 'old-series' });
+      applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+      expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    });
+
     it('keeps Today on a chosen series when a result without server dates lands', () => {
       useUnfoldStore.setState({ devotionals: [replaced()], currentDevotionalId: 'old-series' });
       applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
