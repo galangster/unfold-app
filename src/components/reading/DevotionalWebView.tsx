@@ -2499,9 +2499,13 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    return { docId, bakedThemeJson: themeVars.json, source: { html } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
-  }, [documentMarkup, webViewTargetKey]);
+    // The page's content for this series and day: every font value sits in
+    // <head>, so the markup from </head> on changes only with what the reader
+    // sees. The series and day keep two days with the same words apart.
+    const content = `${devotionalId ?? ''}#${day.dayNumber}\n${documentMarkup.slice(documentMarkup.indexOf('</head>'))}`;
+    return { docId, content, bakedThemeJson: themeVars.json, source: { html } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey and devotionalId included on purpose
+  }, [documentMarkup, webViewTargetKey, devotionalId]);
 
   // "Live document" = the document currently loaded in the mounted WebView,
   // identified by mount key + docId. Its first HEIGHT_CHANGE (echoing the
@@ -2513,6 +2517,27 @@ export function DevotionalWebView({
   // The document on screen now, for commands that must not reach a newer one.
   const liveDocIdRef = useRef(webViewDocument.docId);
   liveDocIdRef.current = webViewDocument.docId;
+  const liveDocTokenRef = useRef(liveDocToken);
+  liveDocTokenRef.current = liveDocToken;
+  // Which content each document of this mount showed. A reading-font change
+  // rebuilds the page under a new docId over the same content, so an Undo
+  // from the old page still applies; new content for the day blocks it. Each
+  // distinct content is kept once, so every document of the mount stays known.
+  const contentNumbersRef = useRef(new Map<string, number>());
+  const docContentRef = useRef(new Map<string, number>());
+  if (!docContentRef.current.has(webViewDocument.docId)) {
+    const contents = contentNumbersRef.current;
+    if (!contents.has(webViewDocument.content)) contents.set(webViewDocument.content, contents.size);
+    docContentRef.current.set(webViewDocument.docId, contents.get(webViewDocument.content)!);
+  }
+  const showsSameContent = useCallback((docId: string) => {
+    const docContent = docContentRef.current;
+    return docId === liveDocIdRef.current
+      || (docContent.has(docId) && docContent.get(docId) === docContent.get(liveDocIdRef.current));
+  }, []);
+  // An Undo tapped while no page is ready (a font still loading unmounts it)
+  // waits here for the next page's first report.
+  const pendingInverseRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> | null>(null);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2628,7 +2653,15 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        if (change.docId !== liveDocIdRef.current) return;
+        if (!showsSameContent(change.docId)) return;
+        // A change from the page on screen proves that page runs its scripts.
+        const pageReady = Boolean(webViewRef.current) && (
+          change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
+        );
+        if (!pageReady) {
+          pendingInverseRef.current = change;
+          return;
+        }
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {
@@ -2651,7 +2684,7 @@ export function DevotionalWebView({
     return () => {
       commandRef.current = null;
     };
-  }, [callPage, commandRef]);
+  }, [callPage, commandRef, showsSameContent]);
 
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
@@ -2789,6 +2822,11 @@ export function DevotionalWebView({
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
           pushScreenReader(screenReaderOn);
+          const pendingInverse = pendingInverseRef.current;
+          pendingInverseRef.current = null;
+          if (pendingInverse && showsSameContent(pendingInverse.docId)) {
+            callPage('__unfoldApplyInverse', { added: pendingInverse.added, removed: pendingInverse.removed });
+          }
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }
