@@ -22,10 +22,28 @@ const EMPTY_CONTEXT: Devotional['userContext'] = {
   emotionalState: '',
 };
 
-function preservedTitle(existing: Devotional | undefined, day: DevotionalDay): string {
+function preservedTitle(existing: Devotional | undefined, day: DevotionalDay, replacesStored = false): string {
   const current = existing?.title?.trim();
-  if (current && current !== 'Your First Devotional') return current;
+  if (current && current !== 'Your First Devotional' && !replacesStored) return current;
   return day.title?.trim() || current || '';
+}
+
+function clockMs(value: string | undefined): number {
+  const ms = Date.parse(value ?? '');
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * The job finished after the stored sample was last written. A reader who
+ * reinstalls keeps the Keychain identity, so a new onboarding reuses the
+ * sample id, and a pull can restore the old sample before the new job lands.
+ * The server stamps a finished job's day with the job's completion time.
+ */
+function isNewerThanStored(existing: Devotional | undefined, incoming: DevotionalDay): boolean {
+  const stored = existing?.days.find((day) => day.dayNumber === 1);
+  if (!stored) return false;
+  const completedAt = clockMs(incoming.updatedAt ?? incoming.generatedAt);
+  return completedAt > Math.max(clockMs(stored.updatedAt), clockMs(existing?.updatedAt));
 }
 
 function sameContext(
@@ -38,10 +56,15 @@ function sameContext(
     && (left?.emotionalState ?? '') === (right?.emotionalState ?? '');
 }
 
-function mergeFirstReadingDay(existing: Devotional | undefined, id: string, incoming: DevotionalDay): DevotionalDay {
+function mergeFirstReadingDay(
+  existing: Devotional | undefined,
+  id: string,
+  incoming: DevotionalDay,
+  replacesStored: boolean,
+): DevotionalDay {
   const normalized = normalizeGeneratedDayIdentity(id, { ...incoming, dayNumber: 1 }, 1);
   const current = existing?.days.find((day) => day.dayNumber === 1);
-  if (!current || !isUsableSampleDevotionalDay(current)) return normalized;
+  if (replacesStored || !current || !isUsableSampleDevotionalDay(current)) return normalized;
   return {
     ...normalized,
     ...current,
@@ -94,18 +117,22 @@ export function persistOnboardingFirstReading(input: {
   const userContext = existingSameId?.userContext?.name
     ? existingSameId.userContext
     : (input.userContext ?? existingSameId?.userContext ?? EMPTY_CONTEXT);
-  const day = mergeFirstReadingDay(existingSameId, id, input.day);
+  const replacesStored = isNewerThanStored(existingSameId, input.day);
+  const day = mergeFirstReadingDay(existingSameId, id, input.day, replacesStored);
   const seriesArc = withOnboardingFirstReadingArc(existingSameId?.seriesArc, createdAt);
   const alreadyMarked = existingSameId != null
     && isOnboardingFirstReading(existingSameId)
-    && existingSameId.title === preservedTitle(existingSameId, day)
+    && existingSameId.title === preservedTitle(existingSameId, day, replacesStored)
     && existingSameId.days[0]?.bodyText === day.bodyText
     && existingSameId.days[0]?.isRead === day.isRead
     && sameContext(existingSameId.userContext, userContext)
     && existingSameId.seriesArc?.origin === seriesArc.origin;
   if (alreadyMarked) return true;
 
-  const updatedAt = nextWriteAt(existingSameId?.updatedAt);
+  // The saved day carries the write's clock, so a pull of an older row of the
+  // same day cannot replace it.
+  const storedDayAt = existingSameId?.days.find((row) => row.dayNumber === 1)?.updatedAt;
+  const updatedAt = nextWriteAt(clockMs(storedDayAt) > clockMs(existingSameId?.updatedAt) ? storedDayAt : existingSameId?.updatedAt);
   const next: Devotional = normalizeDevotionalIdentity({
     ...(existingSameId ?? {
       id,
@@ -116,10 +143,10 @@ export function persistOnboardingFirstReading(input: {
       generationMode: 'progressive',
     }),
     id,
-    title: preservedTitle(existingSameId, day),
+    title: preservedTitle(existingSameId, day, replacesStored),
     totalDays: existingSameId?.totalDays ?? 1,
     currentDay: existingSameId?.currentDay ?? 1,
-    days: [day],
+    days: [{ ...day, updatedAt }],
     createdAt,
     seriesStartDate: existingSameId?.seriesStartDate ?? createdAt,
     userContext,
