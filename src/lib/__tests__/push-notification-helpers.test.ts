@@ -183,6 +183,10 @@ describe('push notification helpers', () => {
       expect(buildNotificationNavigationRoute({ type: 'lapse_reentry' })).toEqual({ pathname: '/(tabs)/(today)' });
     });
 
+    it('routes a daily reminder for a day the device does not hold yet to Today', () => {
+      expect(buildNotificationNavigationRoute({ type: 'daily_reminder' })).toEqual({ pathname: '/(tabs)/(today)' });
+    });
+
     it('routes an act reminder to its day, scrolled to the act', () => {
       expect(
         buildNotificationNavigationRoute({ type: 'act_reminder', devotionalId: 'dev-1', dayNumber: 4 }),
