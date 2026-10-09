@@ -1286,7 +1286,8 @@ describe('pulled series lifecycle', () => {
 
   // 2026-10-09 release audit round 5: a shell a pull built without series
   // dates carries this phone's guess for its creation, and a full sync ranked
-  // that guess above a newer series started on another device.
+  // that guess above a newer series started on another device. After a full
+  // sync that newer series, held here, is the series the server writes.
   it('ranks a held series by the creation time the full sync returned for it', () => {
     useUnfoldStore.setState({
       devotionals: [
@@ -1313,7 +1314,7 @@ describe('pulled series lifecycle', () => {
       },
     });
 
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
   });
 
   it('remembers a series another device deleted, so a pull already out cannot restore it', () => {
@@ -1481,10 +1482,10 @@ describe('pulled series lifecycle', () => {
   // "Continue this series" on another device resumes series-1 at once and
   // pauses series-2 on the same clock through its outbox, which can drain
   // later. One pull carrying both moves Today to series-1. In separate pulls
-  // the resume no longer reads as newer once the pause lands, so Today stays
-  // empty, as before this release.
+  // the resume no longer reads as newer once the pause lands, but series-1 is
+  // then the series the server writes, and a full sync holds every series.
   it.each([
-    ['separate pulls', null],
+    ['separate pulls', 'series-1'],
     ['one pull', 'series-1'],
   ] as const)('follows a series resumed elsewhere only when the pause arrives in one pull with it: %s', (order, landsOn) => {
     useUnfoldStore.setState({

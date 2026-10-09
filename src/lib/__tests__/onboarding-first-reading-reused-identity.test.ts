@@ -114,15 +114,23 @@ const NEW_DAY: DevotionalDay = {
   updatedAt: SECOND_JOB_COMPLETED_AT,
 };
 
-function serverHoldsOldSample() {
+// The first life's trial landed and retired the sample it stood in for.
+const RETIRED_AT = '2026-10-08T18:30:00.000Z';
+const TRIAL_ID = 'trial-00000000-0000-4000-8000-0000000000d2';
+const TRIAL_DAYS = 3;
+
+type Lifecycle = { archivedAt?: string | null; archivedStateAt?: string };
+
+function serverHoldsOldSample(lifecycle: Lifecycle = {}) {
   return {
     timestamp: FIRST_RUN_AT,
     changes: {
       devotionals: [{
         id: SAMPLE_ID,
-        updatedAt: FIRST_RUN_AT,
+        updatedAt: lifecycle.archivedStateAt ?? FIRST_RUN_AT,
         deleted: false,
         data: {
+          ...lifecycle,
           schemaVersion: 1,
           title: OLD_DAY.title,
           totalDays: 1,
@@ -151,6 +159,56 @@ function serverHoldsOldSample() {
     },
   };
 }
+
+// The server after the first life: the retired sample and the trial, every
+// trial day read. Finishing never archives a series.
+function serverHoldsFirstLife() {
+  const sample = serverHoldsOldSample({ archivedAt: RETIRED_AT, archivedStateAt: RETIRED_AT });
+  const trialData = {
+    schemaVersion: 1,
+    title: 'Trial title',
+    totalDays: TRIAL_DAYS,
+    currentDay: TRIAL_DAYS,
+    createdAt: RETIRED_AT,
+    clientUpdatedAt: RETIRED_AT,
+    seriesStartDate: RETIRED_AT,
+    generationMode: 'progressive',
+    seriesArc: {
+      totalDaysPlanned: TRIAL_DAYS,
+      overarchingTheme: '',
+      narrativeShape: '',
+      dayHints: [],
+      isOpenEnded: false,
+      createdAt: RETIRED_AT,
+      seriesKind: 'auto_trial',
+    },
+  };
+  const trialDays = Array.from({ length: TRIAL_DAYS }, (_, index) => ({
+    id: `day-${TRIAL_ID}-${index + 1}`,
+    updatedAt: RETIRED_AT,
+    deleted: false,
+    data: {
+      devotionalId: TRIAL_ID,
+      dayNumber: index + 1,
+      title: `Trial day ${index + 1}`,
+      scriptureReference: 'John 1:1',
+      scriptureText: 'Trial scripture.',
+      bodyText: 'Trial body.',
+      quotableLine: 'Trial line.',
+      isRead: true,
+      readAt: RETIRED_AT,
+    },
+  }));
+  return {
+    timestamp: RETIRED_AT,
+    changes: {
+      devotionals: [...sample.changes.devotionals, { id: TRIAL_ID, updatedAt: RETIRED_AT, deleted: false, data: trialData }],
+      devotional_days: [...sample.changes.devotional_days, ...trialDays],
+    },
+  };
+}
+
+const today = () => useUnfoldStore.getState().currentDevotionalId;
 
 function clearAppData() {
   getMockMmkvStore()?.clear();
@@ -227,6 +285,18 @@ describe('a second onboarding under a reused identity', () => {
     const sample = sampleInStore();
     expect(sample?.title).toBe(NEW_DAY.title);
     expect(sample?.days[0]?.scriptureReference).toBe(NEW_DAY.scriptureReference);
+  });
+
+  // The server never writes another day of the finished trial, so the
+  // app-start pull leaves Today empty and the new first reading takes it.
+  it('keeps Today off the trial finished in the first life, so the new first reading takes it', () => {
+    applyPulledUserData(serverHoldsFirstLife());
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === TRIAL_ID)).toBe(true);
+    expect(today()).toBeNull();
+
+    persistOnboardingFirstReading({ id: SAMPLE_ID, day: NEW_DAY });
+
+    expect(today()).toBe(SAMPLE_ID);
   });
 
   it('saves the first reading as before for a new identity the server holds no sample for', () => {

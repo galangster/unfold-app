@@ -401,6 +401,26 @@ describe('a series that arrives only from the server', () => {
     totalDays: 1,
     days: [{ ...liveX.days[0], isRead: true, readAt: '2026-09-06T08:00:00.000Z' }],
   });
+  const finishedN = series('series-n', {
+    createdAt: STARTED_AT,
+    seriesStartDate: STARTED_AT,
+    totalDays: 1,
+    days: [{ ...newN.days[0], isRead: true, readAt: '2026-09-12T17:00:00.000Z' }],
+  });
+
+  // The server's rows of a series the reader finished.
+  function finishedOnServer(reply: SyncPullResponse): SyncPullResponse {
+    return {
+      ...reply,
+      changes: {
+        ...reply.changes,
+        devotional_days: reply.changes.devotional_days?.map((row) => ({
+          ...row,
+          data: { ...row.data, isRead: true, readAt: '2026-09-12T17:00:00.000Z' },
+        })),
+      },
+    };
+  }
 
   it('gives an empty Today to the series the server writes', async () => {
     useUnfoldStore.setState({ devotionals: [], currentDevotionalId: null });
@@ -435,13 +455,73 @@ describe('a series that arrives only from the server', () => {
     expect(today()).toBe('series-x');
   });
 
-  it('keeps Today empty beside a newer live series the pull did not carry', async () => {
+  it('gives an empty Today to the newer series held here, never to the older one the pull carries', async () => {
     const newerC = series('series-c', { createdAt: '2026-09-12T16:30:00.000Z' });
     useUnfoldStore.setState({ devotionals: [newerC], currentDevotionalId: null });
 
     await runFullSync(fullSyncReply([newN]));
 
+    expect(today()).toBe('series-c');
+  });
+
+  // A reader on 1.1.18 got series-n from the server, and that build stored it
+  // without selecting it. A full sync leaves this device holding every
+  // series, so a series stored here earlier proves itself the same way.
+  it.each([
+    ['carries it again', () => fullSyncReply([newN])],
+    ['carries nothing', () => ({ timestamp: NOW, changes: {} })],
+  ])('gives an empty Today to a series stored here earlier when a full sync %s', async (_label, reply) => {
+    useUnfoldStore.setState({ devotionals: [newN], currentDevotionalId: null });
+
+    await runFullSync(reply());
+
+    expect(today()).toBe('series-n');
+  });
+
+  it('moves a finished series off Today for a series stored here while it was unfinished', async () => {
+    useUnfoldStore.setState({ devotionals: [finishedX, newN], currentDevotionalId: 'series-x' });
+
+    await runFullSync({ timestamp: NOW, changes: {} });
+
+    expect(today()).toBe('series-n');
+  });
+
+  // The server never writes another day of a finished series, so it does
+  // not take an empty Today. A new first reading can take it instead.
+  it.each([
+    ['arrives', [] as Devotional[]],
+    ['is stored here', [finishedN]],
+  ])('keeps Today empty when the series the server writes is finished and %s', async (_label, held) => {
+    useUnfoldStore.setState({ devotionals: held, currentDevotionalId: null });
+
+    await runFullSync(finishedOnServer(fullSyncReply([finishedN])));
+
+    expect(useUnfoldStore.getState().devotionals.some((item) => item.id === 'series-n')).toBe(true);
     expect(today()).toBeNull();
+  });
+
+  it('keeps Today empty when a pull of one series stored here shows it is the series the server writes', () => {
+    useUnfoldStore.setState({ devotionals: [newN], currentDevotionalId: null });
+
+    pullOneSeries('series-n', [seriesRow(newN)]);
+
+    expect(today()).toBeNull();
+  });
+
+  // A pull of one series builds a progressive shell for a series this device
+  // does not hold. The server writes only a series its own row marks
+  // progressive.
+  it.each([
+    { label: 'marks it progressive', generationMode: 'progressive', expected: 'series-n' },
+    { label: 'marks it batch', generationMode: 'batch', expected: null },
+    { label: 'carries no mode', generationMode: undefined, expected: null },
+  ])('gives Today $expected when a pull of one series brings a row that $label', ({ generationMode, expected }) => {
+    useUnfoldStore.setState({ devotionals: [], currentDevotionalId: null });
+
+    pullOneSeries('series-n', [{ ...seriesRow(newN), generationMode: generationMode as Devotional['generationMode'] }]);
+
+    expect(useUnfoldStore.getState().devotionals.some((item) => item.id === 'series-n')).toBe(true);
+    expect(today()).toBe(expected);
   });
 
   it('keeps Today empty when a pull of one series carries the pause of the series held live here', () => {

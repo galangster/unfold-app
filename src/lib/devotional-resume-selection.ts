@@ -2,7 +2,12 @@ import {
   isDevotionalArchived,
   lifecycleTimestampMs,
 } from './devotional-lifecycle';
-import { isStrictActiveSeriesWinner, outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional-active-selection';
+import {
+  isProgressiveSeriesCandidate,
+  isStrictActiveSeriesWinner,
+  outranksActiveSiblings,
+  type ActiveSeriesCandidate,
+} from './devotional-active-selection';
 
 export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
@@ -76,8 +81,6 @@ function outranksWithPulledSeries(
  * failed first series the server ran again) has no resume clock. It takes
  * Today only when Today holds no live series or a finished one, and only as
  * the strict active winner. An unfinished current series always stays.
- * A series held before the pull never wins this way: an older reply can omit
- * a newer series that an earlier pull showed but did not save.
  */
 export function selectSyncedCurrentDevotionalId<T extends ResumeSelectionSeries>(options: {
   previousCurrentId: string | null | undefined;
@@ -91,11 +94,16 @@ export function selectSyncedCurrentDevotionalId<T extends ResumeSelectionSeries>
   pulled?: readonly ResumeSelectionSeries[];
   /** The reader finished the series, so the series the server writes may replace it. */
   isFinished?: (series: T) => boolean;
+  /**
+   * The pull was a full sync, so this device now holds every series the
+   * server keeps, and a series stored here earlier can prove itself too.
+   */
+  holdsEverySeries?: boolean;
 }): string | null {
   const selected = options.next.find((item) => item.id === options.previousCurrentId);
   if (selected && !isDevotionalArchived(selected)) {
     if (!options.isFinished?.(selected)) return selected.id;
-    return arrivedStrictWinner(options) ?? selected.id;
+    return serverWrittenSeries(options) ?? selected.id;
   }
 
   const previousById = new Map(options.previous.map((item) => [item.id, item]));
@@ -114,27 +122,33 @@ export function selectSyncedCurrentDevotionalId<T extends ResumeSelectionSeries>
     }
   }
   if (chosenId && outranksWithPulledSeries(chosenId, options.next, options.pulled)) return chosenId;
-  return arrivedStrictWinner(options);
+  return serverWrittenSeries(options);
 }
 
 /**
- * The series this pull brought here that the server writes: the device did
- * not hold it before, holds it live now, and the pull shows it live. No other
- * live series, held here or only pulled, ranks with or above it.
+ * The series the server writes, when Today may show it: the strict active
+ * winner of every series held here or only pulled, held here live and
+ * unfinished. The server never writes another day of a finished series.
+ * A row the pull returned must be live and progressive by the server's own
+ * mode: a shell built from a pull of one series assumes progressive.
+ * A pull of one series proves only a series it brought here, since an older
+ * reply can omit a newer series that an earlier pull showed but did not save.
  */
-function arrivedStrictWinner(options: {
+function serverWrittenSeries<T extends ResumeSelectionSeries>(options: {
   previous: readonly ResumeSelectionSeries[];
-  next: readonly ResumeSelectionSeries[];
+  next: readonly T[];
   pulled?: readonly ResumeSelectionSeries[];
+  isFinished?: (series: T) => boolean;
+  holdsEverySeries?: boolean;
 }): string | null {
   const ranked = withPulledSeries(options.next, options.pulled);
-  const winner = options.pulled?.find((copy) => {
-    const held = options.next.find((series) => series.id === copy.id);
-    return held && !isDevotionalArchived(held) && !isDevotionalArchived(copy)
-      && !options.previous.some((series) => series.id === copy.id)
-      && isStrictActiveSeriesWinner(copy.id, ranked);
-  });
-  return winner?.id ?? null;
+  const winnerId = ranked.find((series) => isStrictActiveSeriesWinner(series.id, ranked))?.id;
+  const held = options.next.find((series) => series.id === winnerId);
+  if (!held || isDevotionalArchived(held) || options.isFinished?.(held)) return null;
+  const copy = options.pulled?.find((series) => series.id === held.id);
+  if (copy && (isDevotionalArchived(copy) || !isProgressiveSeriesCandidate(copy))) return null;
+  if (options.holdsEverySeries) return held.id;
+  return copy && !options.previous.some((series) => series.id === held.id) ? held.id : null;
 }
 
 function isAcceptedExplicitResume(
