@@ -34,21 +34,29 @@ import { TAP_MAX_MS, TAP_SLOP_PX } from './useSelectionBarOutsideTap';
 
 /** The document is the source of truth: every mutation reports the diff of
  *  live highlights before and after, and the store reconciles from it. */
+/** A change sent to the live page: an Undo, or (reason `replay`) a late change replayed forward. */
+type PageChange = Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> & { reason?: 'replay' };
+
 export interface HighlightsChangedEvent {
-  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal';
+  /** `replay`: a change an older page of the same content posted too late, applied here. */
+  reason: 'create' | 'remove' | 'recolor' | 'undo' | 'heal' | 'replay';
   removed: LiveHighlight[];
   added: LiveHighlight[];
   /** Serial of the highlight the person acted on (create / recolor). */
   primarySerial: string;
   /** True for undo replays — reconcile the store, show no toast. */
   silent: boolean;
+  /** The document that produced the change. Undo replays it into that document only. */
+  docId: string;
 }
 
 /** Imperative handle for the reader screen (undo). */
 export interface DevotionalWebViewCommands {
   /** Apply the inverse of a reported change to the document. The resulting
-   *  diff comes back through `onHighlightsChanged` with `silent: true`. */
-  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed'>) => void;
+   *  diff comes back through `onHighlightsChanged` with `silent: true`. The
+   *  change replays by character position, so it is dropped once the
+   *  document that produced it is gone (new text for the same day). */
+  applyInverse: (change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => void;
   /** Flash and report the y of a stored highlight in the live document
    *  (reader Highlights sheet). Resolves through `onTargetHighlightLocated`. */
   scrollToHighlight: (highlight: Highlight) => void;
@@ -265,10 +273,18 @@ const HIGHLIGHTS_SCRIPT = `
         return out;
       }
 
+      // A serial is start$end$id$class$container. The id is per page: a
+      // highlight restored on a rebuilt page gets a new one, so a highlight
+      // is found by where it is and what it is.
+      function serialPosition(serial) {
+        var parts = String(serial || '').split('$');
+        return [parts[0], parts[1], parts[3], parts[4] || ''].join('$');
+      }
       function findBySerial(serial) {
         var hs = (window.rangyHighlighter && window.rangyHighlighter.highlights) || [];
+        var wanted = serialPosition(serial);
         for (var i = 0; i < hs.length; i++) {
-          if (getRangySerial(hs[i]) === serial) return hs[i];
+          if (serialPosition(getRangySerial(hs[i])) === wanted) return hs[i];
         }
         return null;
       }
@@ -312,6 +328,9 @@ const HIGHLIGHTS_SCRIPT = `
         after.forEach(function(h) { if (!beforeBySerial[h.serial]) added.push(describe(h, true)); });
         postToApp({
           type: 'HIGHLIGHTS_CHANGED',
+          // Which document changed, so a message still in flight from a
+          // replaced document is not saved under the one that replaced it.
+          docId: document.documentElement.getAttribute('data-doc-id'),
           reason: reason,
           removed: removed,
           added: added,
@@ -443,7 +462,7 @@ const HIGHLIGHTS_SCRIPT = `
           console.log('Undo failed:', err);
         }
         closeBar(false);
-        postHighlightsChanged('undo', before, '', true);
+        postHighlightsChanged(change && change.reason === 'replay' ? 'replay' : 'undo', before, '', true);
       };
 
       // Tap-to-edit's X: remove the highlight the mark belongs to.
@@ -2492,9 +2511,13 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    return { docId, bakedThemeJson: themeVars.json, source: { html } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
-  }, [documentMarkup, webViewTargetKey]);
+    // The page's content for this series and day: every font value sits in
+    // <head>, so the markup from </head> on changes only with what the reader
+    // sees. The series and day keep two days with the same words apart.
+    const content = `${devotionalId ?? ''}#${day.dayNumber}\n${documentMarkup.slice(documentMarkup.indexOf('</head>'))}`;
+    return { docId, content, bakedThemeJson: themeVars.json, source: { html } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey and devotionalId included on purpose
+  }, [documentMarkup, webViewTargetKey, devotionalId]);
 
   // "Live document" = the document currently loaded in the mounted WebView,
   // identified by mount key + docId. Its first HEIGHT_CHANGE (echoing the
@@ -2503,6 +2526,31 @@ export function DevotionalWebView({
   // truth. appliedJson tracks the values the document is showing so that an
   // unchanged theme is never pushed twice.
   const liveDocToken = `${webViewTargetKey}|${webViewDocument.docId}`;
+  // The document on screen now, for commands that must not reach a newer one.
+  const liveDocIdRef = useRef(webViewDocument.docId);
+  liveDocIdRef.current = webViewDocument.docId;
+  const liveDocTokenRef = useRef(liveDocToken);
+  liveDocTokenRef.current = liveDocToken;
+  // Which content each document of this mount showed. A reading-font change
+  // rebuilds the page under a new docId over the same content, so an Undo
+  // from the old page still applies; new content for the day blocks it. Each
+  // distinct content is kept once, so every document of the mount stays known.
+  const contentNumbersRef = useRef(new Map<string, number>());
+  const docContentRef = useRef(new Map<string, number>());
+  if (!docContentRef.current.has(webViewDocument.docId)) {
+    const contents = contentNumbersRef.current;
+    if (!contents.has(webViewDocument.content)) contents.set(webViewDocument.content, contents.size);
+    docContentRef.current.set(webViewDocument.docId, contents.get(webViewDocument.content)!);
+  }
+  const showsSameContent = useCallback((docId: string) => {
+    const docContent = docContentRef.current;
+    return docId === liveDocIdRef.current
+      || (docContent.has(docId) && docContent.get(docId) === docContent.get(liveDocIdRef.current));
+  }, []);
+  // Highlight changes for the live page, in order, while no page is ready (a
+  // font still loading unmounts it): an Undo, or a change an older page with
+  // the same content posted. Each waits for the next page's first report.
+  const pendingPageChangesRef = useRef<PageChange[]>([]);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2614,11 +2662,26 @@ export function DevotionalWebView({
     callPage('__unfoldSelectionConfirm', requestId, message);
   }, [callPage]);
 
+  // Undoes `change` on the live page when that page shows the same content.
+  // The page then posts the result as a silent change, which the reader saves.
+  const sendInverseToLivePage = useCallback((change: PageChange) => {
+    if (!showsSameContent(change.docId)) return;
+    // A change from the page on screen proves that page runs its scripts.
+    const pageReady = Boolean(webViewRef.current) && (
+      change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
+    );
+    if (!pageReady) {
+      pendingPageChangesRef.current.push(change);
+      return;
+    }
+    callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed, reason: change.reason });
+  }, [callPage, showsSameContent]);
+
   useEffect(() => {
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+        sendInverseToLivePage(change);
       },
       scrollToHighlight: (highlight) => {
         callPage('__unfoldLocateHighlight', {
@@ -2640,7 +2703,7 @@ export function DevotionalWebView({
     return () => {
       commandRef.current = null;
     };
-  }, [callPage, commandRef]);
+  }, [callPage, commandRef, sendInverseToLivePage]);
 
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
@@ -2726,12 +2789,29 @@ export function DevotionalWebView({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
+        // A change still in flight from the previous document (same-key
+        // source swap) belongs to a page no longer open. With new content its
+        // ranges no longer fit, so it is dropped. Over the same content (a
+        // font switch) the reader's change still counts: it is replayed onto
+        // the live page, which posts it back to be saved.
+        if (data.docId !== webViewDocument.docId) {
+          if (typeof data.docId === 'string') {
+            sendInverseToLivePage({
+              added: Array.isArray(data.removed) ? data.removed : [],
+              removed: Array.isArray(data.added) ? data.added : [],
+              docId: data.docId,
+              reason: 'replay',
+            });
+          }
+          return;
+        }
         onHighlightsChanged({
           reason: data.reason,
           removed: Array.isArray(data.removed) ? data.removed : [],
           added: Array.isArray(data.added) ? data.added : [],
           primarySerial: typeof data.primarySerial === 'string' ? data.primarySerial : '',
           silent: !!data.silent,
+          docId: data.docId,
         });
       } else if (data.type === 'HIGHLIGHT_FAILED') {
         onHighlightFailed?.();
@@ -2773,6 +2853,13 @@ export function DevotionalWebView({
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
           pushScreenReader(screenReaderOn);
+          const pendingChanges = pendingPageChangesRef.current;
+          pendingPageChangesRef.current = [];
+          for (const change of pendingChanges) {
+            if (showsSameContent(change.docId)) {
+              callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed, reason: change.reason });
+            }
+          }
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }
