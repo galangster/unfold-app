@@ -131,7 +131,8 @@ function pulledSeriesBesides(pulled: PulledDevotionalContent, devotionalId: stri
   return pulled.canonicalSeries?.filter((series) => series.id !== devotionalId) ?? [];
 }
 
-function hasQueuedSeriesDelete(devotionalId: string): boolean {
+/** The reader deleted this series here, and the delete has not reached the server yet. */
+export function hasQueuedSeriesDelete(devotionalId: string): boolean {
   return peekSyncOutbox().some((change) => change.table === 'devotionals' && change.deleted && change.id === devotionalId);
 }
 
