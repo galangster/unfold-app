@@ -2499,7 +2499,8 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    return { docId, bakedThemeJson: themeVars.json, source: { html } };
+    // The day's text this document was built from: `day` feeds documentMarkup.
+    return { docId, dayText: JSON.stringify(day), bakedThemeJson: themeVars.json, source: { html } };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
   }, [documentMarkup, webViewTargetKey]);
 
@@ -2513,6 +2514,18 @@ export function DevotionalWebView({
   // The document on screen now, for commands that must not reach a newer one.
   const liveDocIdRef = useRef(webViewDocument.docId);
   liveDocIdRef.current = webViewDocument.docId;
+  // The day's text of each recent document. A reading-font change rebuilds the
+  // page under a new docId over the same text, so an Undo from the old page
+  // still applies. New text for the day blocks it. An Undo lasts five seconds,
+  // so a few documents back is enough.
+  const docDayTextRef = useRef(new Map<string, string>());
+  if (!docDayTextRef.current.has(webViewDocument.docId)) {
+    docDayTextRef.current.set(webViewDocument.docId, webViewDocument.dayText);
+    for (const oldest of docDayTextRef.current.keys()) {
+      if (docDayTextRef.current.size <= 8) break;
+      docDayTextRef.current.delete(oldest);
+    }
+  }
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2628,7 +2641,10 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        if (change.docId !== liveDocIdRef.current) return;
+        const dayText = docDayTextRef.current;
+        const sameText = change.docId === liveDocIdRef.current
+          || (dayText.has(change.docId) && dayText.get(change.docId) === dayText.get(liveDocIdRef.current));
+        if (!sameText) return;
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {

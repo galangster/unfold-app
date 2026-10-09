@@ -875,6 +875,33 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     expect(inverseCalls()).toHaveLength(1);
   });
 
+  it('replays an Undo across a reading-font reload of the same text', () => {
+    const commandRef = { current: null as any };
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" commandRef={commandRef} />);
+    });
+    reportHeight(tree);
+    const oldDocId = getDocId(tree);
+    // Aa picks another reading font: the page rebuilds over the same text.
+    const savedFont = mockDevotionalWebFont;
+    mockDevotionalWebFont = { family: 'Lora', css: '' };
+    try {
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} fontSize="medium" commandRef={commandRef} />);
+      });
+    } finally {
+      mockDevotionalWebFont = savedFont;
+    }
+    reportHeight(tree);
+    expect(getDocId(tree)).not.toBe(oldDocId);
+    const removed = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
+
+    mockInjectJavaScript.mockClear();
+    act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+    expect(mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('))).toHaveLength(1);
+  });
+
   it('keeps the exact source when the day object is replaced with identical content (e.g. marked read)', () => {
     let tree: any;
     act(() => {
