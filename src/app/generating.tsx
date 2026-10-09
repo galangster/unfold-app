@@ -53,6 +53,7 @@ import {
   resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
+  resolveLongRunningAfterMs,
   resolveRetryFailureCleanup,
   shiftPollStart,
   MAX_CONSECUTIVE_POLL_NETWORK_ERRORS,
@@ -72,6 +73,7 @@ import {
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
+import { resolveGeneratingWaitCopy } from '@/lib/generating-wait-copy';
 import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
 import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
@@ -92,7 +94,8 @@ import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
 import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
 
-// Soft copy once a job outlives LONG_RUNNING_AFTER_MS. Time alone is never a
+// Soft copy once a job outlives its long-running threshold, which follows the
+// series length (resolveLongRunningAfterMs). Time alone is never a
 // failure: the server decides, and polling continues at the slow tier.
 const LONG_RUNNING_MESSAGE = 'Still writing — taking a little longer';
 // Grace period to wait for the persisted user to hydrate before erroring out
@@ -262,7 +265,7 @@ export default function GeneratingScreen() {
   const observedJobStateRef = useRef<ObservedJobState>('unobserved');
   // When the app left the foreground; background time is not polling time.
   const backgroundedAtRef = useRef<number | null>(null);
-  // Soft "still writing" state past LONG_RUNNING_AFTER_MS (never an error).
+  // Soft "still writing" state past the long-running threshold (never an error).
   const [isLongRunning, setIsLongRunning] = useState(false);
 
   // Track when polling started for the long-running threshold and poll cadence
@@ -632,6 +635,7 @@ export default function GeneratingScreen() {
     const assessDeadline = (): GenerationDeadlineDecision => {
       const decision = evaluateGenerationDeadline({
         elapsedMs: Date.now() - pollStartTime.current,
+        maxDurationMs: resolveLongRunningAfterMs(devotionalLength),
         consecutiveNetworkErrors: consecutiveNetworkErrorsRef.current,
       });
       setIsLongRunning(decision === 'long-running');
@@ -741,7 +745,7 @@ export default function GeneratingScreen() {
     };
 
     poll();
-  }, [handleGenerationComplete, failGenerationSession]);
+  }, [handleGenerationComplete, failGenerationSession, devotionalLength]);
 
   // ========== JOB SUBMISSION ==========
 
@@ -1363,6 +1367,12 @@ export default function GeneratingScreen() {
             )}
           </View>
 
+          {/* Fixed wait estimate. It sits outside the keyed message above, so
+              a message change never remounts it and VoiceOver reads it once. */}
+          <Text style={[genStyles.exitNote, genStyles.waitLine, { color: colors.textMuted }]}>
+            {resolveGeneratingWaitCopy(autoReadyDays ?? devotionalLength, notifyControl)}
+          </Text>
+
           {/* Series title reveal -- shows when server returns title from arc.
               Ternary, not `&&`: the empty-string default would otherwise be
               emitted as a bare text node inside this View. */}
@@ -1743,6 +1753,11 @@ const genStyles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     marginTop: Spacing['4'],
+  },
+  waitLine: {
+    maxWidth: 420,
+    marginTop: 0,
+    marginBottom: Spacing['3'],
   },
   notificationPrompt: {
     width: '100%',

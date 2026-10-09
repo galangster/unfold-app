@@ -157,6 +157,7 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 import { act, create } from 'react-test-renderer';
+import { Text } from 'react-native';
 
 import GeneratingScreen from '@/app/generating';
 import {
@@ -1259,5 +1260,131 @@ describe('a finished job for a series deleted here', () => {
 
     expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(true);
     expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-trial');
+  });
+});
+
+describe('honest wait line on /generating', () => {
+  const TWO_MINUTES = 'This usually takes about two minutes.';
+  const THREE_MINUTES = 'This usually takes about three minutes.';
+  const THIRTY_DAYS = 'A 30-day series usually takes four to six minutes.';
+  const LONGER = 'A longer series usually takes four to six minutes.';
+  const LEAVE_NOTE = 'You can leave this screen. We\u2019ll let you know when Day 1 is ready.';
+
+  async function renderWaiting(devotionalLength: number): Promise<Tree> {
+    useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+    mockSubmitGenerationJob.mockReturnValue(new Promise(() => undefined));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    return tree;
+  }
+
+  function textNodes(tree: Tree, text: string) {
+    return tree.root.findAllByType(Text).filter((node) => node.props.children === text);
+  }
+
+  it.each([
+    [3, TWO_MINUTES],
+    [7, TWO_MINUTES],
+    [8, THREE_MINUTES],
+    [14, THREE_MINUTES],
+    [15, LONGER],
+    [21, LONGER],
+    [30, THIRTY_DAYS],
+  ])('a %i-day series shows one fixed wait line', async (days, line) => {
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, line)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('keeps one wait line while the waiting messages cycle', async () => {
+    const tree = await renderWaiting(7);
+    expect(textNodes(tree, 'Reading your story')).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+
+    expect(textNodes(tree, 'Choosing scripture')).toHaveLength(1);
+    expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+  });
+
+  it.each([
+    [30, THIRTY_DAYS],
+    [21, LONGER],
+  ])('a %i-day series with notifications on says the reader can leave', async (days, line) => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, `${line} ${LEAVE_NOTE}`)).toHaveLength(1);
+  });
+
+  it('a long series with notifications off does not promise a notification', async () => {
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a long series whose token registration failed does not promise a notification', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('failed');
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a 14-day series with notifications on keeps the short line', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(14);
+
+    expect(textNodes(tree, THREE_MINUTES)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+});
+
+describe('long-running copy on /generating follows the series length', () => {
+  const LONG_RUNNING = 'Still writing \u2014 taking a little longer';
+
+  async function renderPolling(devotionalLength: number): Promise<Tree> {
+    useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-wait', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    return tree;
+  }
+
+  async function advancePolling(ms: number) {
+    for (let elapsed = 0; elapsed < ms; elapsed += 5000) {
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+      });
+      await flush();
+    }
+  }
+
+  it('softens a 3-day wait after four minutes', async () => {
+    const tree = await renderPolling(3);
+
+    await advancePolling(3.5 * 60_000);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
+  });
+
+  it('waits seven minutes before it softens a 30-day wait', async () => {
+    const tree = await renderPolling(30);
+
+    await advancePolling(6.5 * 60_000);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
   });
 });

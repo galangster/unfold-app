@@ -19,6 +19,7 @@ import {
   resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
+  resolveLongRunningAfterMs,
   resolveRetryFailureCleanup,
   shiftPollStart,
   LONG_RUNNING_AFTER_MS,
@@ -201,9 +202,27 @@ describe('getNextPollDelayMs', () => {
   });
 });
 
+describe('resolveLongRunningAfterMs — the soft threshold follows the series length', () => {
+  it('softens a series of 14 days or fewer after four minutes', () => {
+    for (const days of [1, 3, 7, 8, 14]) {
+      expect(resolveLongRunningAfterMs(days)).toBe(4 * 60 * 1000);
+    }
+  });
+
+  it('softens a series of more than 14 days after seven minutes', () => {
+    for (const days of [15, 21, 30]) {
+      expect(resolveLongRunningAfterMs(days)).toBe(7 * 60 * 1000);
+    }
+  });
+
+  it('reads an unknown length as a short series', () => {
+    expect(resolveLongRunningAfterMs(Number.NaN)).toBe(4 * 60 * 1000);
+  });
+});
+
 describe('evaluateGenerationDeadline — the wall clock is never a verdict', () => {
   it('keeps polling before the long-running threshold', () => {
-    expect(LONG_RUNNING_AFTER_MS).toBe(10 * 60 * 1000);
+    expect(LONG_RUNNING_AFTER_MS).toBe(4 * 60 * 1000);
     for (const elapsed of [0, 1, 60_000, LONG_RUNNING_AFTER_MS - 1]) {
       expect(evaluateGenerationDeadline({ elapsedMs: elapsed, consecutiveNetworkErrors: 0 })).toBe('poll');
     }
