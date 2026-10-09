@@ -54,8 +54,6 @@ type PulledDevotionalMetadata = {
 
 export type PulledDevotionalContent = {
   devotional?: PulledDevotionalMetadata;
-  /** The pull returned this series' tombstone, which the mappers drop. */
-  seriesDeleted?: boolean;
   /** All nondeleted rows, needed to prove selection after a force-full pull. */
   canonicalSeries?: PulledDevotionalMetadata[];
   days: DevotionalDay[];
@@ -189,14 +187,12 @@ export function extractPulledDevotionalContent(
     .map(mapPulledDevotionalMetadata)
     .filter((candidate): candidate is PulledDevotionalMetadata => !!candidate);
   const devotional = canonicalSeries.find((candidate) => candidate.id === devotionalId);
-  const seriesDeleted = (payload.changes.devotionals ?? []).some((record) => record.id === devotionalId && record.deleted);
 
   return {
     devotional,
     canonicalSeries,
     days,
     timestamp: payload.timestamp,
-    ...(seriesDeleted ? { seriesDeleted } : {}),
   };
 }
 

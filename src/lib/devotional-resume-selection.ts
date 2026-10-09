@@ -7,9 +7,7 @@ import { outranksActiveSiblings, type ActiveSeriesCandidate } from './devotional
 export type ResumeSelectionSeries = ActiveSeriesCandidate;
 
 /**
- * The rows held here, ranked by the server's creation time where the pull
- * returned one (a shell built from a pull without series dates carries this
- * phone's guess), each with a newer resume the pull returned for it, plus
+ * The rows held here, each with a newer resume the pull returned for it, plus
  * every pulled row this device does not hold yet. A pulled resume can wait for
  * the full sync before it is saved, but the server already counts it, so it
  * still blocks an older resume. Only resumes are laid over: a pulled pause
@@ -23,15 +21,14 @@ function withPulledSeries(
   const pulledById = new Map(pulled.map((series) => [series.id, series]));
   const held = next.map((series) => {
     const copy = pulledById.get(series.id);
-    if (!copy) return series;
-    const ranked = copy.createdAt ? { ...series, createdAt: copy.createdAt } : series;
     if (
-      copy.archivedAt
+      !copy
+      || copy.archivedAt
       || !(lifecycleTimestampMs(copy.archivedStateAt) > lifecycleTimestampMs(series.archivedStateAt))
     ) {
-      return ranked;
+      return series;
     }
-    return { ...ranked, archivedAt: null, archivedStateAt: copy.archivedStateAt };
+    return { ...series, archivedAt: null, archivedStateAt: copy.archivedStateAt };
   });
   const heldIds = new Set(next.map((series) => series.id));
   return [...held, ...pulled.filter((series) => !heldIds.has(series.id))];
@@ -49,18 +46,7 @@ export function canPulledSeriesTakeEmptyToday(
   pulled?: readonly ResumeSelectionSeries[],
 ): boolean {
   const target = held.find((series) => series.id === id);
-  return Boolean(target && !isDevotionalArchived(target) && outranksWithPulledSeries(id, held, pulled));
-}
-
-/** The series ranks above every other live series, each ranked as the pull shows it. */
-function outranksWithPulledSeries(
-  id: string,
-  held: readonly ResumeSelectionSeries[],
-  pulled?: readonly ResumeSelectionSeries[],
-): boolean {
-  const ranked = withPulledSeries(held, pulled);
-  const target = ranked.find((series) => series.id === id);
-  return Boolean(target && outranksActiveSiblings(target, ranked));
+  return Boolean(target && !isDevotionalArchived(target) && outranksActiveSiblings(target, withPulledSeries(held, pulled)));
 }
 
 /**
@@ -104,7 +90,10 @@ export function selectSyncedCurrentDevotionalId(options: {
       chosenClock = clock;
     }
   }
-  return chosenId && outranksWithPulledSeries(chosenId, options.next, options.pulled) ? chosenId : null;
+  const chosen = options.next.find((series) => series.id === chosenId);
+  return chosen && outranksActiveSiblings(chosen, withPulledSeries(options.next, options.pulled))
+    ? chosen.id
+    : null;
 }
 
 function isAcceptedExplicitResume(
