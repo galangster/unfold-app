@@ -87,8 +87,9 @@ async function pullRevealSeries(
 /**
  * The pushed series as the winner check should see it. A pulled row gives the
  * server's mode and creation time: the shell built from a pull is always
- * marked progressive. Pause and resume come from whichever copy is newer, as
- * a sync merges them: a sync can land a newer one after the reveal's pull.
+ * marked progressive, and a row without a mode is one the server does not
+ * select. Pause and resume come from whichever copy is newer, as a sync
+ * merges them: a sync can land a newer one after the reveal's pull.
  */
 function revealTargetCandidate(
   local: ActiveSeriesCandidate | undefined,
@@ -98,7 +99,7 @@ function revealTargetCandidate(
   return {
     id: local.id,
     createdAt: pulled.createdAt ?? local.createdAt,
-    generationMode: pulled.generationMode ?? local.generationMode,
+    generationMode: pulled.generationMode,
     ...mergeDevotionalLifecycle({ local, incoming: pulled }),
   };
 }

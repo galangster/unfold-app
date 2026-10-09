@@ -339,12 +339,13 @@ describe('reveal for a series this device does not hold yet', () => {
     expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
   });
 
-  it('judges the pushed series by the server copy, not the shell built from it', async () => {
-    // The server holds it as a batch series; the shell from the pull is marked
-    // progressive. Only a progressive series can become current.
+  it.each([['batch' as const], [undefined]])('judges the pushed series by the server copy (mode %s), not the shell built from it', async (generationMode) => {
+    // The server holds it as a batch series, or without a mode; the shell
+    // from the pull is marked progressive. Only a progressive series can
+    // become current.
     mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
       { id: LOCAL_ID, createdAt: NOW },
-      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z', generationMode: 'batch' },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z', generationMode },
     ]));
     await openReadyPush(PULLED_ID);
     pressReveal();
