@@ -834,10 +834,22 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       journalEntries: (() => {
         // A queued copy newer than this device's row stands in for it, so a
         // repair below carries the reader's latest writing rather than
-        // replacing it in the outbox.
+        // replacing it in the outbox. Only on a day this pull brings rows for,
+        // in a series still here (a delete queued here or applied by this pull
+        // has removed it), and only for an entry whose row is older or whose
+        // day has no entry at all: a row that a fold or a delete removed stays
+        // gone.
+        const dayKey = (entry: { devotionalId: string; dayNumber: number }) => `${entry.devotionalId}:${entry.dayNumber}`;
+        const pulledDays = new Set((changes.journal_entries ?? [])
+          .map((record) => mapJournalEntry(record))
+          .filter((entry): entry is JournalEntry => entry != null)
+          .map(dayKey));
         const local = queuedEntries.reduce((items, queued) => {
+          if (!pulledDays.has(dayKey(queued))
+            || !devotionals.some((item) => item.id === queued.devotionalId)) return items;
           const current = items.find((item) => item.id === queued.id);
           if (current && (localUpdatedAt(current) ?? '') >= (queued.updatedAt ?? '')) return items;
+          if (!current && items.some((item) => dayKey(item) === dayKey(queued))) return items;
           // The queued copy carries every field but when the entry began.
           return current
             ? items.map((item) => (item.id === queued.id ? { ...queued, createdAt: item.createdAt } : item))

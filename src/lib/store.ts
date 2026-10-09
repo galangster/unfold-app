@@ -1237,9 +1237,25 @@ export const useUnfoldStore = create<UnfoldState>()(
             buildPersonalDataSyncChange(table, id, {}, now, true);
           const ownedBy = <T extends { id: string; devotionalId: string }>(rows: T[]) =>
             rows.filter((row) => row.devotionalId === devotionalId);
+          // A journal write can sit in the outbox without its row, after a
+          // crash before the store reached disk. It is deleted too, stamped
+          // past the queued write so the delete is what goes out.
+          const queuedOnlyJournalDeletes = peekSyncOutbox()
+            .filter((change) => change.table === 'journal_entries'
+              && !change.deleted
+              && (change.data as { devotionalId?: unknown } | undefined)?.devotionalId === devotionalId
+              && !state.journalEntries.some((row) => row.id === change.id))
+            .map((change) => buildPersonalDataSyncChange(
+              'journal_entries',
+              change.id,
+              {},
+              journalWriteClock({ updatedAt: change.clientUpdatedAt } as JournalEntry, now),
+              true,
+            ));
           enqueueSyncChanges([
             ...(devotional ? [tombstone('devotionals', devotionalId)] : []),
             ...(devotional?.days ?? []).flatMap((day) => (day.id ? [tombstone('devotional_days', day.id)] : [])),
+            ...queuedOnlyJournalDeletes,
             // A journal entry can be dated ahead of this phone (a pulled row, or
             // a merge repair). Its delete is stamped past it, or the outbox and
             // the server keep the live writing.

@@ -338,6 +338,10 @@ describe('pushing the writing a pull folded together', () => {
     expect(queued[0].data.content).toContain('Phone.');
   });
 
+  function seedSeries() {
+    useUnfoldStore.setState({ devotionals: [{ id: DEVOTIONAL, title: 'Series', currentDay: DAY, totalDays: 7, days: [] }] } as never);
+  }
+
   // The outbox is written at once and the store's disk a moment later, so a
   // crash in between leaves the newest writing only in the queued change.
   function queueWriteLostFromStore(content: string, clientUpdatedAt: string) {
@@ -353,6 +357,7 @@ describe('pushing the writing a pull folded together', () => {
   }
 
   it('keeps writing whose row a crash lost when a pull brings an older delete and legacy rows', () => {
+    seedSeries();
     const canonical = queueWriteLostFromStore('Written just before the crash.', '2026-09-06T00:00:00.000Z');
 
     applyPulledUserData({
@@ -377,6 +382,7 @@ describe('pushing the writing a pull folded together', () => {
   });
 
   it('folds the queued writing, not the older row the store kept, when a pull folds the day', () => {
+    seedSeries();
     seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');
     const canonical = queueWriteLostFromStore('Old draft. Written just before the crash.', '2026-09-06T00:00:00.000Z');
 
@@ -394,25 +400,107 @@ describe('pushing the writing a pull folded together', () => {
   });
 
   it('restores writing a crash kept from the store, with the date the entry began', () => {
-    seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');
-    const canonical = queueWriteLostFromStore('Old draft. Written just before the crash.', '2026-09-06T00:00:00.000Z');
+    seedSeries();
+    const canonical = seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');
+    useUnfoldStore.setState((state) => ({
+      journalEntries: state.journalEntries.map((entry) => ({ ...entry, createdAt: '2026-08-20T08:00:00.000Z' })),
+    }));
+    queueWriteLostFromStore('Old draft. Written just before the crash.', '2026-09-06T00:00:00.000Z');
 
-    applyPulledUserData({ changes: {}, timestamp: '2026-09-06T00:00:01.000Z' } as never);
+    // The server's copy of the day is older than the queued write, so the
+    // pull keeps the queued writing.
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow(canonical, 'Old draft.', '2026-09-02T10:00:00.000Z')] },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
 
     const entry = useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical);
     expect(entry).toMatchObject({
       content: 'Old draft. Written just before the crash.',
-      createdAt: '2026-09-01T08:00:00.000Z',
+      createdAt: '2026-08-20T08:00:00.000Z',
       updatedAt: '2026-09-06T00:00:00.000Z',
     });
   });
 
+  it('restores nothing on a pull that brings no row for the day', () => {
+    seedSeries();
+    const canonical = seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');
+    queueWriteLostFromStore('Old draft. Written just before the crash.', '2026-09-06T00:00:00.000Z');
+
+    applyPulledUserData({ changes: {}, timestamp: '2026-09-06T00:00:01.000Z' } as never);
+
+    expect(useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical)?.content).toBe('Old draft.');
+  });
+
+  it('does not bring back a legacy write the day already folded in, after the reader cleared the day', () => {
+    seedSeries();
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z')] },
+      timestamp: '2026-09-02T00:00:00.000Z',
+    } as never);
+    // An edit under the legacy id is still queued when a second row folds the day.
+    useUnfoldStore.getState().updateJournalEntry('journal_one', 'Phone, edited.');
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_two', 'Tablet.', '2026-09-01T09:30:00.000Z')] },
+      timestamp: '2026-09-03T00:00:00.000Z',
+    } as never);
+    const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
+    useUnfoldStore.getState().updateJournalEntry(canonical, '');
+    const cleared = queuedJournal().find((change) => change.id === canonical)!;
+
+    // The server's echo of the cleared day brings a row for it.
+    applyPulledUserData({
+      changes: { journal_entries: [{ ...legacyRow(canonical, '', cleared.clientUpdatedAt), id: canonical }] },
+      timestamp: '2026-09-04T00:00:00.000Z',
+    } as never);
+
+    expect(useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical)?.content).toBe('');
+    expect(useUnfoldStore.getState().journalEntries.some((item) => item.id === 'journal_one')).toBe(false);
+  });
+
+  it('deletes a write queued without its row along with its series, and does not restore it', () => {
+    seedSeries();
+    // Dated ahead of this phone, so the delete must be stamped past it.
+    const canonical = queueWriteLostFromStore('Written just before the crash.', '2099-06-01T00:00:00.000Z');
+
+    useUnfoldStore.getState().removeDevotional(DEVOTIONAL);
+    expect(queuedJournal()).toEqual([
+      expect.objectContaining({ id: canonical, deleted: true, clientUpdatedAt: '2099-06-01T00:00:00.001Z' }),
+    ]);
+
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z')] },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
+    expect(useUnfoldStore.getState().journalEntries.some((item) => item.id === canonical)).toBe(false);
+  });
+
+  it('does not restore a write queued without its row when the pull deletes its series', () => {
+    seedSeries();
+    const canonical = queueWriteLostFromStore('Written just before the crash.', '2026-09-06T00:00:00.000Z');
+
+    applyPulledUserData({
+      changes: {
+        devotionals: [{ id: DEVOTIONAL, data: { id: DEVOTIONAL }, updatedAt: '2026-09-07T00:00:00.000Z', deleted: true }],
+        journal_entries: [legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z')],
+      },
+      timestamp: '2026-09-07T00:00:01.000Z',
+    } as never);
+
+    expect(useUnfoldStore.getState().journalEntries.some((item) => item.id === canonical)).toBe(false);
+  });
+
   it('leaves the store as it is when the queued writing is what it already holds', () => {
-    seedCanonicalEntry('Saved.', '2026-09-06T00:00:00.000Z');
+    seedSeries();
+    const canonical = seedCanonicalEntry('Saved.', '2026-09-06T00:00:00.000Z');
     queueWriteLostFromStore('Saved.', '2026-09-06T00:00:00.000Z');
     const before = useUnfoldStore.getState().journalEntries;
 
-    applyPulledUserData({ changes: {}, timestamp: '2026-09-06T00:00:01.000Z' } as never);
+    // An older server copy of the day: the pull keeps the store's row.
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow(canonical, 'Saved.', '2026-09-05T00:00:00.000Z')] },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
 
     expect(useUnfoldStore.getState().journalEntries).toBe(before);
   });
