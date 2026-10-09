@@ -937,6 +937,30 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
   });
 
+  // Round 7 again: the check ran before retirement, so a saved first reading
+  // dated after the trial outranked it and Today went empty.
+  it('gives Today to the trial once retirement archives a saved first reading dated after it', () => {
+    const intent = seedSubmittedIntent();
+    useUnfoldStore.setState({
+      devotionals: [
+        {
+          id: 'first-reading-1', title: 'First reading', totalDays: 1, currentDay: 1, days: [], createdAt: '2026-09-08T18:00:00.000Z',
+          updatedAt: '2026-09-08T18:00:00.000Z', generationMode: 'progressive',
+          seriesArc: withOnboardingFirstReadingArc(undefined, '2026-09-08T18:00:00.000Z'),
+        } as unknown as Devotional,
+        {
+          id: 'devo-1', title: 'Trial', totalDays: 3, currentDay: 1, days: [{ ...day1, devotionalId: 'devo-1', id: 'devo-1:1' }],
+          createdAt: '2026-09-08T17:00:00.000Z', updatedAt: '2026-09-08T17:00:00.000Z', generationMode: 'progressive',
+        } as unknown as Devotional,
+      ],
+      currentDevotionalId: 'first-reading-1',
+    });
+
+    settleLandedAutoTrialSeries(intent, 'devo-1');
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+  });
+
   it('settles the matching id in the else branch', () => {
     seedSubmittedIntent();
     applyInitialArcResult(

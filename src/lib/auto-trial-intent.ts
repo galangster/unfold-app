@@ -502,14 +502,15 @@ export function settleLandedAutoTrialSeries(intent: AutoTrialIntentV1, devotiona
   const series = store.devotionals.find((row) => row.id === devotionalId);
   if (!series || !series.days.some((day) => day.dayNumber === 1)) return;
 
-  // The trial takes Today only as the series the server writes. A newer live
-  // series that reached this phone first keeps it, and a sample the trial
-  // retires leaves Today empty rather than on the trial.
-  const trialWins = isStrictActiveSeriesWinner(devotionalId, store.devotionals);
+  // The trial takes Today only as the series the server writes, judged once
+  // retiring the samples has archived the first reading they stood in for. A
+  // newer live series that reached this phone first keeps Today, and a
+  // sample's hand-off to a trial that still loses leaves Today empty.
   store.retireOnboardingSamples({ keepId: devotionalId });
-  if (trialWins) {
+  const retired = useUnfoldStore.getState();
+  if (isStrictActiveSeriesWinner(devotionalId, retired.devotionals)) {
     store.setCurrentDevotional(devotionalId);
-  } else if (useUnfoldStore.getState().currentDevotionalId === devotionalId) {
+  } else if (retired.currentDevotionalId === devotionalId) {
     useUnfoldStore.setState({ currentDevotionalId: null });
   }
 
