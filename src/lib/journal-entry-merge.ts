@@ -167,8 +167,9 @@ function mergeStringList(
  * the merged text. When the base cannot be found, the draft follows the
  * merged text, so nothing is dropped.
  */
-/** A letter, a digit, or a combining mark (an accent belongs to its word). */
-const WORD_CHARACTER = /^[\p{L}\p{N}\p{M}]$/u;
+const LETTER_OR_DIGIT = /^[\p{L}\p{N}]$/u;
+/** A combining mark: an accent, or an emoji's variation selector. It belongs to the character before it. */
+const MARK = /^\p{M}$/u;
 
 /** The whole character that ends at `end` in `text`, a surrogate pair included. */
 function characterBefore(text: string, end: number): string {
@@ -183,19 +184,35 @@ function characterAt(text: string, start: number): string {
   return point === undefined ? '' : String.fromCodePoint(point);
 }
 
+/** The character that ends at `end`, past any marks it carries: the base those marks attach to. */
+function baseBefore(text: string, end: number): string {
+  let at = end;
+  while (at > 0) {
+    const character = characterBefore(text, at);
+    if (!MARK.test(character)) return character;
+    at -= character.length;
+  }
+  return '';
+}
+
 /**
- * Whether `text` holds `part` as whole words: at an end of `part` that is a
- * letter, digit or accent, no such character runs on outside it. An end that
- * is a space or punctuation already separates the words. Characters are read
- * whole, so a character outside the basic plane counts as one.
+ * Whether `text` holds `part` as whole words. At an end of `part` that is a
+ * letter or digit (its marks included, as in an accented letter), no letter
+ * or digit runs on outside it. An end that is a space, punctuation or an
+ * emoji already separates the words. Characters are read whole, so a
+ * character outside the basic plane counts as one, and a mark right after
+ * `part` means it stops inside a character.
  */
 function holdsWholeWords(text: string, part: string): boolean {
   if (!part) return false;
-  const startsInWord = WORD_CHARACTER.test(characterAt(part, 0));
-  const endsInWord = WORD_CHARACTER.test(characterBefore(part, part.length));
+  const first = characterAt(part, 0);
+  const startsWithMark = MARK.test(first);
+  const startsInWord = startsWithMark || LETTER_OR_DIGIT.test(first);
+  const endsInWord = LETTER_OR_DIGIT.test(baseBefore(part, part.length));
   for (let at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
-    const runsOnBefore = startsInWord && at > 0 && WORD_CHARACTER.test(characterBefore(text, at));
-    const runsOnAfter = endsInWord && WORD_CHARACTER.test(characterAt(text, at + part.length));
+    const runsOnBefore = startsInWord && at > 0 && (startsWithMark || LETTER_OR_DIGIT.test(baseBefore(text, at)));
+    const after = characterAt(text, at + part.length);
+    const runsOnAfter = MARK.test(after) || (endsInWord && LETTER_OR_DIGIT.test(after));
     if (!runsOnBefore && !runsOnAfter) return true;
   }
   return false;
