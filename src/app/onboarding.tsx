@@ -18,7 +18,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
@@ -369,6 +369,13 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
   };
 }
 
+const HOOK_HEADLINE = 'Ever open your Bible and not know where to start?';
+
+/** Bottom padding of the standard scrolling step layout. */
+const STANDARD_STEP_BOTTOM_PADDING = 120;
+/** Height of the fade above the pinned mirror-back actions. */
+const MIRROR_BACK_FADE_HEIGHT = 48;
+
 const ALL_STEPS = [
   // HOOK: Opening question — problem-naming with an obvious "yes"
   { id: 'hook', question: '', subtext: '', type: 'hook' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
@@ -627,6 +634,7 @@ export default function OnboardingScreen() {
   const isDark = true;
   const reducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const iconMap = useMemo(() => getIconMap(colors.accent), [colors.accent]);
 
@@ -662,9 +670,14 @@ export default function OnboardingScreen() {
   }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
-  // Preserve legacy names while new users choose a conversation style.
-  const [companionNameInput] = useState(() =>
-    resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+  // The name the reader gives the companion on the feature summary. The draft
+  // keeps what they typed across a relaunch, because a resume never returns to
+  // the feature summary. Otherwise a saved name prefills it. Empty means no
+  // name: nothing falls back to a default here.
+  const [companionNameInput, setCompanionNameInput] = useState(() =>
+    restoredDraft?.companionName
+      ?? resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)
+      ?? '',
   );
   const [companionPersonality, setCompanionPersonality] = useState(() =>
     resolveCompanionPersonality(restoredDraft?.companionPersonality ?? existingUser?.companionPersonality),
@@ -947,6 +960,7 @@ export default function OnboardingScreen() {
   const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
   // Mirror-back v2: inline correction UI shown instead of immediately going back
   const [showMirrorCorrection, setShowMirrorCorrection] = useState(false);
+  const [mirrorBackActionsHeight, setMirrorBackActionsHeight] = useState(0);
 
   // Re-entering mirrorBack must always offer ratification afresh — without
   // this, one tap of "Let me adjust something" locks the step into
@@ -1056,6 +1070,7 @@ export default function OnboardingScreen() {
       stepId: currentStepId,
       data: dataRef.current,
       companionPersonality: companionPersonalityRef.current,
+      companionName: companionNameInputRef.current,
       purchasedDuringOnboarding,
       sampleDevotionalId: onboardingDevotionalId || null,
     });
@@ -1091,7 +1106,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     draftAutosave.schedule();
-  }, [data, companionPersonality, currentStepId, draftAutosave]);
+  }, [data, companionPersonality, companionNameInput, currentStepId, draftAutosave]);
 
   // Land the pending write before iOS suspends the app — the debounce window is
   // exactly the gap that used to lose the last answer on a force-quit.
@@ -1386,7 +1401,9 @@ export default function OnboardingScreen() {
     const pendingAuth = pendingAuthDataRef.current ?? {};
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
-    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    // An empty field sends no name, never a default. Omitting the field keeps
+    // a name saved on another device that this one has not loaded yet.
+    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined;
     // A blank or skipped life answer keeps the saved context.
     const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
@@ -1428,7 +1445,7 @@ export default function OnboardingScreen() {
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     } else {
       setUser({
         name: data.name,
@@ -1470,7 +1487,7 @@ export default function OnboardingScreen() {
         mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     }
   }, [data, existingUser, updateUser, setUser, setCompanionName, purchasedDuringOnboarding]);
 
@@ -1615,6 +1632,7 @@ export default function OnboardingScreen() {
           stepId: 'purchaseConfirmation',
           data: dataRef.current,
           companionPersonality: companionPersonalityRef.current,
+          companionName: companionNameInputRef.current,
           purchasedDuringOnboarding: true,
           sampleDevotionalId: onboardingDevotionalId || null,
         });
@@ -2002,14 +2020,18 @@ export default function OnboardingScreen() {
           >
             {/* Heading — left-aligned, scatter letter animation */}
             <View style={{ flexGrow: 1, justifyContent: 'center' }}>
-              <ScatterTitle
-                text="Ever open your Bible and not know where to start?"
-                fontSize={32}
-                baseDelay={400}
-                stagger={60}
-                color={colors.text}
-                onComplete={() => setScreenReady(true)}
-              />
+              {/* Each letter is its own element, so VoiceOver spelled the
+                  heading out. One label carries the whole sentence. */}
+              <View accessible accessibilityLabel={HOOK_HEADLINE}>
+                <ScatterTitle
+                  text={HOOK_HEADLINE}
+                  fontSize={32}
+                  baseDelay={400}
+                  stagger={60}
+                  color={colors.text}
+                  onComplete={() => setScreenReady(true)}
+                />
+              </View>
 
               {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
               <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
@@ -3613,63 +3635,12 @@ export default function OnboardingScreen() {
             </Text>
           </Animated.View>
 
-          {/* CTA buttons */}
+          {/* CTA buttons. The confirm pair is pinned below the scroll
+              (renderMirrorBackActions); this spacer lets the last line
+              scroll clear of it. */}
           <Animated.View entering={FadeIn.duration(600).delay(1850)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
             {!showMirrorCorrection ? (
-              <>
-                <TouchableOpacity activeOpacity={1}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
-                    // Advance immediately — the feature summary is a full-screen step
-                    // that replaces the entire view, so no need for input fade-out
-                    advanceToNextStep();
-                  }}
-                >
-                  <View style={{
-                    backgroundColor: colors.accent,
-                    paddingVertical: 18,
-                    paddingHorizontal: Spacing['6'],
-                    borderRadius: Radius.lg,
-                    alignItems: 'center',
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.4,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}>
-                    <Text style={{
-                      fontFamily: FontFamily.uiSemiBold,
-                      fontSize: FontSize.base,
-                      color: colors.background,
-                    }}>
-                      Yes, this feels right
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity activeOpacity={1}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowMirrorCorrection(true);
-                  }}
-                >
-                  <View style={{
-                    paddingVertical: 14,
-                    paddingHorizontal: Spacing['6'],
-                    borderRadius: Radius.lg,
-                    alignItems: 'center',
-                  }}>
-                    <Text style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.sm,
-                      color: colors.textMuted,
-                    }}>
-                      Let me adjust something
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </>
+              <View testID="mirror-back-scroll-spacer" style={{ height: Math.max(0, mirrorBackActionsHeight - STANDARD_STEP_BOTTOM_PADDING) }} />
             ) : (
               <Animated.View entering={FadeIn.duration(300)} style={{ gap: Spacing['3'] }}>
                 <View style={{
@@ -3771,13 +3742,18 @@ export default function OnboardingScreen() {
       return (
         <FeatureSummaryCarousel
           colors={colors}
+          companionName={companionNameInput}
+          onCompanionNameChange={setCompanionNameInput}
           companionPersonality={companionPersonality}
           onCompanionPersonalityChange={setCompanionPersonality}
           currentPage={featureSummaryPage}
           onPageChange={setFeatureSummaryPage}
           onComplete={() => {
             setFeatureSummaryPage(0);
-            updateUser({ companionPersonality });
+            // The store keeps the name across a relaunch until the profile is saved.
+            const companionName = resolveCompanionNameToPersist(companionNameInput) || undefined;
+            updateUser({ companionPersonality, companionName });
+            setCompanionName(companionName ?? null);
             advanceToNextStep();
           }}
         />
@@ -3979,6 +3955,7 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               activeOpacity={1}
               onPress={handleNext}
+              accessibilityRole="button"
               style={{
                 backgroundColor: colors.accent,
                 paddingVertical: Spacing['4'],
@@ -4243,6 +4220,90 @@ export default function OnboardingScreen() {
     return null;
   };
 
+  // Mirror-back confirm actions, pinned below the scroll. The generated text
+  // can run long, so they no longer sit under it below the screen edge. The
+  // text scrolls behind a soft fade.
+  const showMirrorBackActions = step?.type === 'mirrorBack'
+    && showInput
+    && !showMirrorCorrection
+    && !(isLoadingMirrorBack && !aiMirrorBack);
+  const renderMirrorBackActions = () => (
+    <Animated.View
+      entering={FadeIn.duration(600).delay(1850)}
+      testID="mirror-back-actions"
+      onLayout={(e) => setMirrorBackActionsHeight(Math.ceil(e.nativeEvent.layout.height))}
+      pointerEvents="box-none"
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+    >
+      <LinearGradient
+        colors={[alpha(colors.background, 0), colors.background]}
+        style={{ height: MIRROR_BACK_FADE_HEIGHT }}
+        pointerEvents="none"
+      />
+      <View style={{
+        backgroundColor: colors.background,
+        paddingHorizontal: Spacing['6'],
+        paddingBottom: Math.max(insets.bottom, Spacing['4']),
+        gap: Spacing['3'],
+      }}>
+        <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
+            // Advance immediately — the feature summary is a full-screen step
+            // that replaces the entire view, so no need for input fade-out
+            advanceToNextStep();
+          }}
+        >
+          <View style={{
+            backgroundColor: colors.accent,
+            paddingVertical: 18,
+            paddingHorizontal: Spacing['6'],
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+            shadowColor: colors.accent,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.4,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            <Text style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: FontSize.base,
+              color: colors.background,
+            }}>
+              Yes, this feels right
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowMirrorCorrection(true);
+          }}
+        >
+          <View style={{
+            paddingVertical: 14,
+            paddingHorizontal: Spacing['6'],
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+          }}>
+            <Text style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textMuted,
+            }}>
+              Let me adjust something
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+
   // Loading state during discovery preparation
   if (isPreparingDiscovery) {
     return (
@@ -4426,7 +4487,7 @@ export default function OnboardingScreen() {
               </KeyboardAwareScrollView>
             ) : (
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={100}>
-                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: 120 }}>
+                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: STANDARD_STEP_BOTTOM_PADDING }}>
                   <View>
                     {(isLoadingAdaptive && step?.adaptive) || (isLoadingDiagnostic && step?.id === 'diagnosticRound') ? (
                       <>
@@ -4518,6 +4579,7 @@ export default function OnboardingScreen() {
                 </View>
               </KeyboardAwareScrollView>
             )}
+            {showMirrorBackActions && renderMirrorBackActions()}
           </Animated.View>
         </View>
       </SafeAreaView>
