@@ -83,8 +83,6 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 jest.mock('@/lib/day-unlock-telemetry', () => ({ reportReadyPushForLockedDay: jest.fn() }));
-// The reveal pulls a series it does not hold; the sync module reads the app version.
-jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.0', nativeBuildVersion: '1' }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('@/lib/bug-logger', () => ({ logBugError: jest.fn(), logBugEvent: jest.fn() }));
 jest.mock('@/lib/mmkv-storage', () => {

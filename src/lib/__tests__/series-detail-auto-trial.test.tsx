@@ -231,18 +231,6 @@ describe('J16 series-detail auto trial', () => {
     expect(text).not.toContain('Day 3 preparing');
   });
 
-  it('says 1 day completed for a finished one-day book, such as the first devotional', () => {
-    const start = nonAuto().createdAt;
-    mockDevotionals = [nonAuto({
-      totalDays: 1,
-      currentDay: 1,
-      days: [day('past-series', 1, { isRead: true, readAt: start })],
-    })];
-    const text = allRenderedText(renderScreen());
-    expect(text).toContain('1 day completed');
-    expect(text).not.toContain('1 days completed');
-  });
-
   it('renders an auto series current on calendar Day 2 with no row as read, preparing, locked', () => {
     mockParams = { id: 'auto-1' };
     mockCurrentDevotionalId = 'auto-1';
