@@ -98,6 +98,9 @@ export function buildNotificationPreferenceRequestBody({
   };
 }
 
+/** A daily reminder for a day the device does not hold yet. It opens Today. */
+export const DAILY_REMINDER_TODAY_TYPE = 'daily_reminder';
+
 export function buildDevotionalReadyNotificationData(
   devotional: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'days'>,
   dayNumber: number,
@@ -336,6 +339,12 @@ export function buildNotificationNavigationRoute(
 
   // Lapse re-entry: the series is waiting on Today.
   if (data?.type === 'lapse_reentry') {
+    return { pathname: '/(tabs)/(today)' };
+  }
+
+  // A daily reminder for a day the device does not hold yet: Today shows the
+  // day once it arrives.
+  if (data?.type === DAILY_REMINDER_TODAY_TYPE) {
     return { pathname: '/(tabs)/(today)' };
   }
 

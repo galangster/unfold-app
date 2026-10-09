@@ -19,6 +19,7 @@ import {
 } from '@/lib/home-devotional-state';
 import {
   buildDevotionalReadyNotificationData,
+  DAILY_REMINDER_TODAY_TYPE,
   pushNamesAutoTrialIntent,
 } from '@/lib/push-notification-helpers';
 import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
@@ -423,6 +424,18 @@ function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotion
 }
 
 /**
+ * What a daily reminder opens. A day this device holds opens its reveal. A
+ * day it does not hold yet (the server delivers it later) opens Today, which
+ * shows the day once it arrives: a reminder without tap data went nowhere.
+ */
+function dailyReminderTapContent(): { data: Record<string, unknown>; categoryIdentifier?: string } {
+  const data = getCurrentDevotionalNotificationData();
+  return data
+    ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY }
+    : { data: { type: DAILY_REMINDER_TODAY_TYPE } };
+}
+
+/**
  * The shared start of a daily reminder write: claim the operation, clear the
  * whole daily family, confirm permission. Returns the operation to write
  * under, or null when the write must not go ahead.
@@ -477,7 +490,7 @@ export async function scheduleDailyReminder(
 
   const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
-  const data = getCurrentDevotionalNotificationData();
+  const tap = dailyReminderTapContent();
   const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
 
   try {
@@ -487,7 +500,7 @@ export async function scheduleDailyReminder(
         title,
         body,
         sound: true,
-        ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
+        ...tap,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -511,7 +524,7 @@ export async function scheduleDailyReminder(
     logEvent('notification_scheduled', {
       type: 'daily_reminder',
       owner: 'local',
-      specific: Boolean(data),
+      specific: Boolean(tap.categoryIdentifier),
       trigger: 'daily',
     });
     return scheduled;
@@ -560,7 +573,7 @@ export async function scheduleDailyReminderMornings(
     return NO_MORNINGS_WRITTEN;
   }
 
-  const data = getCurrentDevotionalNotificationData();
+  const tap = dailyReminderTapContent();
   const operationIdentifier = dailyReminderIdentifierForOperation(originatingSession, operation);
   const written = await Promise.all(
     dates.map(async (date, index) => {
@@ -572,7 +585,7 @@ export async function scheduleDailyReminderMornings(
             title,
             body,
             sound: true,
-            ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
+            ...tap,
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -609,7 +622,7 @@ export async function scheduleDailyReminderMornings(
   logEvent('notification_scheduled', {
     type: 'daily_reminder',
     owner,
-    specific: Boolean(data),
+    specific: Boolean(tap.categoryIdentifier),
     trigger: 'dates',
     count: scheduled.length,
   });
