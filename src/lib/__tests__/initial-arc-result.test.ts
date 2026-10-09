@@ -236,7 +236,10 @@ describe('applyInitialArcResult', () => {
       removeItem.mockImplementation(original);
     }
 
-    expect(storedWhenCleared).toContain('"devo-1"');
+    const stored = JSON.parse(storedWhenCleared!);
+    expect(stored.state.devotionals).toEqual([
+      expect.objectContaining({ id: 'devo-1', days: [expect.objectContaining({ dayNumber: 1 })] }),
+    ]);
   });
 
   it('throws before touching the store when the result has no devotional id', () => {
