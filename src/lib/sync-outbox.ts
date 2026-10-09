@@ -229,12 +229,13 @@ function isLostSeriesDelete(pair: SyncAcknowledgementPair): boolean {
     && !pair.result.serverData?.deletedAt;
 }
 
-/** The latest clock on the server row, in ms. */
+/** The latest clock on the server row, in ms, or now when the row carries none. */
 function serverRowClock(result: SyncPushResult): number {
   const row = result.serverData ?? {};
-  return Math.max(...[row.clientUpdatedAt, row.updatedAt, result.serverUpdatedAt]
+  const clocks = [row.clientUpdatedAt, row.updatedAt, result.serverUpdatedAt]
     .map((value) => (typeof value === 'string' ? Date.parse(value) : Number.NaN))
-    .filter(Number.isFinite));
+    .filter(Number.isFinite);
+  return clocks.length > 0 ? Math.max(...clocks) : Date.now();
 }
 
 function rememberLostSeriesDelete(id: string, serverClock: number): void {
