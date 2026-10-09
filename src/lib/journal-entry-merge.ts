@@ -167,6 +167,57 @@ function mergeStringList(
  * the merged text. When the base cannot be found, the draft follows the
  * merged text, so nothing is dropped.
  */
+const LETTER_OR_DIGIT = /^[\p{L}\p{N}]$/u;
+/** A combining mark: an accent, or an emoji's variation selector. It belongs to the character before it. */
+const MARK = /^\p{M}$/u;
+
+/** The whole character that ends at `end` in `text`, a surrogate pair included. */
+function characterBefore(text: string, end: number): string {
+  const code = text.charCodeAt(end - 1);
+  const pair = code >= 0xdc00 && code <= 0xdfff && end >= 2;
+  return text.slice(pair ? end - 2 : end - 1, end);
+}
+
+/** The whole character that starts at `start` in `text`. */
+function characterAt(text: string, start: number): string {
+  const point = text.codePointAt(start);
+  return point === undefined ? '' : String.fromCodePoint(point);
+}
+
+/** The character that ends at `end`, past any marks it carries: the base those marks attach to. */
+function baseBefore(text: string, end: number): string {
+  let at = end;
+  while (at > 0) {
+    const character = characterBefore(text, at);
+    if (!MARK.test(character)) return character;
+    at -= character.length;
+  }
+  return '';
+}
+
+/**
+ * Whether `text` holds `part` as whole words. At an end of `part` that is a
+ * letter or digit (its marks included, as in an accented letter), no letter
+ * or digit runs on outside it. An end that is a space, punctuation or an
+ * emoji already separates the words. Characters are read whole, so a
+ * character outside the basic plane counts as one, and a mark right after
+ * `part` means it stops inside a character.
+ */
+function holdsWholeWords(text: string, part: string): boolean {
+  if (!part) return false;
+  const first = characterAt(part, 0);
+  const startsWithMark = MARK.test(first);
+  const startsInWord = startsWithMark || LETTER_OR_DIGIT.test(first);
+  const endsInWord = LETTER_OR_DIGIT.test(baseBefore(part, part.length));
+  for (let at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
+    const runsOnBefore = startsInWord && at > 0 && (startsWithMark || LETTER_OR_DIGIT.test(baseBefore(text, at)));
+    const after = characterAt(text, at + part.length);
+    const runsOnAfter = MARK.test(after) || (endsInWord && LETTER_OR_DIGIT.test(after));
+    if (!runsOnBefore && !runsOnAfter) return true;
+  }
+  return false;
+}
+
 export function rebaseJournalDraft(base: string, merged: string, draft: string): string {
   // The merged text already is the draft, as when the editor's own save comes back.
   if (merged === draft) return draft;
@@ -175,9 +226,12 @@ export function rebaseJournalDraft(base: string, merged: string, draft: string):
   // The merge already holds the draft's additions, as when another device
   // saved the same words and more. Rebasing again would repeat them. A draft
   // started on an empty field counts too: all of it is the reader's addition.
-  if (draft.trim() && draft.includes(base) && merged.includes(draft)) return merged;
+  if (draft.trim() && draft.includes(base) && holdsWholeWords(merged, draft)) return merged;
   const at = base.trim() ? merged.indexOf(base) : -1;
   if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
+  // The merge replaced the base with the draft's own words, as when both
+  // devices made the same edit. Appending the draft would repeat them.
+  if (draft.trim() && holdsWholeWords(merged, draft)) return merged;
   if (!merged.trim()) return draft;
   if (!draft.trim()) return merged;
   return `${merged}\n\n${draft}`;

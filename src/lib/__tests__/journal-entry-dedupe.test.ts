@@ -453,6 +453,40 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('', 'My prayer, continued', 'My prayer')).toBe('My prayer, continued');
   });
 
+  it('does not repeat an edit both devices made the same way', () => {
+    expect(rebaseJournalDraft('Old.', 'New.\n\nTablet note.', 'New.')).toBe('New.\n\nTablet note.');
+  });
+
+  it('keeps a replacement that only appears inside another word of the merge', () => {
+    expect(rebaseJournalDraft('I am anxious.', 'I feel peaceful today.', 'peace')).toBe('I feel peaceful today.\n\npeace');
+  });
+
+  it('takes the merged text when it holds a draft that ends on a space', () => {
+    expect(rebaseJournalDraft('My', 'My prayer continued', 'My prayer ')).toBe('My prayer continued');
+  });
+
+  it('reads accents and characters outside the basic plane as parts of words', () => {
+    expect(rebaseJournalDraft('Old.', 'cafe\u0301s', 'cafe\u0301')).toBe('cafe\u0301s\n\ncafe\u0301');
+    expect(rebaseJournalDraft('Old.', 'a\u{20BB7}b', '\u{20BB7}')).toBe('a\u{20BB7}b\n\n\u{20BB7}');
+    expect(rebaseJournalDraft('Old.', 'New cafe\u0301.\n\nTablet note.', 'New cafe\u0301.')).toBe('New cafe\u0301.\n\nTablet note.');
+  });
+
+  it('reads an emoji as a word boundary, its variation selector included', () => {
+    expect(rebaseJournalDraft('Love', 'Love \u2764\uFE0FJesus', 'Love \u2764\uFE0F')).toBe('Love \u2764\uFE0FJesus');
+  });
+
+  it('keeps a draft the merge only holds cut inside an accented letter', () => {
+    expect(rebaseJournalDraft('Old.', 'cafe\u0301', 'cafe')).toBe('cafe\u0301\n\ncafe');
+  });
+
+  it('keeps a first draft that only appears inside another word of the merge', () => {
+    expect(rebaseJournalDraft('', 'banana', 'a')).toBe('banana\n\na');
+  });
+
+  it('still appends a draft the merge does not hold when the base is gone', () => {
+    expect(rebaseJournalDraft('Old.', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
+  });
+
   it('still keeps a deletion when the merge added words after it', () => {
     expect(rebaseJournalDraft('Hope is', 'Hope is here today', 'Hope')).toBe('Hope here today');
   });
