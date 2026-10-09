@@ -139,6 +139,32 @@ describe('notifications routing + cancellation', () => {
     expect(buildNotificationNavigationRoute(content.data)).toEqual({ pathname: '/(tabs)/(today)' });
   });
 
+  it('gives the dated reminder mornings for a day the device does not hold yet a tap that opens Today', async () => {
+    const { scheduleDailyReminderMornings, beginDailyReminderOperation } = require('../notifications');
+    const { captureSyncSession } = jest.requireActual('../sync-session-fence');
+    const { buildNotificationNavigationRoute } = jest.requireActual('../push-notification-helpers');
+    const devotional = mockState.devotionals[0];
+    devotional.currentDay = 4;
+    try {
+      await scheduleDailyReminderMornings(
+        [new Date('2026-10-10T15:00:00.000Z'), new Date('2026-10-11T15:00:00.000Z')],
+        'local',
+        captureSyncSession(),
+        beginDailyReminderOperation(),
+      );
+    } finally {
+      devotional.currentDay = 3;
+    }
+
+    const requests = mockScheduleNotificationAsync.mock.calls as unknown as Array<[{ content: { data: Record<string, unknown> } }]>;
+    expect(requests).toHaveLength(2);
+    for (const [{ content }] of requests) {
+      expect(content.data).toEqual({ type: 'daily_reminder' });
+      expect(content).not.toHaveProperty('categoryIdentifier');
+      expect(buildNotificationNavigationRoute(content.data)).toEqual({ pathname: '/(tabs)/(today)' });
+    }
+  });
+
   it('cancelAllScheduledNotifications uses the OS-wide cancel instead of named families (full reset)', async () => {
     const { cancelAllScheduledNotifications } = require('../notifications');
 
