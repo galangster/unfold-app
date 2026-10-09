@@ -6,6 +6,9 @@
  * device A kept A's text, the server and device B kept B's, permanently.
  * Conflicts now go through the pull mappers with the same LWW guard.
  */
+import { resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
+import type { SyncPushChange } from '../sync-types';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -89,6 +92,22 @@ function serverBiblePositionRow(id: string, clientUpdatedAt: string) {
     createdAt: at(0),
     updatedAt: clientUpdatedAt,
     clientUpdatedAt,
+    deletedAt: null,
+  };
+}
+
+/** The raw sync_devotionals row the push returns after a server write (worker, cron) stamped it. */
+function serverSeriesRow(id: string, stampedAt: string) {
+  return {
+    id,
+    clerkUserId: 'user-1',
+    title: 'Stillness',
+    totalDays: 14,
+    currentDay: 5,
+    generationMode: 'progressive',
+    createdAt: at(0),
+    updatedAt: stampedAt,
+    clientUpdatedAt: stampedAt,
     deletedAt: null,
   };
 }
@@ -347,6 +366,90 @@ describe('push conflict → server version', () => {
 
     expect(useUnfoldStore.getState().notes.find((n) => n.id === id)).toBeUndefined();
     expect(peekSyncOutbox()).toHaveLength(0);
+  });
+
+  // 2026-10-09 release audit pass 2: the server stamped the series after the delete, the conflict applied its live row, and the deleted series came back.
+  it('keeps a deleted series deleted when the server wrote to it before the delete arrived', async () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'series-1',
+        title: 'Stillness',
+        totalDays: 14,
+        currentDay: 4,
+        days: [{ id: 'day-4', dayNumber: 4, title: 'Day 4', scriptureReference: 'John 1:1', scriptureText: '', bodyText: '', quotableLine: '', isRead: true }],
+        createdAt: at(0),
+        updatedAt: at(0),
+        generationMode: 'progressive',
+      } as never],
+      currentDevotionalId: 'series-1',
+    });
+    useUnfoldStore.getState().removeDevotional('series-1');
+    // The push goes out the next morning. Overnight the server wrote the next
+    // day and stamped the series with its own clock, a little ahead of this phone.
+    jest.setSystemTime(new Date(T0.getTime() + 8 * 3_600_000));
+    const serverAt = at(8 * 3_600_000 + 5_000);
+    (globalThis as any).fetch = jest.fn(async (_url: string, init: RequestInit) => {
+      const { changes } = JSON.parse(String(init.body)) as { changes: SyncPushChange[] };
+      return {
+        ok: true,
+        json: async () => ({
+          results: changes.map((change) => (change.table === 'devotionals'
+            ? { table: change.table, id: change.id, status: 'conflict', serverUpdatedAt: serverAt, serverData: serverSeriesRow(change.id, serverAt) }
+            : { table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: serverAt })),
+        }),
+      };
+    });
+
+    await drainSyncOutbox();
+
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(false);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(peekSyncOutbox()).toEqual([
+      expect.objectContaining({ table: 'devotionals', id: 'series-1', deleted: true, clientUpdatedAt: at(8 * 3_600_000 + 5_001) }),
+    ]);
+    // Once the retry is through, a pull that left before it still cannot bring the series back.
+    removeSyncChangesForRecords([{ table: 'devotionals', id: 'series-1' }]);
+    expect(wasSeriesDeleted('series-1', serverAt)).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 2 review: the delete was remembered at the server's older clock, so
+  // a server write that landed while the retry was out could restore it.
+  it('remembers a requeued series delete at the retry\'s own clock', async () => {
+    resetDeletedSeriesForTesting();
+    try {
+      useUnfoldStore.setState({
+        devotionals: [{
+          id: 'series-1', title: 'Stillness', totalDays: 14, currentDay: 4, days: [],
+          createdAt: at(0), updatedAt: at(0), generationMode: 'progressive',
+        } as never],
+        currentDevotionalId: 'series-1',
+      });
+      useUnfoldStore.getState().removeDevotional('series-1');
+      // This phone runs ahead of the server's clock on the series row.
+      jest.setSystemTime(new Date(T0.getTime() + 120_000));
+      const serverAt = at(60_000);
+      (globalThis as any).fetch = jest.fn(async (_url: string, init: RequestInit) => {
+        const { changes } = JSON.parse(String(init.body)) as { changes: SyncPushChange[] };
+        return {
+          ok: true,
+          json: async () => ({
+            results: changes.map((change) => (change.table === 'devotionals'
+              ? { table: change.table, id: change.id, status: 'conflict', serverUpdatedAt: serverAt, serverData: serverSeriesRow(change.id, serverAt) }
+              : { table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: serverAt })),
+          }),
+        };
+      });
+
+      await drainSyncOutbox();
+      removeSyncChangesForRecords([{ table: 'devotionals', id: 'series-1' }]);
+
+      // A live row written while the retry was out, after the conflict.
+      expect(wasSeriesDeleted('series-1', at(90_000))).toBe(true);
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
   });
 
   it('retains a conflict without serverData and does not apply it', async () => {

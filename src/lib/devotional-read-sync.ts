@@ -73,6 +73,20 @@ export function buildDevotionalReadSyncChanges({
   ];
 }
 
+/**
+ * A read this phone holds that the server never received, such as one an app
+ * kill cut off mid-push. Queues the day row again with its own read time and
+ * returns it. The series row is left out: its old clock would lose on the
+ * server and come back as a conflict.
+ */
+export function requeueHeldDayRead(devotional: Devotional | undefined, dayNumber: number): SyncPushChange | undefined {
+  const day = devotional?.days.find((candidate) => candidate.dayNumber === dayNumber);
+  if (!devotional || !day?.isRead || !day.readAt) return undefined;
+  const [dayChange] = buildDevotionalReadSyncChanges({ devotional, day, readAt: day.readAt });
+  enqueueSyncChanges([dayChange]);
+  return dayChange;
+}
+
 export async function syncDevotionalDayRead(params: {
   devotional: Devotional;
   day: DevotionalDay;

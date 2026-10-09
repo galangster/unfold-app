@@ -241,10 +241,16 @@ jest.mock('@/lib/series-replacement', () => ({
 jest.mock('@/lib/store', () => {
   const useUnfoldStore = (selector: (state: Record<string, unknown>) => unknown) => selector(mockTodayStoreState);
   useUnfoldStore.getState = () => mockTodayStoreState;
+  useUnfoldStore.setState = (
+    update: Record<string, unknown> | ((state: Record<string, unknown>) => Record<string, unknown>),
+  ) => {
+    Object.assign(mockTodayStoreState, typeof update === 'function' ? update(mockTodayStoreState) : update);
+  };
   return {
     useUnfoldStore,
     useHasHydrated: () => true,
     updateSyncedDevotionals: jest.fn(),
+    flushUnfoldStorePersist: jest.fn(),
     flushUnfoldStorePersistAsync: jest.fn(async () => true),
   };
 });
@@ -879,6 +885,55 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     expect(cardProps().state.type).toBe('first-series-failed');
     expect(cardProps().nonblockingResume).toBeNull();
     expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  describe('once the server reports the job complete', () => {
+    // The ready push opened the reveal, which pulled the series and its
+    // first day without touching the record.
+    const pulledSeries = {
+      ...olderSeries,
+      id: 'series-new',
+      title: 'New Series',
+      createdAt: '2026-10-09T06:52:00.000Z',
+      seriesStartDate: '2026-10-09T06:52:00.000Z',
+      days: [{ id: 'series-new-day-1', devotionalId: 'series-new', dayNumber: 1, title: 'Day 1', isRead: true }],
+    };
+
+    beforeEach(() => {
+      mockTodayStoreState.generationSession = { status: 'running', devotionalId: 'series-new', title: 'Generating...', error: null };
+      mockTodayStoreState.completeGenerationSession = (payload?: { title?: string }) => {
+        mockTodayStoreState.generationSession = { status: 'complete', devotionalId: 'series-new', title: payload?.title ?? null, error: null };
+      };
+      mockPollJobStatus.mockResolvedValue({
+        status: 'complete',
+        result: { devotionalId: 'series-new', seriesTitle: 'New Series', totalDays: 3, devotionalDay: { dayNumber: 1, title: 'Day 1' } },
+      });
+    });
+
+    // 2026-10-09 release audit pass 2: a reader back from day 1 of a series the reveal landed was sent to /generating's "Begin Day 1" again.
+    it('stays on Today once the reveal has landed the series and its first day', async () => {
+      mockTodayStoreState.devotionals = [pulledSeries];
+      mockTodayStoreState.currentDevotionalId = 'series-new';
+      await renderToday();
+
+      expect(mockPollJobStatus).toHaveBeenCalledTimes(1);
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+      expect(mockMmkvItems.has(INFLIGHT_GENERATION_JOB_KEY)).toBe(false);
+      expect((mockTodayStoreState.generationSession as { status: string }).status).toBe('complete');
+      expect(cardProps().state.type).not.toBe('first-series-failed');
+    });
+
+    // 2026-10-09 release audit pass 2: landing in place must not swallow an app kill whose series never reached the phone.
+    it.each([
+      ['the phone does not hold the series yet', () => []],
+      ['the phone holds the series without its first day', () => [{ ...pulledSeries, days: [] }]],
+    ])('still opens /generating when %s', async (_label, devotionals) => {
+      mockTodayStoreState.devotionals = devotionals();
+      await renderToday();
+
+      expect(mockRouterReplace).toHaveBeenCalledWith({ pathname: '/generating' });
+      expect(mockMmkvItems.has(INFLIGHT_GENERATION_JOB_KEY)).toBe(true);
+    });
   });
 
   it('keeps the inline resume for a record that names no series', async () => {
