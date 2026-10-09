@@ -429,6 +429,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // follows through the silent HIGHLIGHTS_CHANGED that comes back.
   const [highlightToast, setHighlightToast] = useState<{ message: string; undo: () => void } | null>(null);
   const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
+  // Undo replays a change into the open page by character position, so it
+  // belongs to the page it came from. Leaving that page ends its toast, and an
+  // Undo that still arrives for it is dropped.
+  const highlightPage = `${effectiveDevotionalId ?? ''}:${viewingDay}`;
+  const highlightPageRef = useRef(highlightPage);
+  useLayoutEffect(() => {
+    highlightPageRef.current = highlightPage;
+    setHighlightToast(null);
+  }, [highlightPage]);
   const [lockedDayToast, setLockedDayToast] = useState<string | null>(null);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number; key: string } | null>(null);
@@ -1336,10 +1345,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '' }[event.reason];
+    const page = highlightPageRef.current;
     setHighlightToast({
       message,
       undo: () => {
-        highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed });
+        if (highlightPageRef.current === page) {
+          highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed });
+        }
         setHighlightToast(null);
       },
     });
