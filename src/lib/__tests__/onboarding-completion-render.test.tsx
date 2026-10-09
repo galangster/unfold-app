@@ -9,6 +9,7 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockGetPermissionsAsync = jest.fn();
 const mockRequestPermissionsAsync = jest.fn();
 const mockRegisterPushToken = jest.fn();
@@ -58,7 +59,13 @@ jest.mock('react-native-keyboard-controller', () => {
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
 jest.mock('expo-router', () => ({
   useIsFocused: () => true,
-  useRouter: () => ({ canGoBack: () => true, replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({
+    canGoBack: () => true,
+    replace: (...args: unknown[]) => mockReplace(...args),
+    dismissTo: (...args: unknown[]) => mockDismissTo(...args),
+    back: jest.fn(),
+    push: jest.fn(),
+  }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useLocalSearchParams: () => mockOnboardingSearchParams,
@@ -291,6 +298,7 @@ describe('new series from Today', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockReplace.mockClear();
+    mockDismissTo.mockClear();
     mockTypewriterFinishes = true;
     mockGenerateDiagnosticQuestions.mockReset().mockResolvedValue(null);
     mockStoreState.lifeContextDraft = SHARE_AN_UPDATE_DRAFT;
@@ -452,6 +460,18 @@ describe('new series from Today', () => {
       currentSituation: PREVIOUS_SITUATION,
     }));
     expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
+  });
+
+  it('backing out of the first step keeps the series it would have replaced', async () => {
+    // Set by "Start a new series?"; the series ends only when the new one lands.
+    // Nothing else is pending: earlier tests here leave a first-series request.
+    mockMmkvStore.clear();
+    mockMmkvStore.set('replaced-series-v1', 'series-reading');
+    await openAt('themeType');
+    await tap({ label: 'Go back' });
+
+    expect(mockDismissTo).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(mockMmkvStore.has('replaced-series-v1')).toBe(false);
   });
 
   it('does not inherit the previous series direction', async () => {
