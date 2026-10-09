@@ -73,6 +73,7 @@ import {
   summarizeRenderableDevotionalDays,
 } from '@/lib/devotional-canonical-days';
 import {
+  blockedForwardMessage,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -428,7 +429,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // follows through the silent HIGHLIGHTS_CHANGED that comes back.
   const [highlightToast, setHighlightToast] = useState<{ message: string; undo: () => void } | null>(null);
   const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
-  const [lockedDayToast, setLockedDayToast] = useState(false);
+  const [lockedDayToast, setLockedDayToast] = useState<string | null>(null);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number; key: string } | null>(null);
   const [layoutGeneration, setLayoutGeneration] = useState(1);
@@ -495,7 +496,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   useAutoHide(bookmarkToast, 2500, useCallback(() => setBookmarkToast(false), []));
 
   // Locked-day toast (blocked forward swipe) auto-dismiss after 2.5s
-  useAutoHide(lockedDayToast, 2500, useCallback(() => setLockedDayToast(false), []));
+  useAutoHide(lockedDayToast != null, 2500, useCallback(() => setLockedDayToast(null), []));
 
   useEffect(() => {
     readingMountedRef.current = true;
@@ -1369,6 +1370,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     Keyboard.dismiss();
   }, []);
 
+  // The reason is fixed when the swipe is blocked, so moving to another day
+  // while the toast shows does not rewrite it.
+  const showBlockedForwardToast = useCallback(() => {
+    setLockedDayToast(blockedForwardMessage(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));
+  }, [currentDevotional, viewingDay, totalDays, isViewingActiveSeries]);
+
   const panGesture = useMemo(() =>
     Gesture.Pan()
       // Reserve the leading edge for the native stack back gesture.
@@ -1398,7 +1405,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           // locked-day case — surface why nothing happened instead of just
           // the haptic.
           if (event.translationX < -80 && viewingDay >= availableDays) {
-            runOnJS(setLockedDayToast)(true);
+            runOnJS(showBlockedForwardToast)();
           }
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
@@ -1408,7 +1415,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           translateX.value = withTiming(0, { duration: Duration.normal });
         }
       }),
-    [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe]
+    [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe, showBlockedForwardToast]
   );
 
   const handleShare = useCallback(() => {
@@ -3197,7 +3204,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
           ]}
         >
-          <Text style={styles.toastText}>Tomorrow's reading unlocks after midnight</Text>
+          <Text style={styles.toastText}>
+            {lockedDayToast}
+          </Text>
         </Animated.View>
       )}
 
