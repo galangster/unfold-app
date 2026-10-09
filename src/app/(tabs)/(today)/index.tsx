@@ -13,7 +13,13 @@ import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
+import {
+  flushUnfoldStorePersistAsync,
+  updateSyncedDevotionals,
+  useUnfoldStore,
+  useHasHydrated,
+  type MoodLevel,
+} from '@/lib/store';
 import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
 import { useQuery } from '@tanstack/react-query';
@@ -26,6 +32,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
+import { getLockScreenProps, getNextMidnight, getTodayReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -78,6 +85,7 @@ import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { readReplacedSeries } from '@/lib/series-replacement';
 import {
   isReadableCurrentSeries,
   resolveCreateNewDuringPendingInitial,
@@ -170,6 +178,30 @@ function generatingRoute(autoTrialIntentId?: string | null): {
   return autoTrialIntentId
     ? { pathname: '/generating', params: { autoTrialIntentId } }
     : { pathname: '/generating' };
+}
+
+/**
+ * The /generating route that resumes an app-kill record. The auto-trial
+ * intent goes along only for its own job: a landed or submitted trial left in
+ * storage would otherwise send /generating back to that older series.
+ */
+export function resumeGeneratingRoute(
+  jobId: string,
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'jobId'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent?.jobId === jobId ? intent.intentId : null);
+}
+
+/**
+ * The /generating route behind the failure card's Try again. A trial still in
+ * flight (purchased, submitted or failed) retries through its intent. A
+ * landed trial is finished, so the failure belongs to a later series: its
+ * intent would reopen the trial's reveal instead of submitting that series.
+ */
+export function retryFailedSeriesRoute(
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'status'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent && intent.status !== 'landed' ? intent.intentId : null);
 }
 
 export function applyTodayAutoTrialFocus(i: {
@@ -524,7 +556,8 @@ export default function HomeScreen() {
   // where the reader goes: /generating is re-entered only while it reports
   // the job alive or complete; a failed job settles here, as the watch would,
   // so the failed card shows instead of a bounce into /generating's error
-  // state; an unreachable server keeps the record for the next focus. A
+  // state; an unreachable server keeps the record, shows the pending card
+  // and asks again on the next focus or foreground. A
   // server that answers "no such job" (404 / 400) is a verdict, not
   // unreachable: that record is dropped too, or it would be kept forever.
   const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
@@ -534,6 +567,12 @@ export default function HomeScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   const [pendingInitialResume, setPendingInitialResume] = useState<PendingInitialArcResume>('none');
+  // App-kill recovery the server did not answer: the record is kept, so
+  // Today offers to continue the wait and asks again on foreground. Without
+  // it a new reader sat on an empty Today until something else changed.
+  const [keptInflightJob, setKeptInflightJob] = useState<InflightGenerationJob | null>(null);
+  const [inflightRecheckKey, setInflightRecheckKey] = useState(0);
+  const inflightCheckPendingRef = useRef(false);
   const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
   const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
 
@@ -568,6 +607,7 @@ export default function HomeScreen() {
     if (focus.skipResolver) {
       setInflightSeries(null);
       setPendingInitialResume('none');
+      setKeptInflightJob(null);
       if (focus.navigation) {
         router.push(focus.navigation);
       }
@@ -575,6 +615,7 @@ export default function HomeScreen() {
     }
     const decision = focus.inflightDecision;
     if (decision.action !== 'resume-on-generating') {
+      setKeptInflightJob(null);
       if (decision.action === 'none') {
         const store = useUnfoldStore.getState();
         const pendingResume = resolvePendingInitialArcResume({
@@ -608,6 +649,9 @@ export default function HomeScreen() {
     setInflightSeries(null);
     setPendingInitialResume('none');
     const { jobId, devotionalId } = decision.job;
+    // A re-check of the kept job keeps its card up until the server answers.
+    setKeptInflightJob((prev) => (prev?.jobId === jobId ? prev : null));
+    inflightCheckPendingRef.current = true;
     let cancelled = false;
     const session = captureSyncSession();
     void (async () => {
@@ -624,12 +668,17 @@ export default function HomeScreen() {
         );
       }
       if (cancelled || !isSyncSessionCurrent(session)) return;
+      inflightCheckPendingRef.current = false;
       const resume = resolveInflightResume(poll);
+      setKeptInflightJob((prev) => {
+        if (resume !== 'keep') return null;
+        return prev?.jobId === jobId ? prev : decision.job;
+      });
       if (resume === 'resume') {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+        router.replace(resumeGeneratingRoute(jobId, readAutoTrialIntent()));
         return;
       }
       if (resume === 'discard') {
@@ -648,9 +697,31 @@ export default function HomeScreen() {
     })();
     return () => {
       cancelled = true;
+      inflightCheckPendingRef.current = false;
     };
-  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId, inflightRecheckKey]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // iOS keeps Today mounted and focused while the app is suspended, so the
+  // check above would not run again on its own. A return to the foreground
+  // asks again, at most once per cooldown, while a record is kept or a check
+  // is still out: a return during the first check would otherwise be missed.
+  const lastInflightRecheckAtRef = useRef<number | null>(null);
+  const keptInflightJobRef = useRef(keptInflightJob);
+  keptInflightJobRef.current = keptInflightJob;
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      if (!inflightCheckPendingRef.current && !keptInflightJobRef.current) return;
+      const now = Date.now();
+      const lastRecheckAt = lastInflightRecheckAtRef.current;
+      if (lastRecheckAt !== null && now - lastRecheckAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastInflightRecheckAtRef.current = now;
+      setInflightRecheckKey((key) => key + 1);
+    });
+    return () => subscription.remove();
+  }, [isTodayFocused]);
 
   // The series failed after the reader left for Today (the watch below
   // settled on a failure, or the submission itself failed). The session holds
@@ -661,8 +732,14 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+    router.replace(retryFailedSeriesRoute(readAutoTrialIntent()));
   }, [router]);
+  const keptInflightJobId = keptInflightJob?.jobId ?? null;
+  const handleResumeKeptInflight = useCallback(() => {
+    if (!keptInflightJobId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace(resumeGeneratingRoute(keptInflightJobId, readAutoTrialIntent()));
+  }, [router, keptInflightJobId]);
   const handleResumePendingInitial = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/generating' });
@@ -716,8 +793,13 @@ export default function HomeScreen() {
           updateDevotionalDays,
           updateDevotionals: updateSyncedDevotionals,
         });
-        // Only after the content is in the store — a cancelled focus above
-        // discards the response, and must not advance the cursor.
+        // Only after the content is on disk — a cancelled focus above
+        // discards the response, and must not advance the cursor. The
+        // store's writes wait up to a few seconds; a kill in that window
+        // with the cursor saved would skip these rows until the next full
+        // refresh.
+        await flushUnfoldStorePersistAsync();
+        if (cancelled || !isSyncSessionCurrent(session)) return;
         commitDevotionalPullCursor(pulled);
       } catch (err) {
         if (err instanceof SyncPullRateLimitedError) {
@@ -785,6 +867,24 @@ export default function HomeScreen() {
     getCurrentDevotional(devotionals, currentDevotionalId)
   ), [currentDevotionalId, devotionals]);
 
+  // The focus sync above runs before the focus pull lands, replaces or
+  // restores a day, and the day watch below lands one while Today stays
+  // open. Sync the widgets again when what they show changes. A replaced day
+  // keeps the day count, and an earlier day restored or marked read keeps the
+  // reading too, so the key is the series fields of the sync fingerprint,
+  // built as it builds them: the reading of both timeline entries, the day
+  // total, the weekly checks and the Lock Screen ring. Writing on a day does
+  // not change them, so it does not re-sync.
+  const widgetSyncKey = useMemo(() => JSON.stringify({
+    reading: [clockNow, getNextMidnight(clockNow)].map((forDate) => getTodayReadingProps(currentDevotional, forDate)),
+    totalDays: getServerOwnedSeriesTotalDays(currentDevotional),
+    weeklyProgress: getWeeklyProgress(devotionals, clockNow),
+    lock: getLockScreenProps(currentDevotional, clockNow),
+  }), [currentDevotional, devotionals, clockNow]);
+  useEffect(() => {
+    syncWidgets();
+  }, [currentDevotionalId, widgetSyncKey]);
+
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
@@ -819,13 +919,28 @@ export default function HomeScreen() {
     enabled: inflightSeries != null && isTodayFocused,
     onSettled: onInflightSeriesSettled,
   });
+  // "Start a new series" keeps the series it replaces current until the new
+  // one lands. That series is the old reading, never the series in flight:
+  // not by id (a session it left behind) and not as the current series.
+  const replacedSeriesId = readReplacedSeries();
+  const landedSeries = replacedSeriesId ? devotionals.filter((row) => row.id !== replacedSeriesId) : devotionals;
+  const hasLandedCurrentSeries = !!currentDevotional && currentDevotional.id !== replacedSeriesId;
   const isPreparingInflightSeries = inflightSeries != null
-    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
   const isInflightSeriesFailed = inflightSeries == null
     && generationSessionStatus === 'error'
-    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
+  // A kept record gets the pending card. Continue re-enters /generating on
+  // the record, as the check does once the server answers. Only a series the
+  // record names counts as landed: a record without one (an adopted job)
+  // says nothing about the series already here.
+  const keptSeriesId = keptInflightJob?.devotionalId;
+  const keptSeriesLanded = keptSeriesId != null && landedSeries.some((row) => row.id === keptSeriesId);
+  const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
+    ? { onResume: handleResumeKeptInflight }
+    : null;
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;
@@ -1770,9 +1885,8 @@ export default function HomeScreen() {
           onDismiss: handleDismissInflightSeriesFailure,
         }
       : null,
-    pendingInitialResume: pendingInitialResume === 'offer-resume'
-      ? { onResume: handleResumePendingInitial }
-      : null,
+    pendingInitialResume: keptInflightResume
+      ?? (pendingInitialResume === 'offer-resume' ? { onResume: handleResumePendingInitial } : null),
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -1852,9 +1966,10 @@ export default function HomeScreen() {
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}
                 storedPick={autoTrialActive ? storedNextPick : undefined}
-                nonblockingResume={pendingInitialResume === 'offer-nonblocking-resume'
-                  ? { onResume: handleResumePendingInitial }
-                  : null}
+                nonblockingResume={keptInflightResume
+                  ?? (pendingInitialResume === 'offer-nonblocking-resume'
+                    ? { onResume: handleResumePendingInitial }
+                    : null)}
                 ambienceVisible={shouldShowCompletedEmberAmbience({
                   stateType: devotionalState.type,
                   hasReadToday,
