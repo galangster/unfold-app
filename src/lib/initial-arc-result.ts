@@ -10,13 +10,13 @@ import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/
 import { isSeriesComplete } from '@/lib/book-of-seasons';
 import { isDevotionalArchived } from '@/lib/devotional-lifecycle';
 import { isStrictActiveSeriesWinner } from '@/lib/devotional-active-selection';
-import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
-import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { clearInflightGenerationJob, readInflightGenerationJob, requestAnsweredByInflightJob } from '@/lib/inflight-generation-job';
+import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { clearReplacedSeries, readReplacedSeries } from '@/lib/series-replacement';
+import { clearReplacedSeries, readReplacedSeries, readReplacedSeriesAt } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -108,6 +108,36 @@ function fillMissingReaderContext(devotionalId: string, context: ReaderContext):
 }
 
 /**
+ * Whether a landing result still ends the series it replaces. A later choice
+ * about either series stands over an old result: the replaced series resumed
+ * or paused after the reader chose to replace it, or the replacement already
+ * paused, as another device can do before this result lands here.
+ */
+function replacementStillEnds(replacedId: string, replacementId: string): boolean {
+  const { devotionals } = useUnfoldStore.getState();
+  const replacement = devotionals.find((d) => d.id === replacementId);
+  if (replacement && isDevotionalArchived(replacement)) return false;
+  const replaced = devotionals.find((d) => d.id === replacedId);
+  const chosenAt = readReplacedSeriesAt();
+  return !(replaced?.archivedStateAt && chosenAt && replaced.archivedStateAt > chosenAt);
+}
+
+/**
+ * Writes the landed series to disk now. A failed write (a full disk) keeps
+ * the recovery records, so a restart lands the result again, and the reader
+ * goes on to the series already in memory instead of a stuck screen.
+ */
+function writeLandedSeriesToDisk(): boolean {
+  try {
+    flushUnfoldStorePersist();
+    return true;
+  } catch (err) {
+    void logBugError('generation', err, { phase: 'persist-landed-series' });
+    return false;
+  }
+}
+
+/**
  * Put day 1 in the store, record its scripture, drop the in-flight record and
  * mark the generation session complete. Idempotent: when the shell already
  * exists (a retry, or the sync pull landed it first) only the day is added,
@@ -128,7 +158,7 @@ export function applyInitialArcResult(
   // First, so Today moves off the old series: to this one when a sync pull
   // already landed it, otherwise to the shell added below.
   const replacedId = readReplacedSeries();
-  if (replacedId && replacedId !== devotionalId) {
+  if (replacedId && replacedId !== devotionalId && replacementStillEnds(replacedId, devotionalId)) {
     useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId);
   }
 
@@ -196,10 +226,11 @@ export function applyInitialArcResult(
   // write would otherwise leave no new series and no way to land it again.
   // Landing the same result twice is safe.
   store.completeGenerationSession({ title: seriesTitle });
-  flushUnfoldStorePersist();
-  if (replacedId) clearReplacedSeries();
-  clearInflightGenerationJob();
-  clearInitialGenerationRequestId();
+  if (writeLandedSeriesToDisk()) {
+    if (replacedId) clearReplacedSeries();
+    clearInflightGenerationJob();
+    clearInitialGenerationRequestId();
+  }
 
   return { devotionalId, seriesTitle, day1 };
 }
@@ -258,7 +289,15 @@ export function settleInflightInitialArcWatch(
 
   if (!isSyncSessionCurrent(session)) return;
   logger.error(`[home] ${outcome.phase}:`, outcome.message);
+  // The server ruled on this job, and resubmitting the request it answered
+  // only returns the same job, so Today's Try again would loop on it. That
+  // request is retired with the job. A newer request stays.
+  const inflight = readInflightGenerationJob();
+  const answered = inflight?.jobId === jobId
+    ? requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId())
+    : null;
   clearInflightGenerationJob();
+  if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
   store.failGenerationSession(outcome.message);
   void logBugError('generation', new Error(outcome.message), { jobId, phase: outcome.phase });
 

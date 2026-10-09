@@ -19,9 +19,17 @@ import { readInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { readInitialGenerationRequestId } from '@/lib/initial-generation-request';
 
 export const REPLACED_SERIES_KEY = 'replaced-series-v1';
+/** When the reader chose to replace it. A record an older build wrote has none. */
+export const REPLACED_SERIES_AT_KEY = 'replaced-series-at-v1';
 
-export function recordReplacedSeries(devotionalId: string): void {
+export function recordReplacedSeries(devotionalId: string, at = new Date().toISOString()): void {
   mmkvStorage.setItem(REPLACED_SERIES_KEY, devotionalId);
+  mmkvStorage.setItem(REPLACED_SERIES_AT_KEY, at);
+}
+
+export function readReplacedSeriesAt(): string | null {
+  const stored = mmkvStorage.getItem(REPLACED_SERIES_AT_KEY) as string | null;
+  return stored || null;
 }
 
 export function readReplacedSeries(): string | null {
@@ -31,6 +39,7 @@ export function readReplacedSeries(): string | null {
 
 export function clearReplacedSeries(): void {
   mmkvStorage.removeItem(REPLACED_SERIES_KEY);
+  mmkvStorage.removeItem(REPLACED_SERIES_AT_KEY);
 }
 
 /**
