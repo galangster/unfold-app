@@ -97,6 +97,11 @@ function pairPrayers(existing: PrayerRequest[], incoming: PrayerRequest[]): Map<
   return pairs;
 }
 
+/** When this copy last decided its answer: the reader's toggle, else the answer's own time. */
+function answerDecidedAt(prayer: PrayerRequest): string | undefined {
+  return prayer.answerChangedAt ?? (prayer.isAnswered ? prayer.answeredAt : undefined);
+}
+
 function mergePrayerRequests(
   existing: PrayerRequest[] | undefined,
   incoming: PrayerRequest[] | undefined,
@@ -104,16 +109,24 @@ function mergePrayerRequests(
   if (!existing?.length) return incoming;
   if (!incoming?.length) return existing;
   const pairs = pairPrayers(existing, incoming);
-  // A prayer in both keeps the newer entry's copy, so an answer marked later
-  // stays marked. The newer entry is not always the newer decision about the
-  // prayer: a text repair carries the prayer as it last saw it. So a copy
-  // without the answer never undoes an answer the older copy holds.
+  // A prayer in both keeps the newer entry's copy. The newer entry is not
+  // always the newer decision about the prayer: a text repair carries the
+  // prayer as it last saw it. So when the two copies disagree, the later
+  // decision wins: a reader's toggle, or the answer itself. A copy with no
+  // decision never undoes an answer, and a later "not answered" stands.
   const olderByNewer = new Map([...pairs].map(([older, newer]) => [newer, older] as const));
   const keepAnswer = (newer: PrayerRequest): PrayerRequest => {
     const older = olderByNewer.get(newer);
-    return older?.isAnswered && !newer.isAnswered
-      ? { ...newer, isAnswered: true, answeredAt: older.answeredAt }
-      : newer;
+    if (!older || older.isAnswered === newer.isAnswered) return newer;
+    const olderDecidedAt = answerDecidedAt(older);
+    const newerDecidedAt = answerDecidedAt(newer);
+    if (!olderDecidedAt || (newerDecidedAt && newerDecidedAt >= olderDecidedAt)) return newer;
+    return {
+      ...newer,
+      isAnswered: older.isAnswered,
+      answeredAt: older.answeredAt,
+      answerChangedAt: older.answerChangedAt,
+    };
   };
   // The newer list already holds every older prayer: keep it, answers kept.
   if (pairs.size === existing.length) {
@@ -186,6 +199,7 @@ const isBlank = (text: string | undefined | null) => !(text ?? '').trim();
  * empty: its text, a SOAP field, an answer, or its prayer or prompt lists.
  */
 export function onlyFillsEmptyFields(own: JournalEntry, merged: JournalEntry): boolean {
+  if (merged.journalMode !== own.journalMode) return false;
   if ((merged.content ?? '') !== (own.content ?? '') && !isBlank(own.content)) return false;
   const ownSoap = normalizeSoapResponses(own.soapResponses);
   const mergedSoap = normalizeSoapResponses(merged.soapResponses);

@@ -41,7 +41,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { applyPulledUserData } from '../full-sync-pull';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates, rebaseJournalDraft } from '../journal-entry-merge';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields, rebaseJournalDraft } from '../journal-entry-merge';
 import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
@@ -194,6 +194,30 @@ describe('mergeJournalEntryDuplicates', () => {
     ]);
   });
 
+  it('lets a later "not answered" stand over an older answered copy', () => {
+    const answered = { id: 'p', text: 'Healing', isAnswered: true, answeredAt: '2026-09-02T10:05:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
+    const cleared = { id: 'p', text: 'Healing', isAnswered: false, answerChangedAt: '2026-09-02T11:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'legacy-a', content: 'Old device.', prayerRequests: [answered], updatedAt: '2026-09-02T10:05:00.000Z' }),
+      entry({ id: DAY_ID, content: 'Old device.', prayerRequests: [cleared], updatedAt: '2026-09-02T11:00:00.000Z' }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([cleared]);
+  });
+
+  it('keeps a later "not answered" when a newer repair carries a stale answered copy', () => {
+    const cleared = { id: 'p', text: 'Healing', isAnswered: false, answerChangedAt: '2026-09-03T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
+    const stale = { id: 'p', text: 'Healing', isAnswered: true, answeredAt: '2026-09-02T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: DAY_ID, content: 'Day.', prayerRequests: [cleared], updatedAt: '2026-09-03T10:00:00.000Z' }),
+      entry({ id: 'legacy-a', content: 'Day.\n\nRepair.', prayerRequests: [stale], updatedAt: '2026-09-03T11:00:00.000Z' }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([
+      expect.objectContaining({ id: 'p', isAnswered: false, answeredAt: undefined, answerChangedAt: '2026-09-03T10:00:00.000Z' }),
+    ]);
+  });
+
   it('keeps every prayer under its own id when two older prayers share their text', () => {
     const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
     const merged = mergeJournalEntryDuplicates([
@@ -329,6 +353,37 @@ describe('mergeJournalEntryDuplicates', () => {
     ]);
     expect(merged).toHaveLength(3);
     expect(merged.map((e) => e.content).sort()).toEqual(['day one', 'day two', 'other series']);
+  });
+});
+
+describe('prayer answers', () => {
+  it('stamps both marking a prayer answered and clearing it', () => {
+    const store = useUnfoldStore.getState();
+    const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'text', journalMode: 'freewrite' });
+    store.addPrayerRequest(id, 'Healing');
+    const prayerId = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0].id;
+
+    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
+    const answered = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
+    expect(answered.isAnswered).toBe(true);
+    expect(answered.answerChangedAt).toBe(answered.answeredAt);
+
+    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
+    const cleared = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
+    expect(cleared.isAnswered).toBe(false);
+    expect(cleared.answeredAt).toBeUndefined();
+    expect(cleared.answerChangedAt).toEqual(expect.any(String));
+  });
+});
+
+describe('onlyFillsEmptyFields', () => {
+  it('is false when the fold changes the journal mode', () => {
+    const own: JournalEntry = {
+      id: DAY_ID, devotionalId: 'dev-1', dayNumber: 1, content: 'Text.', journalMode: 'soap',
+      createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
+    };
+    expect(onlyFillsEmptyFields(own, { ...own, journalMode: 'freewrite' })).toBe(false);
+    expect(onlyFillsEmptyFields(own, { ...own })).toBe(true);
   });
 });
 

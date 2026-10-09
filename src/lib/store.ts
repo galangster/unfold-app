@@ -372,6 +372,8 @@ export interface PrayerRequest {
   text: string;
   isAnswered: boolean;
   answeredAt?: string;
+  /** When the reader last marked it answered or not answered. */
+  answerChangedAt?: string;
   createdAt: string;
 }
 
@@ -1655,7 +1657,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               ...e,
               prayerRequests: (e.prayerRequests ?? []).map((p) =>
                 p.id === prayerId
-                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? now : undefined }
+                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? now : undefined, answerChangedAt: now }
                   : p
               ),
               updatedAt: journalWriteClock(e, now),
