@@ -943,6 +943,29 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
       expect(inverseCalls()).toHaveLength(1);
     });
 
+    it('drops a held Undo when the reader moves to another series showing the same words', () => {
+      const commandRef = { current: null as any };
+      let tree: any;
+      act(() => {
+        tree = renderer.create(<DevotionalWebView day={day} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
+      });
+      reportHeight(tree);
+      const oldDocId = getDocId(tree);
+      mockDevotionalWebFont = null;
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-a" fontSize="medium" commandRef={commandRef} />);
+      });
+      mockInjectJavaScript.mockClear();
+      act(() => { commandRef.current.applyInverse({ added: [], removed, docId: oldDocId }); });
+
+      mockDevotionalWebFont = { family: 'Lora', css: '' };
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} devotionalId="series-b" fontSize="medium" commandRef={commandRef} />);
+      });
+      reportHeight(tree);
+      expect(inverseCalls()).toHaveLength(0);
+    });
+
     it('still replays after many font previews', () => {
       const commandRef = { current: null as any };
       const tree = mount(commandRef);

@@ -2499,12 +2499,13 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    // The page's content: every font value sits in <head>, so the markup from
-    // </head> on changes only with what the reader sees.
-    const content = documentMarkup.slice(documentMarkup.indexOf('</head>'));
+    // The page's content for this series and day: every font value sits in
+    // <head>, so the markup from </head> on changes only with what the reader
+    // sees. The series and day keep two days with the same words apart.
+    const content = `${devotionalId ?? ''}#${day.dayNumber}\n${documentMarkup.slice(documentMarkup.indexOf('</head>'))}`;
     return { docId, content, bakedThemeJson: themeVars.json, source: { html } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
-  }, [documentMarkup, webViewTargetKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey and devotionalId included on purpose
+  }, [documentMarkup, webViewTargetKey, devotionalId]);
 
   // "Live document" = the document currently loaded in the mounted WebView,
   // identified by mount key + docId. Its first HEIGHT_CHANGE (echoing the
