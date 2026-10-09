@@ -13,6 +13,7 @@ import {
   type DailyGenerationRecoveryState,
 } from '../daily-generation-recovery';
 import { ApiError, type GenerationJobResponse } from '../generation-api';
+import type { SyncPushChange } from '../sync-types';
 
 function generatedDay(dayNumber = 2, devotionalId = 'devo-1') {
   return {
@@ -42,8 +43,34 @@ function job(overrides: Partial<GenerationJobResponse> = {}): GenerationJobRespo
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+const NOW = new Date('2026-09-08T12:00:00.000Z').getTime();
+
+function queuedRead(dayNumber = 1, devotionalId = 'devo-1'): SyncPushChange {
+  return {
+    table: 'devotional_days',
+    id: `day-${devotionalId}-${dayNumber}`,
+    clientUpdatedAt: '2026-09-07T21:00:00.000Z',
+    data: { devotionalId, dayNumber, isRead: true, readAt: '2026-09-07T21:00:00.000Z', schemaVersion: 1 },
+    deleted: false,
+  };
+}
+
+function dayNotReady(reason: 'ahead_of_reading' | 'ahead_of_calendar') {
+  return new ApiError("Day 2 isn't ready yet.", 425, 'DAY_NOT_READY', undefined, reason);
+}
+
+function completedJob() {
+  return job({ status: 'complete', result: { devotionalDay: generatedDay(), devotionalId: 'devo-1' } });
+}
+
+/** The poll loop runs detached; with immediate sleeps one macrotask drains it. */
+function settle() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function setup(overrides: Partial<DailyGenerationRecoveryDependencies> = {}) {
@@ -56,8 +83,11 @@ function setup(overrides: Partial<DailyGenerationRecoveryDependencies> = {}) {
     pollJobStatus: jest.fn(async () => job()),
     recoverCompletedGenerationResult: jest.fn(async () => null),
     retryJob: jest.fn(async () => ({ jobId: 'job-1', status: 'pending' })),
+    peekSyncOutbox: jest.fn(() => []),
+    drainSyncChange: jest.fn(async () => undefined),
+    requeueLocalRead: jest.fn(() => undefined),
     sleep: jest.fn(() => pendingSleep.promise),
-    now: () => new Date('2026-09-08T12:00:00.000Z').getTime(),
+    now: () => NOW,
     isSessionCurrent: () => true,
     ...overrides,
   };
@@ -141,6 +171,9 @@ describe('daily generation recovery', () => {
       sleep: jest.fn(() => new Promise(() => undefined)),
       now: () => Date.now(),
       isSessionCurrent: () => true,
+      peekSyncOutbox: jest.fn(() => []),
+      drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -169,6 +202,9 @@ describe('daily generation recovery', () => {
       sleep: jest.fn(() => new Promise(() => undefined)),
       now: () => Date.now(),
       isSessionCurrent: () => true,
+      peekSyncOutbox: jest.fn(() => []),
+      drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const states: DailyGenerationRecoveryState[] = [];
     const controller = createDailyGenerationRecovery({
@@ -200,6 +236,9 @@ describe('daily generation recovery', () => {
       sleep: jest.fn(() => new Promise(() => undefined)),
       now: () => Date.now(),
       isSessionCurrent: () => true,
+      peekSyncOutbox: jest.fn(() => []),
+      drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -215,6 +254,8 @@ describe('daily generation recovery', () => {
     await controller.retry();
 
     expect(states.at(-1)).toMatchObject({ status: 'failed', canRetry: false });
+    // The server still allows a retry; only this reader cannot ask for one.
+    expect(states.at(-1)).not.toHaveProperty('retriesExhausted');
     expect(dependencies.retryJob).not.toHaveBeenCalled();
     expect(dependencies.submitGenerationJob).not.toHaveBeenCalled();
   });
@@ -312,6 +353,9 @@ describe('daily generation recovery', () => {
       sleep: jest.fn(() => new Promise(() => undefined)),
       now: () => new Date('2026-09-08T12:00:00.000Z').getTime(),
       isSessionCurrent: () => true,
+      peekSyncOutbox: jest.fn(() => []),
+      drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -450,6 +494,9 @@ describe('daily generation recovery', () => {
       sleep: jest.fn(() => new Promise(() => undefined)),
       now: () => Date.now(),
       isSessionCurrent: () => true,
+      peekSyncOutbox: jest.fn(() => []),
+      drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const makeController = (session: number) => createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -631,5 +678,298 @@ describe('daily generation recovery', () => {
 
     expect(onDay).not.toHaveBeenCalled();
     expect(states.map((state) => state.status)).toEqual(['checking']);
+  });
+});
+
+describe('daily generation recovery after a failed status request', () => {
+  beforeEach(() => {
+    resetDailyGenerationRecoveryForTesting();
+  });
+
+  it.each([
+    ['a client timeout', new Error('Aborted')],
+    ['a 502 during a deploy', new ApiError('Bad gateway', 502, 'POLL_FAILED')],
+  ])('keeps polling a running day after %s', async (_label, failure) => {
+    const pollJobStatus = jest.fn()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValue(completedJob());
+    const { controller, states, onDay } = setup({
+      findDayJob: jest.fn(async () => job({ status: 'processing' })),
+      pollJobStatus,
+      sleep: jest.fn(async () => undefined),
+    });
+
+    await controller.start();
+    await settle();
+
+    expect(pollJobStatus).toHaveBeenCalledTimes(2);
+    expect(onDay).toHaveBeenCalledTimes(1);
+    expect(states.map((state) => state.status)).toEqual(['checking', 'running', 'complete']);
+  });
+
+  it('backs off between failed polls and reports the outage only after three in a row', async () => {
+    const outage = new Error('Network request failed');
+    const pollJobStatus = jest.fn()
+      .mockRejectedValueOnce(outage)
+      .mockRejectedValueOnce(outage)
+      .mockRejectedValueOnce(outage)
+      .mockResolvedValue(completedJob());
+    const sleep = jest.fn(async (_ms: number) => undefined);
+    const { controller, states, onDay } = setup({
+      findDayJob: jest.fn(async () => job({ status: 'processing' })),
+      pollJobStatus,
+      sleep,
+    });
+
+    await controller.start();
+    await settle();
+
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([15_000, 30_000, 60_000, 60_000]);
+    expect(states.map((state) => state.status)).toEqual(['checking', 'running', 'offline', 'complete']);
+    expect(onDay).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['a job-gone 404', new ApiError('Not found', 404, 'NOT_FOUND')],
+    ['a read-budget 429', new ApiError('Rate limited', 429, 'RATE_LIMITED')],
+  ])('stops polling on %s after a transient failure', async (_label, verdict) => {
+    const pollJobStatus = jest.fn()
+      .mockRejectedValueOnce(new ApiError('Bad gateway', 502, 'POLL_FAILED'))
+      .mockRejectedValueOnce(verdict)
+      .mockResolvedValue(completedJob());
+    const { controller, states, onDay } = setup({
+      findDayJob: jest.fn(async () => job({ status: 'processing' })),
+      pollJobStatus,
+      sleep: jest.fn(async () => undefined),
+    });
+
+    await controller.start();
+    await settle();
+
+    expect(pollJobStatus).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toEqual({ status: 'service-error', jobId: 'job-1' });
+    expect(onDay).not.toHaveBeenCalled();
+  });
+
+  it('ignores a failed poll from a loop that a newer check replaced', async () => {
+    const stalePoll = deferred<GenerationJobResponse>();
+    const pollJobStatus = jest.fn().mockImplementationOnce(() => stalePoll.promise);
+    let sleeps = 0;
+    const sleep = jest.fn(() => (sleeps++ === 0 ? Promise.resolve() : new Promise<void>(() => undefined)));
+    const { controller, states } = setup({
+      findDayJob: jest.fn(async () => job({ status: 'processing' })),
+      pollJobStatus,
+      sleep,
+    });
+
+    await controller.start();
+    await settle();
+    expect(pollJobStatus).toHaveBeenCalledTimes(1);
+    await controller.checkAgain();
+    stalePoll.reject(new Error('Aborted'));
+    await settle();
+
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-1' });
+    expect(states.map((state) => state.status)).not.toContain('offline');
+    controller.cancel();
+  });
+});
+
+describe('daily generation recovery when the server is waiting on the last read', () => {
+  beforeEach(() => {
+    resetDailyGenerationRecoveryForTesting();
+  });
+
+  it('saves the queued read, then re-checks once and starts the day', async () => {
+    const read = queuedRead(1);
+    const submitGenerationJob = jest.fn()
+      .mockRejectedValueOnce(dayNotReady('ahead_of_reading'))
+      .mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
+    const drainSyncChange = jest.fn(async () => ({
+      table: 'devotional_days' as const,
+      id: read.id,
+      serverUpdatedAt: '2026-09-08T12:00:01.000Z',
+      status: 'accepted' as const,
+    }));
+    const { controller, dependencies, states } = setup({
+      // Only the read of the day before this one gates generation.
+      peekSyncOutbox: jest.fn(() => [queuedRead(1, 'devo-other'), queuedRead(2), read]),
+      drainSyncChange,
+      submitGenerationJob,
+    });
+
+    await controller.start();
+
+    expect(drainSyncChange).toHaveBeenCalledTimes(1);
+    expect(drainSyncChange).toHaveBeenCalledWith(read, 7, { deadlineAt: NOW + 5_000 });
+    expect(dependencies.findDayJob).toHaveBeenCalledTimes(2);
+    expect(submitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(states).toContainEqual({ status: 'blocked', reason: 'read-sync-pending' });
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
+    controller.cancel();
+  });
+
+  // 2026-10-09: a reader on 1.1.18 lost a day's read to an app kill mid-push.
+  // The phone held it, the outbox did not, and every check stopped on the read.
+  it('queues again a read this phone holds but never sent, saves it, and starts the day', async () => {
+    const held = queuedRead(1);
+    const submitGenerationJob = jest.fn()
+      .mockRejectedValueOnce(dayNotReady('ahead_of_reading'))
+      .mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
+    const requeueLocalRead = jest.fn(() => held);
+    const drainSyncChange = jest.fn(async () => ({
+      table: 'devotional_days' as const,
+      id: held.id,
+      serverUpdatedAt: '2026-09-08T12:00:01.000Z',
+      status: 'accepted' as const,
+    }));
+    const { controller, states } = setup({ requeueLocalRead, drainSyncChange, submitGenerationJob });
+
+    await controller.start();
+
+    expect(requeueLocalRead).toHaveBeenCalledTimes(1);
+    expect(requeueLocalRead).toHaveBeenCalledWith('devo-1', 1);
+    expect(drainSyncChange).toHaveBeenCalledWith(held, 7, { deadlineAt: NOW + 5_000 });
+    expect(submitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
+    controller.cancel();
+  });
+
+  it('stays blocked once when this phone holds no read of the day before', async () => {
+    const submitGenerationJob = jest.fn(async () => { throw dayNotReady('ahead_of_reading'); });
+    const requeueLocalRead = jest.fn(() => undefined);
+    const { controller, dependencies, states } = setup({ requeueLocalRead, submitGenerationJob });
+
+    await controller.start();
+
+    expect(requeueLocalRead).toHaveBeenCalledTimes(1);
+    expect(dependencies.drainSyncChange).not.toHaveBeenCalled();
+    expect(submitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'read-sync-pending' });
+  });
+
+  it.each([
+    ['the save times out', undefined],
+    ['the server rejects the read', {
+      table: 'devotional_days' as const,
+      id: 'day-devo-1-1',
+      serverUpdatedAt: '2026-09-08T12:00:01.000Z',
+      status: 'rejected' as const,
+    }],
+  ])('stays blocked on the read and submits once per check when %s', async (_label, acknowledgement) => {
+    const submitGenerationJob = jest.fn(async () => { throw dayNotReady('ahead_of_reading'); });
+    const drainSyncChange = jest.fn(async () => acknowledgement);
+    const { controller, states } = setup({
+      peekSyncOutbox: jest.fn(() => [queuedRead(1)]),
+      drainSyncChange,
+      submitGenerationJob,
+    });
+
+    await controller.start();
+
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'read-sync-pending' });
+    expect(submitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(drainSyncChange).toHaveBeenCalledTimes(1);
+
+    await controller.checkAgain();
+
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'read-sync-pending' });
+    expect(submitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(drainSyncChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a calendar block final, and Check Again saves a read the server is waiting on', async () => {
+    const submitGenerationJob = jest.fn()
+      .mockRejectedValueOnce(dayNotReady('ahead_of_calendar'))
+      .mockRejectedValueOnce(dayNotReady('ahead_of_reading'))
+      .mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
+    const drainSyncChange = jest.fn(async () => ({
+      table: 'devotional_days' as const,
+      id: 'day-devo-1-1',
+      serverUpdatedAt: '2026-09-08T12:00:01.000Z',
+      status: 'accepted' as const,
+    }));
+    const { controller, states } = setup({
+      peekSyncOutbox: jest.fn(() => [queuedRead(1)]),
+      drainSyncChange,
+      submitGenerationJob,
+    });
+
+    await controller.start();
+
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'day-not-ready' });
+    expect(drainSyncChange).not.toHaveBeenCalled();
+    expect(submitGenerationJob).toHaveBeenCalledTimes(1);
+
+    await controller.checkAgain();
+
+    expect(drainSyncChange).toHaveBeenCalledTimes(1);
+    expect(submitGenerationJob).toHaveBeenCalledTimes(3);
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
+    controller.cancel();
+  });
+
+  it('re-checks when the queued read reached the server before the wait began', async () => {
+    const peekSyncOutbox = jest.fn()
+      .mockReturnValueOnce([queuedRead(1)])
+      .mockReturnValue([]);
+    const submitGenerationJob = jest.fn()
+      .mockRejectedValueOnce(dayNotReady('ahead_of_reading'))
+      .mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
+    const { controller, states } = setup({ peekSyncOutbox, submitGenerationJob });
+
+    await controller.start();
+
+    expect(submitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
+    controller.cancel();
+  });
+});
+
+describe('daily generation recovery after the retry budget is spent', () => {
+  beforeEach(() => {
+    resetDailyGenerationRecoveryForTesting();
+  });
+
+  it('marks a failed job the server will not retry and finds it again once reopened', async () => {
+    const findDayJob = jest.fn()
+      .mockResolvedValueOnce(job({ status: 'failed', canRetry: false }))
+      .mockResolvedValue(job({ status: 'processing' }));
+    const { controller, dependencies, states } = setup({ findDayJob });
+
+    await controller.start();
+
+    expect(states.at(-1)).toEqual({
+      status: 'failed',
+      jobId: 'job-1',
+      canRetry: false,
+      failureKind: 'job',
+      retriesExhausted: true,
+    });
+
+    await controller.checkAgain();
+
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-1' });
+    expect(dependencies.retryJob).not.toHaveBeenCalled();
+    expect(dependencies.submitGenerationJob).not.toHaveBeenCalled();
+    controller.cancel();
+  });
+
+  it('rediscovers instead of reporting a service error when the server refuses a retry', async () => {
+    const findDayJob = jest.fn()
+      .mockResolvedValueOnce(job({ status: 'failed', canRetry: true }))
+      .mockResolvedValue(job({ status: 'failed', canRetry: false }));
+    const { controller, dependencies, states } = setup({
+      findDayJob,
+      retryJob: jest.fn(async () => { throw new ApiError('Retry limit reached', 409, 'MAX_RETRIES_EXCEEDED'); }),
+    });
+
+    await controller.start();
+    await controller.retry();
+
+    expect(findDayJob).toHaveBeenCalledTimes(2);
+    expect(states.map((state) => state.status)).not.toContain('service-error');
+    expect(states.at(-1)).toMatchObject({ status: 'failed', canRetry: false, retriesExhausted: true });
+    expect(dependencies.submitGenerationJob).not.toHaveBeenCalled();
   });
 });
