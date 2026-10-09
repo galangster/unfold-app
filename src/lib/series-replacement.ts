@@ -78,9 +78,14 @@ export function readReplacementSeries(): string | null {
  * The series the choice is bound to, even after its request retired. Its
  * result still ends the replaced series: a Try again from a failure push
  * lands the same series. A new request rebinds, and then only its series does.
+ * While a different request is on its way, its answers are newer than the
+ * bound attempt, which then ends nothing, even before that request rebinds.
  */
 export function readBoundReplacementSeries(): string | null {
-  return readBinding()?.devotionalId || null;
+  const binding = readBinding();
+  if (!binding?.devotionalId) return null;
+  const pending = readInitialGenerationRequestId();
+  return !pending || pending === binding.requestId ? binding.devotionalId : null;
 }
 
 function readBinding(): Partial<ReplacementBinding> | null {

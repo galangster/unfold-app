@@ -16,6 +16,7 @@ import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import { wasSeriesDeleted } from '@/lib/deleted-series';
 import { bindReplacementSeries, clearReplacedSeries, readBoundReplacementSeries, readReplacedSeries, readReplacedSeriesChosenAt, readReplacedSeriesState } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
@@ -66,6 +67,17 @@ type ReaderContext = Pick<Devotional, 'userContext' | 'themeCategory' | 'devotio
  * Today holds no series the reader chose: none, one that is gone or
  * archived, or onboarding's first reading.
  */
+/**
+ * A landing for a series the reader deleted on this phone. It neither brings
+ * the series back nor ends the series it was to replace.
+ */
+export class DeletedSeriesResultError extends Error {
+  constructor() {
+    super('The landed series was deleted on this phone');
+    this.name = 'DeletedSeriesResultError';
+  }
+}
+
 function holdsNoChosenSeries(current: Devotional | undefined): boolean {
   return !current
     || isDevotionalArchived(current)
@@ -156,6 +168,7 @@ export function applyInitialArcResult(
 ): AppliedInitialArcResult {
   assertSyncSessionCurrent(session, 'apply initial arc');
   const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
+  if (wasSeriesDeleted(devotionalId)) throw new DeletedSeriesResultError();
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
   const day1 = result.devotionalDay;
@@ -218,13 +231,14 @@ export function applyInitialArcResult(
     // addDevotional makes the new series current. Beside a newer live series,
     // such as the replaced one resumed elsewhere after the choice, the server
     // writes that one, so the new series gives Today back. Without a server
-    // date the new series' start is this phone's guess, so it takes Today only
-    // in place of no chosen series or a finished one, and its guess ranks
-    // nothing.
+    // date the new series' start is this phone's guess, so it takes Today
+    // only when no other chosen, unfinished series is held here, current or
+    // not, and its guess ranks nothing.
     const landedState = useUnfoldStore.getState();
-    const previousCurrent = landedState.devotionals.find((d) => d.id === previousCurrentId);
     const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals)
-      || (!serverAnchor && !holdsNoChosenSeries(previousCurrent) && !isSeriesComplete(previousCurrent));
+      || (!serverAnchor && landedState.devotionals.some((d) => (
+        d.id !== devotionalId && !holdsNoChosenSeries(d) && !isSeriesComplete(d)
+      )));
     if (keepsPrevious) {
       // The previous series keeps Today only while the server would pick it.
       // Otherwise Today stays empty: another held series can carry a guessed
@@ -305,6 +319,14 @@ export function settleInflightInitialArcWatch(
       });
     } catch (err) {
       if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) {
+        return;
+      }
+      if (err instanceof DeletedSeriesResultError) {
+        // The reader deleted this series: its job is done, and nothing is left
+        // to watch or retry.
+        clearInflightGenerationJob();
+        if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
+        store.clearGenerationSession();
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
