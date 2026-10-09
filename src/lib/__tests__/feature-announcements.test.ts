@@ -16,11 +16,13 @@ import {
 import { MUSIC_ANNOUNCEMENT } from '../music-announcement';
 
 const mockValues = new Map<string, string>();
+let mockWritesFail = false;
 
 jest.mock('../mmkv-storage', () => ({
   mmkvStorage: {
     getItem: (name: string) => mockValues.get(name) ?? null,
     setItem: (name: string, value: string) => {
+      if (mockWritesFail) throw new Error('storage unavailable');
       mockValues.set(name, value);
     },
     removeItem: (name: string) => {
@@ -153,6 +155,23 @@ describe('feature announcements', () => {
   it('waits for the Today tour, so a fresh install goes straight to the tour', () => {
     expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: false })).toBe(false);
     expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: true })).toBe(true);
+  });
+
+  it('keeps settled pages closed for this visit when storage writes fail', () => {
+    mockWritesFail = true;
+    try {
+      // A fresh module copy, so the remembered records end with this test.
+      jest.isolateModules(() => {
+        const announcements = jest.requireActual('../feature-announcements') as typeof import('../feature-announcements');
+        announcements.settleAnnouncementsForNewReader();
+
+        expect(announcements.listPendingAnnouncementPages(allAvailable)).toEqual([]);
+        expect(announcements.hasSeenAnnouncement(COMPANION_ANNOUNCEMENT_ID)).toBe(true);
+      });
+    } finally {
+      mockWritesFail = false;
+    }
+    expect(mockValues.has(FEATURE_ANNOUNCEMENTS_KEY)).toBe(false);
   });
 
   it('settles every current page for a new reader and keeps what was already seen', () => {
