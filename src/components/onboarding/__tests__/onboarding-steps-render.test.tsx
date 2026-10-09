@@ -8,7 +8,7 @@ import { ScrollView, TextInput } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { pressableAncestor } from '@/lib/__tests__/fixtures/pressable-ancestor';
 
-const renderer = require('react-test-renderer');
+const renderer = jest.requireActual('react-test-renderer');
 const { act } = renderer;
 
 const mockReplace = jest.fn();
@@ -17,7 +17,7 @@ const mockMmkvStore = new Map<string, string>();
 let mockOnboardingSearchParams: Record<string, string> = { startAt: 'hook' };
 
 jest.mock('react-native-reanimated', () => {
-  const { View, Text: RNText } = require('react-native');
+  const { View, Text: RNText } = jest.requireActual('react-native');
   const chainable = () => {
     const anim: Record<string, unknown> = {};
     for (const method of ['duration', 'delay', 'easing', 'springify', 'damping', 'build']) {
@@ -41,15 +41,15 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('react-native-gesture-handler', () => {
-  const { View, TouchableOpacity } = require('react-native');
+  const { View, TouchableOpacity } = jest.requireActual('react-native');
   return { Gesture: { Pan: () => ({}), Tap: () => ({}) }, GestureDetector: ({ children }: { children: unknown }) => children, TouchableOpacity, View };
 });
 jest.mock('react-native-safe-area-context', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) };
 });
 jest.mock('react-native-keyboard-controller', () => {
-  const { ScrollView } = require('react-native');
+  const { ScrollView } = jest.requireActual('react-native');
   return { KeyboardAwareScrollView: ScrollView };
 });
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
@@ -164,8 +164,8 @@ jest.mock('@/lib/generation-session', () => ({
   SyncSessionInvalidatedError: class SyncSessionInvalidatedError extends Error {},
 }));
 jest.mock('@/components/TypewriterText', () => {
-  const ReactActual = require('react');
-  const { Text } = require('react-native');
+  const ReactActual = jest.requireActual('react');
+  const { Text } = jest.requireActual('react-native');
   return {
     TypewriterText: ({ text, onComplete }: { text: string; onComplete?: () => void }) => {
       ReactActual.useEffect(() => {
