@@ -2,7 +2,6 @@
 /**
  * Background check-in top-up: refill the 14-day horizon without an open,
  * without inventing a second scheduler, and without touching the trial notice.
- * The same wake refills the morning reading reminder.
  */
 
 const mockState = {
@@ -33,9 +32,6 @@ const mockUpdateUser = jest.fn((patch: { isPremium?: boolean }) => {
   mockState.user = { ...mockState.user, ...patch };
 });
 const mockSetRevenueCatResolved = jest.fn();
-const mockRunDailyReminderTopup = jest.fn(
-  async (): Promise<'written' | 'skipped' | 'deferred' | 'failed'> => 'skipped',
-);
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios },
@@ -78,9 +74,6 @@ jest.mock('@/lib/notifications', () => ({
   cancelMiddayCheckIn: () => mockCancelMidday(),
   cancelEveningWindDown: () => mockCancelEvening(),
   areNotificationsEnabled: () => mockAreEnabled(),
-}));
-jest.mock('@/lib/daily-reminder-sync', () => ({
-  runDailyReminderBackgroundTopup: () => mockRunDailyReminderTopup(),
 }));
 jest.mock('@/lib/ui-state', () => ({
   useUIState: {
@@ -159,8 +152,6 @@ function resetMocks() {
   mockSetRevenueCatResolved.mockClear();
   mockScheduleMidday.mockResolvedValue({ ids: ['mid-0'], complete: true });
   mockScheduleEvening.mockResolvedValue({ ids: ['eve-0'], complete: true });
-  mockRunDailyReminderTopup.mockClear();
-  mockRunDailyReminderTopup.mockResolvedValue('skipped');
 }
 
 describe('check-in background top-up', () => {
@@ -185,7 +176,6 @@ describe('check-in background top-up', () => {
     await expect(runCheckInBackgroundTopup()).resolves.toBe(
       BackgroundFetch.BackgroundFetchResult.NoData,
     );
-    expect(mockRunDailyReminderTopup).not.toHaveBeenCalled();
     expect(mockScheduleMidday).not.toHaveBeenCalled();
     expect(mockCancelMidday).not.toHaveBeenCalled();
     expect(mockCancelEvening).not.toHaveBeenCalled();
@@ -196,7 +186,6 @@ describe('check-in background top-up', () => {
     await expect(runCheckInBackgroundTopup()).resolves.toBe(
       BackgroundFetch.BackgroundFetchResult.NoData,
     );
-    expect(mockRunDailyReminderTopup).not.toHaveBeenCalled();
     expect(mockScheduleMidday).not.toHaveBeenCalled();
     expect(mockCancelMidday).not.toHaveBeenCalled();
   });
@@ -208,7 +197,6 @@ describe('check-in background top-up', () => {
     );
     expect(mockGetCustomerInfo).toHaveBeenCalled();
     expect(mockUpdateUser).not.toHaveBeenCalled();
-    expect(mockRunDailyReminderTopup).not.toHaveBeenCalled();
     expect(mockScheduleMidday).not.toHaveBeenCalled();
     expect(mockCancelMidday).not.toHaveBeenCalled();
     expect(mockCancelEvening).not.toHaveBeenCalled();
@@ -223,7 +211,6 @@ describe('check-in background top-up', () => {
       );
       expect(mockScheduleMidday).not.toHaveBeenCalled();
       expect(mockCancelMidday).not.toHaveBeenCalled();
-      expect(mockRunDailyReminderTopup).not.toHaveBeenCalled();
     } finally {
       resetCheckInBackgroundHydrationWaitForTests();
     }
@@ -238,8 +225,6 @@ describe('check-in background top-up', () => {
     expect(mockCancelMidday).not.toHaveBeenCalled();
     expect(mockCancelEvening).not.toHaveBeenCalled();
     expect(mockSetRevenueCatResolved).not.toHaveBeenCalled();
-    // The reminder owner needs resolved premium too; it waits with check-ins.
-    expect(mockRunDailyReminderTopup).not.toHaveBeenCalled();
   });
 
   it('resolves premium from RevenueCat and refills through the shared scheduler', async () => {
@@ -272,34 +257,6 @@ describe('check-in background top-up', () => {
     const second = await runCheckInBackgroundTopup();
     expect(second).toBe(BackgroundFetch.BackgroundFetchResult.NoData);
     expect(mockScheduleMidday).not.toHaveBeenCalled();
-  });
-
-  it('refills the morning reading reminder on the same wake', async () => {
-    mockRunDailyReminderTopup.mockResolvedValue('written');
-    await runCheckInBackgroundTopup();
-    mockScheduleMidday.mockClear();
-    const second = await runCheckInBackgroundTopup();
-    // Check-ins skip the same-day refill; the reminder refill still counts.
-    expect(mockScheduleMidday).not.toHaveBeenCalled();
-    expect(mockRunDailyReminderTopup).toHaveBeenCalledTimes(2);
-    expect(second).toBe(BackgroundFetch.BackgroundFetchResult.NewData);
-  });
-
-  it('refills the morning reading reminder for a reader without premium', async () => {
-    mockState.customerInfo = {
-      ok: true,
-      data: { entitlements: { active: {} } },
-    };
-    await runCheckInBackgroundTopup();
-    expect(mockCancelMidday).toHaveBeenCalled();
-    expect(mockRunDailyReminderTopup).toHaveBeenCalledTimes(1);
-  });
-
-  it('reports a failed reminder refill so the wake is retried', async () => {
-    mockRunDailyReminderTopup.mockResolvedValue('failed');
-    await expect(runCheckInBackgroundTopup()).resolves.toBe(
-      BackgroundFetch.BackgroundFetchResult.Failed,
-    );
   });
 
   it('marks RevenueCat resolved without a network read when the SDK is unused', async () => {

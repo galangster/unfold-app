@@ -8,7 +8,6 @@ import {
   createNotificationNavigationCoordinator,
   getCompletedUserRedirectDisposition,
   normalizePreferredNotificationTime,
-  notificationResponseKey,
   shouldHandleNotificationData,
   shouldHydrateNotificationResponse,
   shouldMarkNotificationNavigationReady,
@@ -181,10 +180,6 @@ describe('push notification helpers', () => {
 
     it('routes a lapse re-entry push to Today', () => {
       expect(buildNotificationNavigationRoute({ type: 'lapse_reentry' })).toEqual({ pathname: '/(tabs)/(today)' });
-    });
-
-    it('routes a daily reminder for a day the device does not hold yet to Today', () => {
-      expect(buildNotificationNavigationRoute({ type: 'daily_reminder' })).toEqual({ pathname: '/(tabs)/(today)' });
     });
 
     it('routes an act reminder to its day, scrolled to the act', () => {
@@ -556,46 +551,5 @@ describe('shouldPostPushRegistration (NET-15)', () => {
   it('session dedupe', () => {
     expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: true })).toBe(false);
     expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: false })).toBe(true);
-  });
-});
-
-describe('notificationResponseKey', () => {
-  const actReminder = (date: number, dayNumber: number) => ({
-    notification: {
-      date,
-      request: {
-        identifier: 'unfold-act-reminder',
-        content: { data: { type: 'act_reminder', devotionalId: 'devotional-1', dayNumber } },
-      },
-    },
-  });
-
-  it('opens the next delivery of a reminder that reuses its identifier', () => {
-    const replace = jest.fn();
-    const coordinator = createNotificationNavigationCoordinator({ replace });
-    coordinator.setNavigationReady(true);
-
-    for (const response of [actReminder(1_760_000_000_000, 3), actReminder(1_760_086_400_000, 4)]) {
-      coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
-    }
-
-    expect(replace.mock.calls.map(([route]) => route.params?.dayNumber)).toEqual(['3', '4']);
-  });
-
-  it('opens one delivery once when the launch response is reported twice', () => {
-    const replace = jest.fn();
-    const coordinator = createNotificationNavigationCoordinator({ replace });
-    coordinator.setNavigationReady(true);
-    const response = actReminder(1_760_000_000_000, 3);
-
-    coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
-    coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
-
-    expect(replace).toHaveBeenCalledTimes(1);
-  });
-
-  it('falls back to the identifier when a response has no delivery date', () => {
-    expect(notificationResponseKey({ notification: { request: { identifier: 'unfold-act-later' } } })).toBe('unfold-act-later');
-    expect(notificationResponseKey(null)).toBeUndefined();
   });
 });

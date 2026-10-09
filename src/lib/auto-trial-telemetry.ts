@@ -91,7 +91,7 @@ export function trackAutoTrialPickStartTapped(data: {
 }
 
 export function trackNotificationPermissionAnswered(data: {
-  trigger: 'reminder_time' | 'series_reveal' | 'generating' | 'later_entry_fallback' | 'trial_reminder';
+  trigger: 'reminder_time' | 'series_reveal' | 'generating' | 'later_entry_fallback';
   result: 'granted' | 'denied' | 'registration_failed';
   prior_status: 'undetermined' | 'granted' | 'denied';
 }): void {

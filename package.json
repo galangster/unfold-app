@@ -1,6 +1,6 @@
 {
   "name": "unfold-app",
-  "version": "1.1.19",
+  "version": "1.1.18",
   "main": "index.ts",
   "trustedDependencies": [
     "@shopify/react-native-skia",
@@ -21,11 +21,10 @@
     "verify:release": "node scripts/verify-release.mjs",
     "capture:release-proof": "node scripts/capture-release-proof.mjs",
     "test:release-proof": "node --test scripts/__tests__/release-proof.test.mjs",
-    "test:release-smoke": "node --test scripts/__tests__/release-smoke.test.mjs",
     "verify:report": "node scripts/verify-report.mjs",
     "prepare:bible-db": "node scripts/prepare-bible-db.mjs",
     "test": "jest --passWithNoTests",
-    "test:day-unlock": "for tz in Pacific/Honolulu America/Los_Angeles UTC; do TZ=$tz jest --runInBand src/lib/__tests__/day-unlock-contract.test.ts src/lib/__tests__/reveal-params.test.ts src/lib/__tests__/today-completion-pacing.test.ts src/lib/__tests__/daily-reminder-schedule.test.ts || exit 1; done",
+    "test:day-unlock": "for tz in Pacific/Honolulu America/Los_Angeles UTC; do TZ=$tz jest --runInBand src/lib/__tests__/day-unlock-contract.test.ts src/lib/__tests__/reveal-params.test.ts src/lib/__tests__/today-completion-pacing.test.ts || exit 1; done",
     "test:e2e": "maestro test .maestro/",
     "eas-build-post-install": "node scripts/stamp-build-profile.mjs"
   },

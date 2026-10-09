@@ -1,6 +1,26 @@
+import { getDailyReminderTrigger } from '../daily-reminder-content';
 import { deferPastQuietHours, isQuietTime } from '../quiet-hours';
 import { formatClockAsReminderTime, suggestReminderTime } from '../reminder-time-suggestion';
 import type { Devotional } from '../store';
+
+describe('getDailyReminderTrigger', () => {
+  const clock = { hour: 8, minute: 0 };
+
+  it('keeps the DAILY floor when nothing was read today', () => {
+    expect(getDailyReminderTrigger({ readToday: false, clock, now: new Date(2026, 8, 8, 6, 30) })).toEqual({ kind: 'daily' });
+  });
+
+  it('skips today with a one-shot for tomorrow when the reader already read before the fire time', () => {
+    expect(getDailyReminderTrigger({ readToday: true, clock, now: new Date(2026, 8, 8, 6, 30) })).toEqual({
+      kind: 'date',
+      date: new Date(2026, 8, 9, 8, 0),
+    });
+  });
+
+  it('keeps DAILY when today\'s fire time already passed (nothing to skip)', () => {
+    expect(getDailyReminderTrigger({ readToday: true, clock, now: new Date(2026, 8, 8, 9, 30) })).toEqual({ kind: 'daily' });
+  });
+});
 
 describe('quiet hours', () => {
   it('covers 22:00 to 07:00', () => {
