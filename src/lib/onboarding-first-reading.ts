@@ -5,6 +5,7 @@ import {
   withOnboardingFirstReadingArc,
 } from '@/lib/auto-trial-series';
 import { isUsableSampleDevotionalDay } from '@/lib/onboarding-sample-day-shape';
+import { applyUnarchiveIntent, isDevotionalArchived } from '@/lib/devotional-lifecycle';
 import { enqueuePersonalDataSyncChange, devotionalSyncData } from '@/lib/personal-data-sync-records';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity } from '@/lib/generation-reconciliation';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
@@ -22,9 +23,9 @@ const EMPTY_CONTEXT: Devotional['userContext'] = {
   emotionalState: '',
 };
 
-function preservedTitle(existing: Devotional | undefined, day: DevotionalDay, replacesStored = false): string {
+function preservedTitle(existing: Devotional | undefined, day: DevotionalDay): string {
   const current = existing?.title?.trim();
-  if (current && current !== 'Your First Devotional' && !replacesStored) return current;
+  if (current && current !== 'Your First Devotional') return current;
   return day.title?.trim() || current || '';
 }
 
@@ -34,14 +35,17 @@ function clockMs(value: string | undefined): number {
 }
 
 /**
- * The job finished after the stored sample was last written. A reader who
- * reinstalls keeps the Keychain identity, so a new onboarding reuses the
- * sample id, and a pull can restore the old sample before the new job lands.
- * The server stamps a finished job's day with the job's completion time.
+ * The result is a new first reading in place of the stored sample: its text
+ * differs, and the job finished after the stored copy was last written. A
+ * reader who reinstalls keeps the Keychain identity, so a new onboarding
+ * reuses the sample id, and a pull can restore the old sample before the new
+ * job lands. The server stamps a finished job's day with the job's completion
+ * time. The same result saved again never replaces the stored day, so the
+ * read state stays whatever this phone's clock says.
  */
-function isNewerThanStored(existing: Devotional | undefined, incoming: DevotionalDay): boolean {
+function replacesStoredSample(existing: Devotional | undefined, incoming: DevotionalDay): boolean {
   const stored = existing?.days.find((day) => day.dayNumber === 1);
-  if (!stored) return false;
+  if (!stored || stored.bodyText === incoming.bodyText) return false;
   const completedAt = clockMs(incoming.updatedAt ?? incoming.generatedAt);
   return completedAt > Math.max(clockMs(stored.updatedAt), clockMs(existing?.updatedAt));
 }
@@ -56,15 +60,10 @@ function sameContext(
     && (left?.emotionalState ?? '') === (right?.emotionalState ?? '');
 }
 
-function mergeFirstReadingDay(
-  existing: Devotional | undefined,
-  id: string,
-  incoming: DevotionalDay,
-  replacesStored: boolean,
-): DevotionalDay {
+function mergeFirstReadingDay(existing: Devotional | undefined, id: string, incoming: DevotionalDay): DevotionalDay {
   const normalized = normalizeGeneratedDayIdentity(id, { ...incoming, dayNumber: 1 }, 1);
   const current = existing?.days.find((day) => day.dayNumber === 1);
-  if (replacesStored || !current || !isUsableSampleDevotionalDay(current)) return normalized;
+  if (!current || !isUsableSampleDevotionalDay(current)) return normalized;
   return {
     ...normalized,
     ...current,
@@ -113,16 +112,19 @@ export function persistOnboardingFirstReading(input: {
   const otherFirst = store.devotionals.find((row) => isOnboardingFirstReading(row) && row.id !== id);
   if (otherFirst) return isOnboardingFirstReading(existingSameId);
 
-  const createdAt = input.createdAt ?? existingSameId?.createdAt ?? new Date().toISOString();
-  const userContext = existingSameId?.userContext?.name
-    ? existingSameId.userContext
-    : (input.userContext ?? existingSameId?.userContext ?? EMPTY_CONTEXT);
-  const replacesStored = isNewerThanStored(existingSameId, input.day);
-  const day = mergeFirstReadingDay(existingSameId, id, input.day, replacesStored);
-  const seriesArc = withOnboardingFirstReadingArc(existingSameId?.seriesArc, createdAt);
+  // A new first reading in place of a stored sample is a new series. Only the
+  // old row's clocks carry over, so the server takes the new row.
+  const replacesStored = replacesStoredSample(existingSameId, input.day);
+  const base = replacesStored ? undefined : existingSameId;
+  const createdAt = input.createdAt ?? base?.createdAt ?? new Date().toISOString();
+  const userContext = base?.userContext?.name
+    ? base.userContext
+    : (input.userContext ?? base?.userContext ?? EMPTY_CONTEXT);
+  const day = mergeFirstReadingDay(base, id, input.day);
+  const seriesArc = withOnboardingFirstReadingArc(base?.seriesArc, createdAt);
   const alreadyMarked = existingSameId != null
     && isOnboardingFirstReading(existingSameId)
-    && existingSameId.title === preservedTitle(existingSameId, day, replacesStored)
+    && existingSameId.title === preservedTitle(base, day)
     && existingSameId.days[0]?.bodyText === day.bodyText
     && existingSameId.days[0]?.isRead === day.isRead
     && sameContext(existingSameId.userContext, userContext)
@@ -133,8 +135,13 @@ export function persistOnboardingFirstReading(input: {
   // same day cannot replace it.
   const storedDayAt = existingSameId?.days.find((row) => row.dayNumber === 1)?.updatedAt;
   const updatedAt = nextWriteAt(clockMs(storedDayAt) > clockMs(existingSameId?.updatedAt) ? storedDayAt : existingSameId?.updatedAt);
+  // A sample the first life's trial retired comes back live, on a clock past
+  // its retirement, so the server takes the resume.
+  const lifecycle = replacesStored && existingSameId && isDevotionalArchived(existingSameId)
+    ? { archivedAt: null, archivedStateAt: applyUnarchiveIntent(existingSameId, updatedAt).archivedStateAt }
+    : { archivedAt: base?.archivedAt, archivedStateAt: base?.archivedStateAt };
   const next: Devotional = normalizeDevotionalIdentity({
-    ...(existingSameId ?? {
+    ...(base ?? {
       id,
       totalDays: 1,
       currentDay: 1,
@@ -143,17 +150,16 @@ export function persistOnboardingFirstReading(input: {
       generationMode: 'progressive',
     }),
     id,
-    title: preservedTitle(existingSameId, day, replacesStored),
-    totalDays: existingSameId?.totalDays ?? 1,
-    currentDay: existingSameId?.currentDay ?? 1,
+    title: preservedTitle(base, day),
+    totalDays: base?.totalDays ?? 1,
+    currentDay: base?.currentDay ?? 1,
     days: [{ ...day, updatedAt }],
     createdAt,
-    seriesStartDate: existingSameId?.seriesStartDate ?? createdAt,
+    seriesStartDate: base?.seriesStartDate ?? createdAt,
     userContext,
-    generationMode: existingSameId?.generationMode ?? 'progressive',
+    generationMode: base?.generationMode ?? 'progressive',
     seriesArc,
-    archivedAt: existingSameId?.archivedAt,
-    archivedStateAt: existingSameId?.archivedStateAt,
+    ...lifecycle,
     updatedAt,
   });
 

@@ -221,9 +221,13 @@ function sampleInStore() {
   return useUnfoldStore.getState().devotionals.find((row) => row.id === SAMPLE_ID);
 }
 
-function queuedSampleTitle() {
+function queuedSample() {
   const queued = peekSyncOutbox().filter((change) => change.table === 'devotionals' && change.id === SAMPLE_ID);
-  return (queued[queued.length - 1]?.data as { title?: string } | undefined)?.title;
+  return queued[queued.length - 1]?.data as { title?: string; archivedAt?: string | null } | undefined;
+}
+
+function queuedSampleTitle() {
+  return queuedSample()?.title;
 }
 
 describe('a second onboarding under a reused identity', () => {
@@ -285,6 +289,58 @@ describe('a second onboarding under a reused identity', () => {
     const sample = sampleInStore();
     expect(sample?.title).toBe(NEW_DAY.title);
     expect(sample?.days[0]?.scriptureReference).toBe(NEW_DAY.scriptureReference);
+  });
+
+  // The trial retired the sample in the first life, and the app-start pull
+  // restores it retired. The new first reading is a new series: live, dated
+  // by this onboarding, and kept on Today by the next pull.
+  it('brings the new first reading back live when the old sample was retired', () => {
+    const retired = { archivedAt: RETIRED_AT, archivedStateAt: RETIRED_AT };
+    applyPulledUserData(serverHoldsOldSample(retired));
+    expect(sampleInStore()?.archivedAt).toBe(RETIRED_AT);
+
+    persistOnboardingFirstReading({ id: SAMPLE_ID, day: NEW_DAY });
+
+    const sample = sampleInStore();
+    expect({
+      archivedAt: sample?.archivedAt ?? null,
+      resumedAfterRetirement: Date.parse(sample?.archivedStateAt ?? '') > Date.parse(RETIRED_AT),
+      createdAt: sample?.createdAt,
+      seriesStartDate: sample?.seriesStartDate,
+      queuedArchivedAt: queuedSample()?.archivedAt,
+      today: today(),
+    }).toEqual({
+      archivedAt: null,
+      resumedAfterRetirement: true,
+      createdAt: SECOND_RUN_AT,
+      seriesStartDate: SECOND_RUN_AT,
+      queuedArchivedAt: null,
+      today: SAMPLE_ID,
+    });
+
+    applyPulledUserData({ timestamp: SECOND_RUN_AT, changes: {} });
+    expect(today()).toBe(SAMPLE_ID);
+    applyPulledUserData(serverHoldsOldSample(retired));
+    expect(today()).toBe(SAMPLE_ID);
+    expect(sampleInStore()?.archivedAt ?? null).toBeNull();
+  });
+
+  // The server stamps the job's day with its own clock, and every write here
+  // uses this phone's. The reader finishes the reading before the clocks
+  // meet, and the celebration saves the same result again.
+  it('keeps the read state when the same result is saved again on a phone whose clock runs slow', () => {
+    jest.setSystemTime(new Date('2026-10-09T20:30:30.000Z'));
+
+    persistOnboardingFirstReading({ id: SAMPLE_ID, day: NEW_DAY });
+    persistOnboardingFirstReading({ id: SAMPLE_ID, day: NEW_DAY });
+    useUnfoldStore.getState().markDayAsRead(SAMPLE_ID, 1);
+    persistOnboardingFirstReading({
+      id: SAMPLE_ID,
+      day: NEW_DAY,
+      userContext: { name: 'QA', aboutMe: '', currentSituation: '', emotionalState: '' },
+    });
+
+    expect(sampleInStore()?.days[0]).toMatchObject({ bodyText: NEW_DAY.bodyText, isRead: true });
   });
 
   // The server never writes another day of the finished trial, so the
