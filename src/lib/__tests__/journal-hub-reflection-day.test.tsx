@@ -230,7 +230,7 @@ describe('journal hub: the day the reflections row and badge point at', () => {
 
     expect(findTouchable(tree, (node) => node.props.accessibilityLabel === "Continue today's reflection")).toBeTruthy();
     expect(findTouchable(tree, (node) => node.props.accessibilityLabel === "Start today's reflection")).toBeUndefined();
-    const dayMeta = tree.root.findAll((node: any) => node.type === Text && /^Day \d+\//.test(textOf(node)));
+    const dayMeta = tree.root.findAll((node: any) => node.type === Text && /^Day \d+ of \d+$/.test(textOf(node)));
     expect(dayMeta.length).toBe(1);
     act(() => tree.unmount());
   });
