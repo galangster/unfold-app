@@ -1357,7 +1357,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       message,
       undo: () => {
         if (highlightPageRef.current === page) {
-          highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed });
+          highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed, docId: event.docId });
         }
         setHighlightToast(null);
       },
