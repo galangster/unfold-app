@@ -17,7 +17,8 @@
  *  - Only accepted results and conflicts with object serverData clear a
  *    submitted entry when the current snapshot equals the sent snapshot.
  *    Rejected results, especially internal error, stay queued. A valid
- *    conflict is applied locally after the outbox settles.
+ *    conflict is applied locally after the outbox settles, except a live
+ *    row answering a series delete: that delete is queued again.
  */
 
 import { mmkvStorage, getDeviceId } from '@/lib/mmkv-storage';
@@ -214,6 +215,35 @@ function applyConflictResults(results: SyncPushResult[]): void {
   }
 }
 
+/**
+ * A server write (worker, cron) can stamp a series after it was deleted here
+ * and before the delete went out. The server then answers the delete with its
+ * live row, and applying that row would restore the series. Day rows the
+ * server keeps cannot restore anything: a day applies only under a series this
+ * phone still holds.
+ */
+function isLostSeriesDelete(pair: SyncAcknowledgementPair): boolean {
+  return pair.change.table === 'devotionals'
+    && pair.change.deleted
+    && isValidConflictResult(pair.result)
+    && !pair.result.serverData?.deletedAt;
+}
+
+/** The latest clock on the server row, in ms. */
+function serverRowClock(result: SyncPushResult): number {
+  const row = result.serverData ?? {};
+  return Math.max(...[row.clientUpdatedAt, row.updatedAt, result.serverUpdatedAt]
+    .map((value) => (typeof value === 'string' ? Date.parse(value) : Number.NaN))
+    .filter(Number.isFinite));
+}
+
+function rememberLostSeriesDelete(id: string, serverClock: number): void {
+  // deleted-series reads this queue, so a static import here would be a cycle.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const deleted = require('./deleted-series') as typeof import('./deleted-series');
+  deleted.rememberDeletedSeries(id, new Date(serverClock).toISOString());
+}
+
 // Single-flight guard — concurrent drains collapse into one POST
 type InFlightDrain = {
   session: number;
@@ -338,6 +368,15 @@ export function drainSyncOutbox(): Promise<void> {
           const pair = resolvingByKey.get(`${entry.table}:${entry.id}`);
           return !pair || !syncSnapshotsEqual(entry, pair.change);
         });
+        // A lost series delete is queued again, stamped past the server's
+        // clock, for the next drain. Its live row is never applied: the
+        // requeued delete keeps it out of conflictsToApply below.
+        for (const pair of resolving.filter(isLostSeriesDelete)) {
+          if (remaining.some((entry) => entry.table === pair.change.table && entry.id === pair.change.id)) continue;
+          const serverClock = serverRowClock(pair.result);
+          remaining.push({ ...pair.change, clientUpdatedAt: new Date(Math.max(serverClock, Date.now()) + 1).toISOString() });
+          rememberLostSeriesDelete(pair.change.id, serverClock);
+        }
         writeOutbox(remaining);
         const conflictsToApply = resolving
           .filter((pair) => isValidConflictResult(pair.result))
