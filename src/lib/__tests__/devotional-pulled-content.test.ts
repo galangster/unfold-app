@@ -1,5 +1,3 @@
-jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPull: jest.fn(async () => undefined) }));
-
 import {
   applyPulledDevotionalContent,
   applyPulledDevotionalContentToDevotionals,
@@ -9,6 +7,8 @@ import type { PulledDevotionalContent } from '@/lib/devotional-sync-pull';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import { replaceSyncOutbox } from '@/lib/sync-outbox';
 import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '@/lib/deleted-series';
+
+jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPull: jest.fn(async () => undefined) }));
 
 const dayTwo: DevotionalDay = {
   id: 'day-devotional-1-2',

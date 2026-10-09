@@ -174,6 +174,40 @@ describe('store archive and resume lifecycle', () => {
     expect(queued[0].data).toEqual({ archivedAt: CLOCK, archivedStateAt: CLOCK });
   });
 
+  // 2026-10-09 release audit sweep: the end of a replaced series only reached
+  // the outbox, so a second device kept showing the old series until the next
+  // launch, reconnect or Today focus.
+  it('sends the end of a replaced series at once', () => {
+    useUnfoldStore.setState({
+      devotionals: [series(CURRENT_ID), series('replacement', { createdAt: '2026-09-12T00:00:00.000Z' })],
+      currentDevotionalId: CURRENT_ID,
+    });
+
+    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID, 'replacement');
+
+    const queued = peekSyncOutbox().filter((change) => change.table === 'devotionals');
+    expect(queued).toHaveLength(1);
+    expect(drainSyncChange).toHaveBeenCalledTimes(1);
+    expect(drainSyncChange).toHaveBeenCalledWith(queued[0]);
+  });
+
+  // 2026-10-09 release audit sweep: a delete still waiting for the replaced
+  // series must stay a delete, so no archive change goes out for it.
+  it('sends nothing when a delete of the replaced series is still waiting', () => {
+    const current = series(CURRENT_ID);
+    useUnfoldStore.setState({ devotionals: [current], currentDevotionalId: CURRENT_ID });
+    useUnfoldStore.getState().removeDevotional(CURRENT_ID);
+    const pendingDelete = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === CURRENT_ID);
+    expect(pendingDelete).toMatchObject({ deleted: true });
+    useUnfoldStore.getState().addDevotional(current);
+
+    useUnfoldStore.getState().archiveReplacedDevotional(CURRENT_ID);
+
+    expect(peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === CURRENT_ID))
+      .toEqual(pendingDelete);
+    expect(drainSyncChange).not.toHaveBeenCalled();
+  });
+
   it('makes the replacement current when it is the series the server writes', () => {
     useUnfoldStore.setState({
       devotionals: [series(CURRENT_ID), series('replacement', { createdAt: '2026-09-12T00:00:00.000Z' })],

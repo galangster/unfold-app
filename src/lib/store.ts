@@ -1502,7 +1502,8 @@ export const useUnfoldStore = create<UnfoldState>()(
         const current = devotionals.find((d) => d.id === currentId);
         recordReplacedSeries(currentId, current?.archivedStateAt ?? '');
       },
-      archiveReplacedDevotional: (id, replacementId, endedAt) =>
+      archiveReplacedDevotional: (id, replacementId, endedAt) => {
+        let ended = null as SyncPushChange | null;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           if (!existing || isDevotionalArchived(existing)) return state;
@@ -1510,7 +1511,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           // progress than another device saved, and a full row with a fresh
           // content clock would win over it.
           const archived = applyArchiveLifecycle(existing, endedAt ?? new Date().toISOString());
-          enqueueDevotionalLifecycle(archived);
+          ended = enqueueDevotionalLifecycle(archived);
           const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
           // The replacement becomes current only as the strict active winner,
           // the series the server writes. Beside a newer live series (one
@@ -1526,7 +1527,12 @@ export const useUnfoldStore = create<UnfoldState>()(
               ? { currentDevotionalId: nextCurrentId, scripturePracticeReturn: null }
               : {}),
           };
-        }),
+        });
+        // A change left for the next launch, reconnect or Today focus lets a
+        // second device keep showing the replaced series until then, so send
+        // it now. The outbox keeps it on failure.
+        if (ended) void drainSyncChange(ended);
+      },
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber, readAt) =>

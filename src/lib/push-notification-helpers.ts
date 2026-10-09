@@ -310,8 +310,14 @@ export function buildNotificationNavigationRoute(
   data: Record<string, unknown> | null | undefined,
   autoTrialIntent?: AutoTrialIntentV1 | null,
 ): NotificationNavigationRoute | null {
+  // Once the series has landed, a push for a later day is that day's reveal.
+  // /generating would show the "Begin Day 1" screen instead.
+  const laterDayOfLandedSeries = autoTrialIntent?.status === 'landed'
+    && data?.type === 'devotional_ready'
+    && Number(data.dayNumber) > 1;
   if (
     autoTrialIntent
+    && !laterDayOfLandedSeries
     && isLiveAutoTrialStatus(autoTrialIntent.status)
     && (data?.type === 'devotional_ready' || data?.type === 'generation_failed')
   ) {
