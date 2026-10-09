@@ -167,13 +167,19 @@ function mergeStringList(
  * the merged text. When the base cannot be found, the draft follows the
  * merged text, so nothing is dropped.
  */
-/** Whether `text` holds `part` as whole words: no letter or digit runs on at either edge. */
+/**
+ * Whether `text` holds `part` as whole words: at an end of `part` that is a
+ * letter or digit, no letter or digit runs on outside it. An end that is a
+ * space or a mark already separates the words.
+ */
 function holdsWholeWords(text: string, part: string): boolean {
   const wordCharacter = /[\p{L}\p{N}]/u;
+  const startsInWord = wordCharacter.test(part[0] ?? '');
+  const endsInWord = wordCharacter.test(part[part.length - 1] ?? '');
   for (let at = text.indexOf(part); at >= 0; at = text.indexOf(part, at + 1)) {
-    const before = text[at - 1] ?? '';
-    const after = text[at + part.length] ?? '';
-    if (!wordCharacter.test(before) && !wordCharacter.test(after)) return true;
+    const runsOnBefore = startsInWord && wordCharacter.test(text[at - 1] ?? '');
+    const runsOnAfter = endsInWord && wordCharacter.test(text[at + part.length] ?? '');
+    if (!runsOnBefore && !runsOnAfter) return true;
   }
   return false;
 }

@@ -461,6 +461,10 @@ describe('rebaseJournalDraft', () => {
     expect(rebaseJournalDraft('I am anxious.', 'I feel peaceful today.', 'peace')).toBe('I feel peaceful today.\n\npeace');
   });
 
+  it('takes the merged text when it holds a draft that ends on a space', () => {
+    expect(rebaseJournalDraft('My', 'My prayer continued', 'My prayer ')).toBe('My prayer continued');
+  });
+
   it('keeps a first draft that only appears inside another word of the merge', () => {
     expect(rebaseJournalDraft('', 'banana', 'a')).toBe('banana\n\na');
   });
