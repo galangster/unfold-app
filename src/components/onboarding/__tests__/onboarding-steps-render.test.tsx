@@ -354,6 +354,7 @@ describe('mirror-back actions', () => {
 // "the companion should be named what the user named it in the beginning".
 describe('companion name', () => {
   type CarouselProps = {
+    companionName: string;
     onCompanionNameChange: (name: string) => void;
     onComplete: () => void;
   };
@@ -406,6 +407,30 @@ describe('companion name', () => {
 
   it('saves the typed name with the profile when onboarding completes', async () => {
     mockStoreState.companionName = 'Selah';
+
+    const profile = await completeFromReminderTime();
+
+    expect(profile.companionName).toBe('Selah');
+    expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith('Selah');
+  });
+
+  it('keeps a typed name through a relaunch, which never returns to the feature summary', async () => {
+    const screen = await openAt('featureSummary');
+    await act(async () => {
+      carouselProps().onCompanionNameChange('Selah');
+    });
+    // Let the draft autosave land, then close the app before the carousel ends.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 400);
+      });
+    });
+    await act(async () => {
+      screen.unmount();
+      client.clear();
+    });
+    tree = null;
+    expect(mockStoreState.setCompanionName).not.toHaveBeenCalled();
 
     const profile = await completeFromReminderTime();
 

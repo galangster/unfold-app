@@ -670,10 +670,14 @@ export default function OnboardingScreen() {
   }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
-  // The name the reader gives the companion on the feature summary. A saved
-  // name prefills it. Empty means no name: nothing falls back to a default here.
+  // The name the reader gives the companion on the feature summary. The draft
+  // keeps what they typed across a relaunch, because a resume never returns to
+  // the feature summary. Otherwise a saved name prefills it. Empty means no
+  // name: nothing falls back to a default here.
   const [companionNameInput, setCompanionNameInput] = useState(() =>
-    resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+    restoredDraft?.companionName
+      ?? resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)
+      ?? '',
   );
   const [companionPersonality, setCompanionPersonality] = useState(() =>
     resolveCompanionPersonality(restoredDraft?.companionPersonality ?? existingUser?.companionPersonality),
@@ -1066,6 +1070,7 @@ export default function OnboardingScreen() {
       stepId: currentStepId,
       data: dataRef.current,
       companionPersonality: companionPersonalityRef.current,
+      companionName: companionNameInputRef.current,
       purchasedDuringOnboarding,
       sampleDevotionalId: onboardingDevotionalId || null,
     });
@@ -1101,7 +1106,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     draftAutosave.schedule();
-  }, [data, companionPersonality, currentStepId, draftAutosave]);
+  }, [data, companionPersonality, companionNameInput, currentStepId, draftAutosave]);
 
   // Land the pending write before iOS suspends the app — the debounce window is
   // exactly the gap that used to lose the last answer on a force-quit.
@@ -1627,6 +1632,7 @@ export default function OnboardingScreen() {
           stepId: 'purchaseConfirmation',
           data: dataRef.current,
           companionPersonality: companionPersonalityRef.current,
+          companionName: companionNameInputRef.current,
           purchasedDuringOnboarding: true,
           sampleDevotionalId: onboardingDevotionalId || null,
         });
