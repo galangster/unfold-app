@@ -70,6 +70,7 @@ import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
   resolveAcceptedGenerationExitCopy,
+  resolveNotifyPromisePlacement,
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
@@ -141,6 +142,18 @@ function autoReadySeriesDays(state: SeriesRevealState): number | undefined {
     ? useUnfoldStore.getState().devotionals.find((row) => row.id === landedId)
     : undefined;
   return getServerOwnedSeriesTotalDays(landed) || readAutoTrialIntent()?.trialDays;
+}
+
+/**
+ * When an auto-trial wait softens to the long-running copy. The trial hook
+ * owns its polling, so the clock starts when the server accepted the job.
+ */
+function autoTrialLongRunningAtMs(): number | null {
+  const intent = readAutoTrialIntent();
+  const submittedAtMs = Date.parse(intent?.submittedAt ?? '');
+  return intent && Number.isFinite(submittedAtMs)
+    ? submittedAtMs + resolveLongRunningAfterMs(intent.trialDays)
+    : null;
 }
 
 function resolveEntryNow(params: {
@@ -297,6 +310,14 @@ export default function GeneratingScreen() {
   // Try again stays hidden until a rate limit's retry time. Nothing else
   // renders the error screen then, so the screen renders itself.
   useRerenderAt(autoTrialHandoffId ? seriesRevealRetryOpensAtMs(autoState) : null);
+  const autoLongRunningAt = useMemo(
+    () => (autoTrialHandoffId && autoState.kind === 'generating' ? autoTrialLongRunningAtMs() : null),
+    [autoTrialHandoffId, autoState],
+  );
+  useRerenderAt(autoLongRunningAt);
+  const showLongRunning = autoTrialHandoffId
+    ? autoLongRunningAt != null && Date.now() >= autoLongRunningAt
+    : isLongRunning;
   const canRetry = autoTrialHandoffId
     ? canRetrySeriesReveal(autoState, Date.now())
     : canRetryJob;
@@ -525,6 +546,8 @@ export default function GeneratingScreen() {
     isComplete,
     outcome: notifyOutcome,
   });
+  const waitSeriesDays = autoReadyDays ?? devotionalLength;
+  const notifyPromise = resolveNotifyPromisePlacement(notifyControl, waitSeriesDays);
 
   const handleDismissNotificationPrompt = () => {
     if (notificationPromptTimerRef.current) {
@@ -1336,7 +1359,7 @@ export default function GeneratingScreen() {
               >
                 {'Reconnecting\u2026'}
               </Animated.Text>
-            ) : isLongRunning ? (
+            ) : showLongRunning ? (
               <Animated.Text
                 key="long-running"
                 entering={entering(FadeIn.duration(600))}
@@ -1370,7 +1393,7 @@ export default function GeneratingScreen() {
           {/* Fixed wait estimate. It sits outside the keyed message above, so
               a message change never remounts it and VoiceOver reads it once. */}
           <Text style={[genStyles.exitNote, genStyles.waitLine, { color: colors.textMuted }]}>
-            {resolveGeneratingWaitCopy(autoReadyDays ?? devotionalLength, notifyControl)}
+            {resolveGeneratingWaitCopy(waitSeriesDays, notifyPromise)}
           </Text>
 
           {/* Series title reveal -- shows when server returns title from arc.
@@ -1407,7 +1430,7 @@ export default function GeneratingScreen() {
                 onPress={handleLeaveForHome}
                 accessibilityRole="button"
                 accessibilityLabel={resolveGeneratingGoHomeLabel(pendingJobId != null)}
-                accessibilityHint={pendingJobId ? resolveAcceptedGenerationExitCopy(notifyControl) : undefined}
+                accessibilityHint={pendingJobId ? resolveAcceptedGenerationExitCopy(notifyPromise) : undefined}
                 style={pendingJobId
                   ? [genStyles.continueButton, { backgroundColor: colors.buttonBackground }]
                   : genStyles.secondaryAction}
@@ -1421,7 +1444,7 @@ export default function GeneratingScreen() {
               </TouchableOpacity>
               <Text style={[genStyles.exitNote, { color: colors.textMuted }]}>
                 {pendingJobId
-                  ? resolveAcceptedGenerationExitCopy(notifyControl)
+                  ? resolveAcceptedGenerationExitCopy(notifyPromise)
                   : resolveGeneratingCloseCopy(false)}
               </Text>
 
@@ -1502,8 +1525,8 @@ export default function GeneratingScreen() {
                 />
               )}
 
-              {/* A confirmed accepted job already includes the notification promise above. */}
-              {notifyControl === 'confirmed' && !pendingJobId && (
+              {/* An accepted job says the promise in its exit copy, a long series on the wait line. */}
+              {notifyPromise === 'exit' && !pendingJobId && (
                 <NotifyNote
                   entering={entering(FadeIn.duration(Duration.normal))}
                   colors={colors}

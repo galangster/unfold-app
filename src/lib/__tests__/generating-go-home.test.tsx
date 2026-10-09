@@ -1345,6 +1345,57 @@ describe('honest wait line on /generating', () => {
     expect(textNodes(tree, THREE_MINUTES)).toHaveLength(1);
     expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
   });
+
+  describe('one notification promise at a time', () => {
+    const joined = (children: unknown): string => {
+      if (typeof children === 'string' || typeof children === 'number') return String(children);
+      if (Array.isArray(children)) return children.map(joined).join('');
+      return '';
+    };
+
+    function notificationPromises(tree: Tree): string[] {
+      return tree.root.findAllByType(Text)
+        .map((node) => joined(node.props.children))
+        .filter((text) => /We\u2019ll (notify you|let you know)/.test(text));
+    }
+
+    async function renderAccepted(devotionalLength: number): Promise<Tree> {
+      useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+      mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-wait', devotionalId: 'devo-1' });
+      mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+      const tree = await renderScreen();
+      mounted.push(tree);
+      findPressable(tree, GO_HOME_LABEL);
+      return tree;
+    }
+
+    beforeEach(() => {
+      mockAreNotificationsEnabled.mockResolvedValue(true);
+      mockRegisterPushToken.mockResolvedValue('registered');
+    });
+
+    it('a 30-day series says it once on the wait line before the job is accepted', async () => {
+      const tree = await renderWaiting(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+    });
+
+    it('a 30-day series says it once on the wait line after the job is accepted', async () => {
+      const tree = await renderAccepted(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+      expect(textNodes(tree, 'We\u2019ll keep writing your first devotional.')).toHaveLength(1);
+    });
+
+    it('a 7-day series keeps its one promise beside the exit', async () => {
+      const tree = await renderAccepted(7);
+
+      expect(notificationPromises(tree)).toEqual([
+        'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.',
+      ]);
+      expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+    });
+  });
 });
 
 describe('long-running copy on /generating follows the series length', () => {
@@ -1382,6 +1433,39 @@ describe('long-running copy on /generating follows the series length', () => {
     const tree = await renderPolling(30);
 
     await advancePolling(6.5 * 60_000);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
+  });
+
+  it('softens a 3-day trial wait four minutes after the trial job is accepted', async () => {
+    const nowMs = Date.now();
+    const created = createAutoTrialIntent({
+      deviceId: 'test-device-id',
+      entry: 'onboarding',
+      surface: 'onboarding_paywall',
+      source: 'purchase',
+      simulated: false,
+      trialDays: 3,
+      purchasedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 3 * 24 * 60 * 60_000).toISOString(),
+      timeZone: 'America/Chicago',
+      isSandbox: false,
+      productIdentifier: 'unfold_premium_yearly',
+      switchFetchedAt: new Date(nowMs).toISOString(),
+      nowMs,
+    });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({ user: { ...user, hasCompletedOnboarding: true, devotionalLength: 30 } as UserProfile });
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-trial', devotionalId: 'devo-trial' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    await advancePolling(3.5 * 60_000);
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+    expect(JSON.stringify(tree.toJSON())).toContain('This usually takes about two minutes.');
     expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
 
     await advancePolling(60_000);
