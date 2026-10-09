@@ -16,7 +16,7 @@ jest.mock('../mmkv-storage', () => {
   };
 });
 
-import { buildDevotionalReadSyncChanges, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
+import { buildDevotionalReadSyncChanges, requeueHeldDayRead, syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 const { drainSyncOutbox, enqueueSyncChanges, peekSyncOutbox, resetDrainStateForTesting, OUTBOX_KEY } = jest.requireActual('@/lib/sync-outbox') as typeof import('@/lib/sync-outbox');
 const {
   beginLocalResetSession,
@@ -171,6 +171,31 @@ describe('buildDevotionalReadSyncChanges', () => {
     });
   });
 
+});
+
+// 2026-10-09: an app kill cut off a day's read mid-push, so the phone held
+// the read, the outbox did not, and the server never generated the next day.
+describe('requeueHeldDayRead', () => {
+  beforeEach(() => {
+    mmkvStorage.removeItem(OUTBOX_KEY);
+  });
+
+  it('queues the day row of a read this phone holds, with its own read time', () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const held = { ...devotional, days: [{ ...day, isRead: true, readAt }] } as Devotional;
+
+    const change = requeueHeldDayRead(held, day.dayNumber);
+
+    expect(change).toMatchObject({ table: 'devotional_days', clientUpdatedAt: readAt, deleted: false });
+    expect(change?.data).toMatchObject({ isRead: true, readAt });
+    expect(peekSyncOutbox()).toEqual([change]);
+  });
+
+  it('queues nothing for a day this phone has not read', () => {
+    expect(requeueHeldDayRead(devotional, day.dayNumber)).toBeUndefined();
+    expect(requeueHeldDayRead(undefined, day.dayNumber)).toBeUndefined();
+    expect(peekSyncOutbox()).toEqual([]);
+  });
 });
 
 describe('syncDevotionalDayRead', () => {

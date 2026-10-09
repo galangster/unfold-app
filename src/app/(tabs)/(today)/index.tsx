@@ -554,7 +554,8 @@ export default function HomeScreen() {
   // the preparing card and watch the job from here. Without it the record is
   // app-kill recovery — and the server, never the record's age, decides
   // where the reader goes: /generating is re-entered only while it reports
-  // the job alive or complete; a failed job settles here, as the watch would,
+  // the job alive or complete; a complete job whose day 1 the phone already
+  // holds lands here; a failed job settles here, as the watch would,
   // so the failed card shows instead of a bounce into /generating's error
   // state; an unreachable server keeps the record, shows the pending card
   // and asks again on the next focus or foreground. A
@@ -674,26 +675,36 @@ export default function HomeScreen() {
         if (resume !== 'keep') return null;
         return prev?.jobId === jobId ? prev : decision.job;
       });
-      if (resume === 'resume') {
+      if (resume === 'keep') return;
+      // One poll with no history classifies the server's answer the way the
+      // watch would.
+      const step = classifyInitialArcPoll(poll, {
+        consecutiveUnknown: 0,
+        consecutiveNetworkErrors: 0,
+        elapsedMs: 0,
+        fallbackDevotionalId: devotionalId,
+      });
+      // A ready push after the kill opens the reveal, which pulls the series
+      // and its first day but leaves this record. The reader back from day 1
+      // would see /generating's "Begin Day 1" again, so that finished job
+      // lands here instead.
+      const finishedId = step.kind === 'settled' && step.outcome.kind === 'complete'
+        ? step.outcome.result.devotionalId
+        : null;
+      const day1Landed = finishedId !== null && useUnfoldStore.getState().devotionals.some(
+        (row) => row.id === finishedId && row.days.some((day) => day.dayNumber === 1),
+      );
+      if (resume === 'resume' && !day1Landed) {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
         router.replace(resumeGeneratingRoute(jobId, readAutoTrialIntent()));
         return;
       }
-      if (resume === 'discard') {
-        // The server's verdict (its failed status, or "no such job") is the
-        // failed outcome the watch would settle on; one poll with no history
-        // classifies it the same way. 'discard' is always settled — the
-        // check narrows the type.
-        const step = classifyInitialArcPoll(poll, {
-          consecutiveUnknown: 0,
-          consecutiveNetworkErrors: 0,
-          elapsedMs: 0,
-          fallbackDevotionalId: devotionalId,
-        });
-        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
-      }
+      // The landed job, or the server's verdict (its failed status, or "no
+      // such job"), settles as the watch would. Both are always settled —
+      // the check narrows the type.
+      if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
     })();
     return () => {
       cancelled = true;

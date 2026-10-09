@@ -85,6 +85,7 @@ function setup(overrides: Partial<DailyGenerationRecoveryDependencies> = {}) {
     retryJob: jest.fn(async () => ({ jobId: 'job-1', status: 'pending' })),
     peekSyncOutbox: jest.fn(() => []),
     drainSyncChange: jest.fn(async () => undefined),
+    requeueLocalRead: jest.fn(() => undefined),
     sleep: jest.fn(() => pendingSleep.promise),
     now: () => NOW,
     isSessionCurrent: () => true,
@@ -172,6 +173,7 @@ describe('daily generation recovery', () => {
       isSessionCurrent: () => true,
       peekSyncOutbox: jest.fn(() => []),
       drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -202,6 +204,7 @@ describe('daily generation recovery', () => {
       isSessionCurrent: () => true,
       peekSyncOutbox: jest.fn(() => []),
       drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const states: DailyGenerationRecoveryState[] = [];
     const controller = createDailyGenerationRecovery({
@@ -235,6 +238,7 @@ describe('daily generation recovery', () => {
       isSessionCurrent: () => true,
       peekSyncOutbox: jest.fn(() => []),
       drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -351,6 +355,7 @@ describe('daily generation recovery', () => {
       isSessionCurrent: () => true,
       peekSyncOutbox: jest.fn(() => []),
       drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const controller = createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -491,6 +496,7 @@ describe('daily generation recovery', () => {
       isSessionCurrent: () => true,
       peekSyncOutbox: jest.fn(() => []),
       drainSyncChange: jest.fn(async () => undefined),
+      requeueLocalRead: jest.fn(() => undefined),
     };
     const makeController = (session: number) => createDailyGenerationRecovery({
       devotionalId: 'devo-1',
@@ -801,6 +807,45 @@ describe('daily generation recovery when the server is waiting on the last read'
     expect(states).toContainEqual({ status: 'blocked', reason: 'read-sync-pending' });
     expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
     controller.cancel();
+  });
+
+  // 2026-10-09: a reader on 1.1.18 lost a day's read to an app kill mid-push.
+  // The phone held it, the outbox did not, and every check stopped on the read.
+  it('queues again a read this phone holds but never sent, saves it, and starts the day', async () => {
+    const held = queuedRead(1);
+    const submitGenerationJob = jest.fn()
+      .mockRejectedValueOnce(dayNotReady('ahead_of_reading'))
+      .mockResolvedValue({ jobId: 'job-new', status: 'pending', devotionalId: 'devo-1' });
+    const requeueLocalRead = jest.fn(() => held);
+    const drainSyncChange = jest.fn(async () => ({
+      table: 'devotional_days' as const,
+      id: held.id,
+      serverUpdatedAt: '2026-09-08T12:00:01.000Z',
+      status: 'accepted' as const,
+    }));
+    const { controller, states } = setup({ requeueLocalRead, drainSyncChange, submitGenerationJob });
+
+    await controller.start();
+
+    expect(requeueLocalRead).toHaveBeenCalledTimes(1);
+    expect(requeueLocalRead).toHaveBeenCalledWith('devo-1', 1);
+    expect(drainSyncChange).toHaveBeenCalledWith(held, 7, { deadlineAt: NOW + 5_000 });
+    expect(submitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toMatchObject({ status: 'running', jobId: 'job-new' });
+    controller.cancel();
+  });
+
+  it('stays blocked once when this phone holds no read of the day before', async () => {
+    const submitGenerationJob = jest.fn(async () => { throw dayNotReady('ahead_of_reading'); });
+    const requeueLocalRead = jest.fn(() => undefined);
+    const { controller, dependencies, states } = setup({ requeueLocalRead, submitGenerationJob });
+
+    await controller.start();
+
+    expect(requeueLocalRead).toHaveBeenCalledTimes(1);
+    expect(dependencies.drainSyncChange).not.toHaveBeenCalled();
+    expect(submitGenerationJob).toHaveBeenCalledTimes(1);
+    expect(states.at(-1)).toEqual({ status: 'blocked', reason: 'read-sync-pending' });
   });
 
   it.each([
