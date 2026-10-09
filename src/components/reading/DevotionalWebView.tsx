@@ -2499,8 +2499,10 @@ export function DevotionalWebView({
     const html = `
 <!DOCTYPE html>
 <html data-doc-id="${docId}" style="${escapeHtml(themeVars.declarations)}">${documentMarkup}`;
-    // The day's text this document was built from: `day` feeds documentMarkup.
-    return { docId, dayText: JSON.stringify(day), bakedThemeJson: themeVars.json, source: { html } };
+    // The page's content: every font value sits in <head>, so the markup from
+    // </head> on changes only with what the reader sees.
+    const content = documentMarkup.slice(documentMarkup.indexOf('</head>'));
+    return { docId, content, bakedThemeJson: themeVars.json, source: { html } };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: themeVars excluded on purpose, webViewTargetKey included on purpose
   }, [documentMarkup, webViewTargetKey]);
 
@@ -2514,18 +2516,27 @@ export function DevotionalWebView({
   // The document on screen now, for commands that must not reach a newer one.
   const liveDocIdRef = useRef(webViewDocument.docId);
   liveDocIdRef.current = webViewDocument.docId;
-  // The day's text of each recent document. A reading-font change rebuilds the
-  // page under a new docId over the same text, so an Undo from the old page
-  // still applies. New text for the day blocks it. An Undo lasts five seconds,
-  // so a few documents back is enough.
-  const docDayTextRef = useRef(new Map<string, string>());
-  if (!docDayTextRef.current.has(webViewDocument.docId)) {
-    docDayTextRef.current.set(webViewDocument.docId, webViewDocument.dayText);
-    for (const oldest of docDayTextRef.current.keys()) {
-      if (docDayTextRef.current.size <= 8) break;
-      docDayTextRef.current.delete(oldest);
-    }
+  const liveDocTokenRef = useRef(liveDocToken);
+  liveDocTokenRef.current = liveDocToken;
+  // Which content each document of this mount showed. A reading-font change
+  // rebuilds the page under a new docId over the same content, so an Undo
+  // from the old page still applies; new content for the day blocks it. Each
+  // distinct content is kept once, so every document of the mount stays known.
+  const contentNumbersRef = useRef(new Map<string, number>());
+  const docContentRef = useRef(new Map<string, number>());
+  if (!docContentRef.current.has(webViewDocument.docId)) {
+    const contents = contentNumbersRef.current;
+    if (!contents.has(webViewDocument.content)) contents.set(webViewDocument.content, contents.size);
+    docContentRef.current.set(webViewDocument.docId, contents.get(webViewDocument.content)!);
   }
+  const showsSameContent = useCallback((docId: string) => {
+    const docContent = docContentRef.current;
+    return docId === liveDocIdRef.current
+      || (docContent.has(docId) && docContent.get(docId) === docContent.get(liveDocIdRef.current));
+  }, []);
+  // An Undo tapped while no page is ready (a font still loading unmounts it)
+  // waits here for the next page's first report.
+  const pendingInverseRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> | null>(null);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2641,10 +2652,15 @@ export function DevotionalWebView({
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        const dayText = docDayTextRef.current;
-        const sameText = change.docId === liveDocIdRef.current
-          || (dayText.has(change.docId) && dayText.get(change.docId) === dayText.get(liveDocIdRef.current));
-        if (!sameText) return;
+        if (!showsSameContent(change.docId)) return;
+        // A change from the page on screen proves that page runs its scripts.
+        const pageReady = Boolean(webViewRef.current) && (
+          change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
+        );
+        if (!pageReady) {
+          pendingInverseRef.current = change;
+          return;
+        }
         callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
       },
       scrollToHighlight: (highlight) => {
@@ -2667,7 +2683,7 @@ export function DevotionalWebView({
     return () => {
       commandRef.current = null;
     };
-  }, [callPage, commandRef]);
+  }, [callPage, commandRef, showsSameContent]);
 
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
@@ -2805,6 +2821,11 @@ export function DevotionalWebView({
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
           pushScreenReader(screenReaderOn);
+          const pendingInverse = pendingInverseRef.current;
+          pendingInverseRef.current = null;
+          if (pendingInverse && showsSameContent(pendingInverse.docId)) {
+            callPage('__unfoldApplyInverse', { added: pendingInverse.added, removed: pendingInverse.removed });
+          }
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));
           }
