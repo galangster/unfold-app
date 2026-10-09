@@ -2535,9 +2535,10 @@ export function DevotionalWebView({
     return docId === liveDocIdRef.current
       || (docContent.has(docId) && docContent.get(docId) === docContent.get(liveDocIdRef.current));
   }, []);
-  // An Undo tapped while no page is ready (a font still loading unmounts it)
-  // waits here for the next page's first report.
-  const pendingInverseRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'> | null>(null);
+  // Highlight changes for the live page, in order, while no page is ready (a
+  // font still loading unmounts it): an Undo, or a change an older page with
+  // the same content posted. Each waits for the next page's first report.
+  const pendingPageChangesRef = useRef<Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>[]>([]);
   const liveDocRef = useRef<{
     token: string;
     appliedJson: string;
@@ -2649,20 +2650,26 @@ export function DevotionalWebView({
     callPage('__unfoldSelectionConfirm', requestId, message);
   }, [callPage]);
 
+  // Undoes `change` on the live page when that page shows the same content.
+  // The page then posts the result as a silent change, which the reader saves.
+  const sendInverseToLivePage = useCallback((change: Pick<HighlightsChangedEvent, 'added' | 'removed' | 'docId'>) => {
+    if (!showsSameContent(change.docId)) return;
+    // A change from the page on screen proves that page runs its scripts.
+    const pageReady = Boolean(webViewRef.current) && (
+      change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
+    );
+    if (!pageReady) {
+      pendingPageChangesRef.current.push(change);
+      return;
+    }
+    callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+  }, [callPage, showsSameContent]);
+
   useEffect(() => {
     if (!commandRef) return;
     commandRef.current = {
       applyInverse: (change) => {
-        if (!showsSameContent(change.docId)) return;
-        // A change from the page on screen proves that page runs its scripts.
-        const pageReady = Boolean(webViewRef.current) && (
-          change.docId === liveDocIdRef.current || liveDocRef.current?.token === liveDocTokenRef.current
-        );
-        if (!pageReady) {
-          pendingInverseRef.current = change;
-          return;
-        }
-        callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+        sendInverseToLivePage(change);
       },
       scrollToHighlight: (highlight) => {
         callPage('__unfoldLocateHighlight', {
@@ -2684,7 +2691,7 @@ export function DevotionalWebView({
     return () => {
       commandRef.current = null;
     };
-  }, [callPage, commandRef, showsSameContent]);
+  }, [callPage, commandRef, sendInverseToLivePage]);
 
   const seriesTitleFor = (devotionals: readonly { id: string; title: string }[]) =>
     devotionalTitle || devotionals.find((d) => d.id === devotionalId)?.title || '';
@@ -2771,9 +2778,20 @@ export function DevotionalWebView({
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'HIGHLIGHTS_CHANGED' && onHighlightsChanged) {
         // A change still in flight from the previous document (same-key
-        // source swap) belongs to a page no longer open. Saving it, or
-        // offering its Undo, would land on this one.
-        if (data.docId !== webViewDocument.docId) return;
+        // source swap) belongs to a page no longer open. With new content its
+        // ranges no longer fit, so it is dropped. Over the same content (a
+        // font switch) the reader's change still counts: it is replayed onto
+        // the live page, which posts it back to be saved.
+        if (data.docId !== webViewDocument.docId) {
+          if (typeof data.docId === 'string') {
+            sendInverseToLivePage({
+              added: Array.isArray(data.removed) ? data.removed : [],
+              removed: Array.isArray(data.added) ? data.added : [],
+              docId: data.docId,
+            });
+          }
+          return;
+        }
         onHighlightsChanged({
           reason: data.reason,
           removed: Array.isArray(data.removed) ? data.removed : [],
@@ -2822,10 +2840,12 @@ export function DevotionalWebView({
           pushThemeVars(themeVars);
           pushBookmarkTokens(savedBoxBookmarkTokens);
           pushScreenReader(screenReaderOn);
-          const pendingInverse = pendingInverseRef.current;
-          pendingInverseRef.current = null;
-          if (pendingInverse && showsSameContent(pendingInverse.docId)) {
-            callPage('__unfoldApplyInverse', { added: pendingInverse.added, removed: pendingInverse.removed });
+          const pendingChanges = pendingPageChangesRef.current;
+          pendingPageChangesRef.current = [];
+          for (const change of pendingChanges) {
+            if (showsSameContent(change.docId)) {
+              callPage('__unfoldApplyInverse', { added: change.added, removed: change.removed });
+            }
           }
           if (layoutGeneration > 0) {
             webViewRef.current?.injectJavaScript(buildLayoutGenerationScript(layoutGeneration));

@@ -839,15 +839,53 @@ describe('DevotionalWebView Aa / theme updates without remounting', () => {
     const change = (docId: string) => ({
       nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId, reason: 'remove', added: [], removed: added, primarySerial: '', silent: false }) },
     });
+    reportHeight(tree);
+    mockInjectJavaScript.mockClear();
     act(() => {
       getWebViewProps(tree).onMessage(change(oldDocId));
     });
     expect(onHighlightsChanged).not.toHaveBeenCalled();
+    // Its ranges belong to the old words, so nothing is replayed either.
+    expect(mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('))).toHaveLength(0);
 
     act(() => {
       getWebViewProps(tree).onMessage(change(getDocId(tree)));
     });
     expect(onHighlightsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  // 2026-10-09 release audit round 3: a font switch rebuilds the page over the
+  // same words before the reader's last change reaches React.
+  it('replays a highlight change still in flight from a page a font switch replaced', () => {
+    const onHighlightsChanged = jest.fn();
+    const savedFont = mockDevotionalWebFont;
+    let tree: any;
+    act(() => {
+      tree = renderer.create(<DevotionalWebView day={day} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
+    });
+    reportHeight(tree);
+    const oldDocId = getDocId(tree);
+    mockDevotionalWebFont = { family: 'Lora', css: '' };
+    try {
+      act(() => {
+        tree.update(<DevotionalWebView day={{ ...day }} fontSize="medium" onHighlightsChanged={onHighlightsChanged} />);
+      });
+      reportHeight(tree);
+      expect(getDocId(tree)).not.toBe(oldDocId);
+      const added = [{ serial: '10$20$1$rangy-highlight-yellow$', text: 'grace upon', color: 'yellow', context: 'x' }];
+      mockInjectJavaScript.mockClear();
+      act(() => {
+        getWebViewProps(tree).onMessage({ nativeEvent: { data: JSON.stringify({ type: 'HIGHLIGHTS_CHANGED', docId: oldDocId, reason: 'create', added, removed: [], primarySerial: added[0].serial, silent: false }) } });
+      });
+
+      // Not saved under the old page: the live page applies it and posts it back.
+      expect(onHighlightsChanged).not.toHaveBeenCalled();
+      const replays = mockInjectJavaScript.mock.calls.filter(([script]) => String(script).includes('__unfoldApplyInverse('));
+      expect(replays).toHaveLength(1);
+      expect(String(replays[0][0])).toContain(JSON.stringify({ added: [], removed: added }));
+    } finally {
+      mockDevotionalWebFont = savedFont;
+    }
   });
 
   // 2026-10-09 release audit: an Undo still on screen replays by character
