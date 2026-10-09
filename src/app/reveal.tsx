@@ -289,15 +289,19 @@ export default function RevealScreen() {
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
     const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
     // A pull can show a newer series this device does not hold yet, or a
-    // newer resume of one it holds (applied later, by the full sync). Every
-    // pulled row counts beside the local ones, so only the series the server
-    // would pick becomes current: either copy of a sibling can block it. The
-    // check reads the target's first row, so the merged target goes first.
-    const target = revealTargetCandidate(
-      latestDevotionals.find((row) => row.id === revealTarget.devotionalId),
-      pulledSeriesRef.current.find((row) => row.id === revealTarget.devotionalId),
-    );
-    const candidates = [...(target ? [target] : []), ...latestDevotionals, ...pulledSeriesRef.current];
+    // newer lifecycle of one it holds (applied later, by the full sync). Each
+    // series counts once, its local and pulled copies merged by the newer
+    // lifecycle, so only the series the server would pick becomes current:
+    // a sibling resumed elsewhere blocks it, and one archived elsewhere but
+    // still live here does not.
+    const pulledRows = pulledSeriesRef.current;
+    const seriesIds = [...new Set([...latestDevotionals, ...pulledRows].map((row) => row.id))];
+    const candidates = seriesIds
+      .map((id) => revealTargetCandidate(
+        latestDevotionals.find((row) => row.id === id),
+        pulledRows.find((row) => row.id === id),
+      ))
+      .filter((row): row is ActiveSeriesCandidate => row !== undefined);
     const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);

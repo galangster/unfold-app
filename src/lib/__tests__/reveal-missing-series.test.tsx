@@ -324,6 +324,34 @@ describe('reveal for a series this device does not hold yet', () => {
     expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
   });
 
+  // 2026-10-09 release audit: a newer series this device holds was archived
+  // on another device. Only the pull carries that clock, and this pull does
+  // not end the current series, so the local copy stays live.
+  it('opens the pushed series when a newer series held here was archived elsewhere', async () => {
+    const endedElsewhere = {
+      ...localSeries,
+      id: 'ended-elsewhere',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      seriesStartDate: '2026-10-09T10:00:00.000Z',
+    } as unknown as Devotional;
+    useUnfoldStore.setState({ devotionals: [localSeries, endedElsewhere], currentDevotionalId: LOCAL_ID, resumeContext: null });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      {
+        id: 'ended-elsewhere',
+        createdAt: '2026-10-09T10:00:00.000Z',
+        archivedAt: '2026-10-09T11:00:00.000Z',
+        archivedStateAt: '2026-10-09T11:00:00.000Z',
+      },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(PULLED_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBeUndefined();
+  });
+
   it('keeps the pulled rows when saving the pull fails', async () => {
     mockFlushStore.mockImplementation(async () => { throw new Error('disk full'); });
     mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([

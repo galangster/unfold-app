@@ -48,6 +48,12 @@ export interface InflightGenerationJob {
    * or watches it; it only marks the job's failure push as stale.
    */
   superseded?: boolean;
+  /**
+   * The request id the server answered with this job. A screen that resumes
+   * the job after a restart retires that request when the job fails, so the
+   * next submission does not return to the failed job.
+   */
+  requestId?: string;
 }
 
 function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
@@ -61,6 +67,7 @@ function toInflightGenerationJob(value: unknown): InflightGenerationJob | null {
     submittedAt: record.submittedAt,
     ...(record.leftForHome === true ? { leftForHome: true } : {}),
     ...(record.superseded === true ? { superseded: true } : {}),
+    ...(typeof record.requestId === 'string' && record.requestId.length > 0 ? { requestId: record.requestId } : {}),
   };
 }
 

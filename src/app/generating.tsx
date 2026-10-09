@@ -233,11 +233,17 @@ export default function GeneratingScreen() {
   // owns the watch. Reset invalidation must prevent that write.
   const recordJob = useCallback((jobId: string, devotionalId: string | undefined): void => {
     if (!isSyncSessionCurrent(generationSessionRef.current)) return;
+    // The record keeps the request the server answered with this job, so a
+    // screen that resumes it after a restart can retire that request.
+    const previous = readInflightGenerationJob();
+    const requestId = answeredRequestIdRef.current
+      ?? (previous?.jobId === jobId ? previous.requestId : undefined);
     writeInflightGenerationJob({
       jobId,
       devotionalId,
       submittedAt: Date.now(),
       leftForHome: leftForHomeRef.current,
+      ...(requestId ? { requestId } : {}),
     });
   }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
@@ -753,6 +759,9 @@ export default function GeneratingScreen() {
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+      // The request this job answered, so a verdict on it can retire that
+      // request and no newer one.
+      answeredRequestIdRef.current = inflight.requestId ?? null;
       if (inflight.devotionalId) {
         startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
       }
