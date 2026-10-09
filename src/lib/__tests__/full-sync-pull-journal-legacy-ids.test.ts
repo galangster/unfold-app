@@ -34,7 +34,9 @@ jest.mock('../mmkv-storage', () => {
 
 import { applyPulledUserData } from '../full-sync-pull';
 import { canonicalJournalEntryId } from '../journal-entry-merge';
+import { mmkvStorage } from '../mmkv-storage';
 import { useUnfoldStore } from '../store';
+import { OUTBOX_KEY, peekSyncOutbox } from '../sync-outbox';
 
 const DEVOTIONAL = 'dev-1';
 const DAY = 3;
@@ -152,5 +154,83 @@ describe('pulling journal rows minted under legacy ids', () => {
     const entries = useUnfoldStore.getState().journalEntries;
     expect(entries).toHaveLength(2);
     expect(entries.find((item) => item.dayNumber === 4)?.content).toBe('Day four.');
+  });
+});
+
+describe('pushing the writing a pull folded together', () => {
+  beforeEach(() => {
+    mmkvStorage.removeItem(OUTBOX_KEY);
+  });
+
+  const queuedJournal = () => peekSyncOutbox().filter((change) => change.table === 'journal_entries');
+
+  function pullLegacyRow() {
+    applyPulledUserData({
+      changes: {
+        journal_entries: [legacyRow('journal_a1b2c3', 'Written on the old device.', '2026-09-01T09:00:00.000Z')],
+      },
+      timestamp: '2026-09-02T11:00:00.000Z',
+    } as never);
+  }
+
+  it('queues the folded day under its canonical id, so the server holds both pieces of writing', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+
+    pullLegacyRow();
+
+    const queued = queuedJournal();
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ id: canonical, deleted: false });
+    expect(queued[0].data.content).toContain('Written on the old device.');
+    expect(queued[0].data.content).toContain('Written after the upgrade.');
+    // The entry carries the clock of its queued change.
+    const day = useUnfoldStore.getState().journalEntries.find((item) => item.id === canonical);
+    expect(day?.updatedAt).toBe(queued[0].clientUpdatedAt);
+  });
+
+  it('queues a legacy entry the collapse moved to its canonical id without merging anything into it', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+    const otherDay = { ...legacyRow('journal_day_four', 'Day four, old device.', '2026-09-01T09:00:00.000Z') };
+    otherDay.data = { ...otherDay.data, dayNumber: 4 };
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [
+          legacyRow('journal_a1b2c3', 'Written on the old device.', '2026-09-01T09:00:00.000Z'),
+          otherDay,
+        ],
+      },
+      timestamp: '2026-09-02T11:00:00.000Z',
+    } as never);
+
+    expect(queuedJournal().map((change) => change.id).sort()).toEqual(
+      [canonical, canonicalJournalEntryId(DEVOTIONAL, 4)].sort(),
+    );
+    expect(queuedJournal().find((change) => change.id === canonicalJournalEntryId(DEVOTIONAL, 4))?.data.content)
+      .toBe('Day four, old device.');
+  });
+
+  it('does not queue the day again when the same legacy row arrives again', () => {
+    seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+    pullLegacyRow();
+    // The push landed.
+    mmkvStorage.removeItem(OUTBOX_KEY);
+
+    pullLegacyRow();
+
+    expect(queuedJournal()).toEqual([]);
+  });
+
+  it('queues nothing for a pull that brings no second entry for a day', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+
+    applyPulledUserData({
+      changes: {
+        journal_entries: [legacyRow(canonical, 'Edited on another device.', '2026-09-03T10:00:00.000Z')],
+      },
+      timestamp: '2026-09-03T11:00:00.000Z',
+    } as never);
+
+    expect(queuedJournal()).toEqual([]);
   });
 });

@@ -13,7 +13,8 @@ import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
 import { useUnfoldStore } from './store';
-import { peekSyncOutbox } from './sync-outbox';
+import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
 import { mergeJournalEntryDuplicates } from './journal-entry-merge';
@@ -200,6 +201,23 @@ function collapseJournalEntryDays(entries: JournalEntry[]): JournalEntry[] {
   );
   const rest = entries.filter((entry) => entry && !keyable.includes(entry));
   return [...mergeJournalEntryDuplicates(keyable), ...rest];
+}
+
+/**
+ * The entries a collapse moved to a canonical id or merged. The server holds
+ * neither under the canonical id, so a later pull of that row, written from
+ * an unmerged copy, would replace the folded writing on this device.
+ */
+function journalEntriesChangedByCollapse(before: JournalEntry[], after: JournalEntry[]): Set<string> {
+  const changed = new Set<string>();
+  if (after === before) return changed;
+  for (const entry of after) {
+    const prior = before.find((candidate) => candidate.id === entry.id);
+    if (!prior || JSON.stringify(journalEntrySyncData(prior)) !== JSON.stringify(journalEntrySyncData(entry))) {
+      changed.add(entry.id);
+    }
+  }
+  return changed;
 }
 
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
@@ -679,6 +697,8 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
   const pendingByRecord = pendingClientUpdatedAtsByRecord();
   const pendingByChapter = pendingBibleReadingByChapter();
   const pendingLifecycleById = pendingDevotionalArchivedStateAtById();
+  const collapsedAt = new Date().toISOString();
+  let collapsedJournalEntries: JournalEntry[] = [];
   useUnfoldStore.setState((state) => {
     const previousDevotionals = state.devotionals;
     let devotionals = previousDevotionals;
@@ -768,12 +788,18 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       // carry random ids, so upserting them by id alone re-creates exactly the
       // per-day duplicates the v41→42 migration merged. Collapse the day again
       // after applying: the merge is idempotent and keeps every piece of text.
-      journalEntries: collapseJournalEntryDays(
-        (changes.journal_entries ?? []).reduce(
+      journalEntries: (() => {
+        const pulled = (changes.journal_entries ?? []).reduce(
           (items, record) => upsertRecord(items, record, 'journal_entries', pendingByRecord, mapJournalEntry),
           state.journalEntries
-        )
-      ),
+        );
+        const collapsed = collapseJournalEntryDays(pulled);
+        const changed = journalEntriesChangedByCollapse(pulled, collapsed);
+        if (changed.size === 0) return collapsed;
+        const stamped = collapsed.map((entry) => (changed.has(entry.id) ? { ...entry, updatedAt: collapsedAt } : entry));
+        collapsedJournalEntries = stamped.filter((entry) => changed.has(entry.id));
+        return stamped;
+      })(),
       bookmarks: (changes.bookmarks ?? []).reduce(
         (items, record) => upsertRecord(items, record, 'bookmarks', pendingByRecord, mapBookmark),
         state.bookmarks
@@ -816,6 +842,15 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
       ),
     };
   });
+  // The merged writing goes to the server under the canonical id. Until the
+  // push lands, its queued change keeps an older copy of the row from
+  // replacing it here. The legacy rows stay on the server: removing one
+  // before the merged row is safely stored could lose its text.
+  if (collapsedJournalEntries.length > 0) {
+    enqueueSyncChanges(collapsedJournalEntries.map((entry) => buildPersonalDataSyncChange(
+      'journal_entries', entry.id, journalEntrySyncData(entry), collapsedAt,
+    )));
+  }
 }
 
 function applyCompanionChanges(payload: SyncPullResponse): void {
