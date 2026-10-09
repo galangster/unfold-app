@@ -224,7 +224,7 @@ describe('journal hub: the day the reflections row and badge point at', () => {
     act(() => tree.unmount());
   });
 
-  it('opens the last unanswered question from the card when no Go Deeper row shows', () => {
+  it('keeps the last unanswered question one tap away, and the card keeps free write', () => {
     useUnfoldStore.setState({
       journalEntries: [
         {
@@ -244,16 +244,23 @@ describe('journal hub: the day the reflections row and badge point at', () => {
     let tree: any;
     act(() => { tree = renderer.create(<JournalHubScreen />); });
 
+    // The count only covers questions after the one the card shows.
+    expect(tree.root.findAll((node: any) => node.type === Text && /more reflections? to explore/.test(textOf(node)))).toHaveLength(0);
     const row = findTouchable(tree, (node) =>
-      node.findAll((child: any) => child.type === Text && /more reflections? to explore/.test(textOf(child))).length > 0,
+      node.findAll((child: any) => child.type === Text && textOf(child) === 'Answer the last reflection').length > 0,
     );
-    expect(row).toBeUndefined();
-    const card = findTouchable(tree, (node) => node.props.accessibilityLabel === "Continue today's reflection");
-    act(() => { card.props.onPress(); });
-
-    expect(mockPush).toHaveBeenCalledWith({
+    act(() => { row.props.onPress(); });
+    expect(mockPush).toHaveBeenLastCalledWith({
       pathname: '/(tabs)/(journal)/entry',
       params: { devotionalId: 'dev-1', dayNumber: '1', focusQuestion: '2' },
+    });
+
+    // The card still opens free write, where Go Deeper and saved prompts live.
+    const card = findTouchable(tree, (node) => node.props.accessibilityLabel === "Continue today's reflection");
+    act(() => { card.props.onPress(); });
+    expect(mockPush).toHaveBeenLastCalledWith({
+      pathname: '/(tabs)/(journal)/entry',
+      params: { devotionalId: 'dev-1', dayNumber: '1' },
     });
     act(() => tree.unmount());
   });

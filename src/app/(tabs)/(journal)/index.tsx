@@ -1809,14 +1809,7 @@ export default function JournalHubScreen() {
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
                 >
                   <TouchableOpacity
-                    // The card opens the question it shows. The Go Deeper row
-                    // below only counts the questions after this one, so for
-                    // the last question the card is the only way in.
-                    onPress={
-                      firstUnansweredQuestion
-                        ? () => handleQuestionTap(firstUnansweredQuestion.index)
-                        : handleWriteToday
-                    }
+                    onPress={handleWriteToday}
                     activeOpacity={0.7}
                     accessibilityRole="button"
                     accessibilityLabel={
@@ -1894,10 +1887,12 @@ export default function JournalHubScreen() {
                 </Animated.View>
               )}
 
-              {/* Go Deeper */}
+              {/* Go Deeper: opens the day's questions, focused on the first
+                  unanswered one. The card above opens free write, so this row
+                  stays for the last question too. */}
               {!isSearchingReflections && currentDevotional &&
                 firstUnansweredQuestion &&
-                moreReflections > 0 && (
+                reflectionQuestions.length > 1 && (
                   <Animated.View
                     entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(60).easing(Ease.out)}
                     style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
@@ -1933,10 +1928,9 @@ export default function JournalHubScreen() {
                             color: colors.textMuted,
                           }}
                         >
-                          {moreReflections}{' '}
-                          more reflection
-                          {moreReflections !== 1 ? 's' : ''}{' '}
-                          to explore
+                          {moreReflections > 0
+                            ? `${moreReflections} more reflection${moreReflections !== 1 ? 's' : ''} to explore`
+                            : 'Answer the last reflection'}
                         </Text>
                         {answeredReflectionCount > 0 && (
                           <Text
