@@ -21,6 +21,7 @@ import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
   readInflightGenerationJob,
+  requestAnsweredByInflightJob,
   supersedeInflightGenerationJob,
   writeInflightGenerationJob,
   GENERATING_SESSION_TITLE_PLACEHOLDER,
@@ -761,7 +762,7 @@ export default function GeneratingScreen() {
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
       // The request this job answered, so a verdict on it can retire that
       // request and no newer one.
-      answeredRequestIdRef.current = inflight.requestId ?? null;
+      answeredRequestIdRef.current = requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId());
       if (inflight.devotionalId) {
         startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
       }
