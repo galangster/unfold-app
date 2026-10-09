@@ -228,6 +228,7 @@ jest.mock('@/lib/store', () => {
     useUnfoldStore,
     useHasHydrated: () => true,
     updateSyncedDevotionals: jest.fn(),
+    flushUnfoldStorePersistAsync: jest.fn(async () => true),
   };
 });
 
@@ -249,6 +250,7 @@ import HomeScreen, { applyTodayAutoTrialFocus } from '@/app/(tabs)/(today)/index
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { commitDevotionalPullCursor } from '@/lib/devotional-sync-pull';
+import { flushUnfoldStorePersistAsync } from '@/lib/store';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { beginRitualSessionRecord, type RitualSessionIdentity } from '@/lib/ritual-session';
 import { beginLocalResetSession, endLocalResetSession, resetSyncSessionFenceForTesting } from '@/lib/sync-session-fence';
@@ -562,8 +564,11 @@ describe('Today across local midnight', () => {
     }));
     expect(commitDevotionalPullCursor).toHaveBeenCalledWith(overnightPull);
     const applyOrder = jest.mocked(applyPulledDevotionalContent).mock.invocationCallOrder;
+    const flushOrder = jest.mocked(flushUnfoldStorePersistAsync).mock.invocationCallOrder;
     const commitOrder = jest.mocked(commitDevotionalPullCursor).mock.invocationCallOrder;
-    expect(applyOrder[applyOrder.length - 1]).toBeLessThan(commitOrder[commitOrder.length - 1]);
+    // Applied, then written to disk, and only then the cursor.
+    expect(applyOrder[applyOrder.length - 1]).toBeLessThan(flushOrder[flushOrder.length - 1]);
+    expect(flushOrder[flushOrder.length - 1]).toBeLessThan(commitOrder[commitOrder.length - 1]);
     // The card follows the watch again, so its Checking / Check Again action
     // tracks the job, instead of a recovery-less "Check back in a moment".
     expect(mockDevotionalCardProps?.state).toEqual(expect.objectContaining({
@@ -571,6 +576,26 @@ describe('Today across local midnight', () => {
       dayNumber: 4,
       recovery: expect.objectContaining({ onCheckAgain: expect.any(Function) }),
     }));
+  });
+
+  it('keeps the cursor when the pulled day fails to reach the disk', async () => {
+    await renderTodayAt(new Date(2026, 9, 3, 21, 0));
+    await settlePull();
+    jest.mocked(commitDevotionalPullCursor).mockClear();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    emitAppState('background');
+    act(() => {
+      jest.setSystemTime(new Date(2026, 9, 4, 7, 30));
+    });
+    mockPullDevotionalContent.mockResolvedValueOnce(overnightPull);
+    jest.mocked(flushUnfoldStorePersistAsync).mockRejectedValueOnce(new Error('disk write failed'));
+    emitAppState('active');
+    await settlePull();
+    warnSpy.mockRestore();
+
+    expect(applyPulledDevotionalContent).toHaveBeenCalledWith(expect.objectContaining({ pulled: overnightPull }));
+    expect(commitDevotionalPullCursor).not.toHaveBeenCalled();
   });
 
   it('keeps the cursor when the pulled day fails to reach the store', async () => {
