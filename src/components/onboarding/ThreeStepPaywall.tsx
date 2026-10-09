@@ -1392,7 +1392,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       (state) => {
         if (!cancelled) setReminderPermissionUndecided(state === 'undetermined');
       },
-      () => undefined,
+      (error) => logger.log('[ThreeStepPaywall] trial reminder permission read failed:', error),
     );
     return () => {
       cancelled = true;

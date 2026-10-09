@@ -771,6 +771,27 @@ describe('ThreeStepPaywall trial reminder permission', () => {
     expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
   });
 
+  it('opens pricing without a purchase when the permission read fails', async () => {
+    mockReadNotificationPermissionState.mockRejectedValue(new Error('permission read failed'));
+    const tree = await renderOnReminderPage();
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+
+  it('opens pricing without a purchase when the permission ask fails', async () => {
+    mockAskNotificationPermissionInContext.mockRejectedValue(new Error('permission ask failed'));
+    const tree = await renderOnReminderPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledTimes(1);
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+
   it('does not ask on the no-trial path, which has no reminder page', async () => {
     const tree = await render(baseProps({ hasFreeTrial: false }));
     await pressPrimaryCTA(tree);
