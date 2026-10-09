@@ -1018,8 +1018,6 @@ export default function JournalHubScreen() {
     if (!reflectionQuestions.length) return 0;
     return Math.max(0, reflectionQuestions.length - answeredReflectionCount);
   }, [reflectionQuestions, answeredReflectionCount]);
-  // The card above the Go Deeper row already shows the first unanswered question.
-  const moreReflections = Math.max(0, remainingReflections - 1);
 
   const isAllReflectionsDone = useMemo(() => {
     if (!reflectionQuestions.length) return false;
@@ -1851,7 +1849,7 @@ export default function JournalHubScreen() {
                             : 0,
                         }}
                       >
-                        {`Day ${currentDayData?.dayNumber ?? currentDevotional.currentDay} of ${Math.max(currentDevotional.totalDays, currentDevotional.days.length)}`}
+                        {`Day ${currentDayData?.dayNumber ?? currentDevotional.currentDay}/${Math.max(currentDevotional.totalDays, currentDevotional.days.length)}`}
                       </Text>
 
                       {currentDayData?.scriptureReference && (
@@ -1887,9 +1885,7 @@ export default function JournalHubScreen() {
                 </Animated.View>
               )}
 
-              {/* Go Deeper: opens the day's questions, focused on the first
-                  unanswered one. The card above opens free write, so this row
-                  stays for the last question too. */}
+              {/* Go Deeper */}
               {!isSearchingReflections && currentDevotional &&
                 firstUnansweredQuestion &&
                 reflectionQuestions.length > 1 && (
@@ -1928,9 +1924,10 @@ export default function JournalHubScreen() {
                             color: colors.textMuted,
                           }}
                         >
-                          {moreReflections > 0
-                            ? `${moreReflections} more reflection${moreReflections !== 1 ? 's' : ''} to explore`
-                            : 'Answer the last reflection'}
+                          {remainingReflections}{' '}
+                          more reflection
+                          {remainingReflections !== 1 ? 's' : ''}{' '}
+                          to explore
                         </Text>
                         {answeredReflectionCount > 0 && (
                           <Text

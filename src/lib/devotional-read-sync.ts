@@ -6,7 +6,7 @@ import { buildSyncPushBody } from './sync-push-body';
 import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
 import type { Devotional, DevotionalDay } from './store';
 import type { SyncPushChange } from './sync-types';
-import { enqueueSyncChanges, settleDirectSyncPush } from './sync-outbox';
+import { enqueueSyncChanges } from './sync-outbox';
 import {
   assertSyncSessionCurrent,
   captureSyncSession,
@@ -88,11 +88,8 @@ export async function syncDevotionalDayRead(params: {
     readAt,
   });
 
-  // Queued before any await. If the app is killed while the push is in
-  // flight, the outbox still holds the read, and the next drain delivers it:
-  // the server generates the next day only once it holds this read.
-  enqueueSyncChanges(changes);
   if (params.isOnline === false) {
+    enqueueSyncChanges(changes);
     return 'queued';
   }
 
@@ -116,7 +113,6 @@ export async function syncDevotionalDayRead(params: {
 
     const payload = await response.json().catch(() => null) as { results?: Array<{ status?: string }> } | null;
     assertSyncSessionCurrent(session, 'devotional read sync');
-    settleDirectSyncPush(changes, payload?.results ?? []);
     const rejected = payload?.results?.filter((result) => result.status === 'rejected') ?? [];
     if (rejected.length > 0) {
       throw new Error(`Sync read state rejected ${rejected.length} change(s)`);
@@ -128,7 +124,8 @@ export async function syncDevotionalDayRead(params: {
         ? err
         : new SyncSessionInvalidatedError('devotional read sync');
     }
-    // The read stays queued for the outbox drain (useSyncOutboxDrain).
+    // Enqueue for retry via the outbox drain hook (useSyncOutboxDrain)
+    enqueueSyncChanges(changes);
     throw err;
   } finally {
     unregister();

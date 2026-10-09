@@ -30,7 +30,6 @@ import {
   type SyncPushBodyEnvelope,
 } from '@/lib/sync-push-body';
 import {
-  correlateSyncAcknowledgements,
   isValidConflictResult,
   resolvingAcknowledgementPairs,
   syncSnapshotsEqual,
@@ -145,21 +144,6 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
 
   writeOutbox(Array.from(map.values()));
   enqueueRevision += 1;
-}
-
-/**
- * Settles a push sent outside the drain for changes that were queued first.
- * An accepted result clears its queued copy while the queue still holds the
- * snapshot that was sent. Anything else stays queued for the drain, which
- * also applies a conflict's server row.
- */
-export function settleDirectSyncPush(sent: readonly SyncPushChange[], rawResults: readonly unknown[]): void {
-  const accepted = correlateSyncAcknowledgements(sent, rawResults)
-    .filter((pair) => pair.result.status === 'accepted');
-  if (accepted.length === 0) return;
-  const current = readOutbox();
-  const remaining = current.filter((entry) => !accepted.some((pair) => syncSnapshotsEqual(entry, pair.change)));
-  if (remaining.length !== current.length) writeOutbox(remaining);
 }
 
 function takeTransportBatch(

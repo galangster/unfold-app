@@ -703,6 +703,3 @@ AppState.addEventListener('change', (status) => {
 
 /** Test/maintenance hook: force any pending coalesced persist write to disk. */
 export const flushCompanionChatPersist = () => companionPersistStorage.flushPendingWrites();
-
-/** Await the pending write; rejects when it fails. */
-export const flushCompanionChatPersistAsync = () => companionPersistStorage.flushPendingWritesAsync();

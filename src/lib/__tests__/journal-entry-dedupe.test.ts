@@ -41,11 +41,9 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { applyPulledUserData } from '../full-sync-pull';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields, rebaseJournalDraft } from '../journal-entry-merge';
-import { mmkvStorage } from '../mmkv-storage';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates } from '../journal-entry-merge';
 import { useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
-import { OUTBOX_KEY } from '../sync-outbox';
 
 const DAY_ID = canonicalJournalEntryId('dev-1', 1);
 
@@ -69,9 +67,7 @@ function serverJournalRow(id: string, data: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  // A real reset clears the store and the outbox together.
   useUnfoldStore.getState().reset();
-  mmkvStorage.removeItem(OUTBOX_KEY);
 });
 
 describe('one journal entry per day', () => {
@@ -148,120 +144,6 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].createdAt).toBe('2026-09-01T10:00:00.000Z');
   });
 
-  it('does not repeat SOAP answers or question responses when folded rows arrive again', () => {
-    const soap = (scripture: string) => ({ scripture, observation: '', application: '', prayer: '' });
-    const merged = mergeJournalEntryDuplicates([
-      entry({
-        id: DAY_ID,
-        soapResponses: soap('A\n\nC\n\nB'),
-        questionResponses: [{ question: 'Q', response: 'A\n\nC\n\nB' }],
-        updatedAt: '2026-09-04T10:00:00.000Z',
-      }),
-      entry({ id: 'legacy-a', soapResponses: soap('A'), questionResponses: [{ question: 'Q', response: 'A' }], updatedAt: '2026-09-01T10:00:00.000Z' }),
-      entry({ id: 'legacy-b', soapResponses: soap('B'), questionResponses: [{ question: 'Q', response: 'B' }], updatedAt: '2026-09-03T10:00:00.000Z' }),
-    ]);
-    expect(merged[0].soapResponses?.scripture).toBe('A\n\nC\n\nB');
-    expect(merged[0].questionResponses).toEqual([{ question: 'Q', response: 'A\n\nC\n\nB' }]);
-  });
-
-  it('keeps the newest mode and prayer answer from a row whose text the day already holds', () => {
-    const prayer = (isAnswered: boolean) => ({ id: 'p', text: 'Healing', isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: DAY_ID, content: 'S', journalMode: 'soap', prayerRequests: [prayer(true)], updatedAt: '2026-09-01T10:00:00.000Z' }),
-      entry({ id: 'legacy-a', content: 'F', journalMode: 'freewrite', prayerRequests: [prayer(false)], updatedAt: '2026-09-02T10:00:00.000Z' }),
-      entry({ id: 'legacy-b', content: 'S', journalMode: 'soap', prayerRequests: [prayer(true)], updatedAt: '2026-09-03T10:00:00.000Z' }),
-    ]);
-    expect(merged[0].content).toBe('S\n\nF');
-    expect(merged[0].journalMode).toBe('soap');
-    expect(merged[0].prayerRequests?.[0].isAnswered).toBe(true);
-  });
-
-  // 2026-10-09 release audit: a device marked the prayer answered, then a text
-  // repair from another device, holding its older unanswered copy, folded the
-  // day later.
-  it('keeps a prayer answered when a later repair carries its unanswered copy', () => {
-    const prayer = (isAnswered: boolean) => ({
-      id: 'p', text: 'Healing', isAnswered, createdAt: '2026-09-01T10:00:00.000Z',
-      ...(isAnswered ? { answeredAt: '2026-09-02T10:05:00.000Z' } : {}),
-    });
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: 'legacy-a', content: 'Old device.', prayerRequests: [prayer(true)], updatedAt: '2026-09-02T10:05:00.000Z' }),
-      entry({ id: DAY_ID, content: 'Old device.\n\nRepair.', prayerRequests: [prayer(false)], updatedAt: '2026-09-02T10:10:00.000Z' }),
-    ]);
-
-    expect(merged[0].prayerRequests).toEqual([
-      expect.objectContaining({ id: 'p', isAnswered: true, answeredAt: '2026-09-02T10:05:00.000Z' }),
-    ]);
-  });
-
-  it('lets a later "not answered" stand over an older answered copy', () => {
-    const answered = { id: 'p', text: 'Healing', isAnswered: true, answeredAt: '2026-09-02T10:05:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
-    const cleared = { id: 'p', text: 'Healing', isAnswered: false, answerChangedAt: '2026-09-02T11:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: 'legacy-a', content: 'Old device.', prayerRequests: [answered], updatedAt: '2026-09-02T10:05:00.000Z' }),
-      entry({ id: DAY_ID, content: 'Old device.', prayerRequests: [cleared], updatedAt: '2026-09-02T11:00:00.000Z' }),
-    ]);
-
-    expect(merged[0].prayerRequests).toEqual([cleared]);
-  });
-
-  it('keeps a later "not answered" when a newer repair carries a stale answered copy', () => {
-    const cleared = { id: 'p', text: 'Healing', isAnswered: false, answerChangedAt: '2026-09-03T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
-    const stale = { id: 'p', text: 'Healing', isAnswered: true, answeredAt: '2026-09-02T10:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' };
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: DAY_ID, content: 'Day.', prayerRequests: [cleared], updatedAt: '2026-09-03T10:00:00.000Z' }),
-      entry({ id: 'legacy-a', content: 'Day.\n\nRepair.', prayerRequests: [stale], updatedAt: '2026-09-03T11:00:00.000Z' }),
-    ]);
-
-    expect(merged[0].prayerRequests).toEqual([
-      expect.objectContaining({ id: 'p', isAnswered: false, answeredAt: undefined, answerChangedAt: '2026-09-03T10:00:00.000Z' }),
-    ]);
-  });
-
-  it('keeps every prayer under its own id when two older prayers share their text', () => {
-    const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: 'a', prayerRequests: [prayer('p1', 'Healing'), prayer('p2', 'Healing'), prayer('p3', 'Work')], updatedAt: '2026-09-01T10:00:00.000Z' }),
-      entry({ id: 'b', prayerRequests: [prayer('q1', 'Healing', true)], updatedAt: '2026-09-02T10:00:00.000Z' }),
-    ]);
-    const prayers = merged[0].prayerRequests ?? [];
-    expect(prayers.map((item) => item.id)).toEqual(['q1', 'p2', 'p3']);
-    expect(prayers[0].isAnswered).toBe(true);
-  });
-
-  it('keeps an older prayer when the newer list holds only one of two with its text', () => {
-    const prayer = (id: string, text: string) => ({ id, text, isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' });
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: 'a', prayerRequests: [prayer('p1', 'Healing'), prayer('p2', 'Healing')], updatedAt: '2026-09-01T10:00:00.000Z' }),
-      entry({ id: 'b', prayerRequests: [prayer('q1', 'Healing')], updatedAt: '2026-09-02T10:00:00.000Z' }),
-    ]);
-    expect((merged[0].prayerRequests ?? []).map((item) => item.id)).toEqual(['q1', 'p2']);
-  });
-
-  it('does not repeat text when rows the day already folded in arrive together again', () => {
-    // The day's entry holds A, C and B in clock order; A and B are its legacy rows.
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: DAY_ID, content: 'A\n\nC\n\nB', updatedAt: '2026-09-04T10:00:00.000Z' }),
-      entry({ id: 'legacy-a', content: 'A', updatedAt: '2026-09-01T10:00:00.000Z', createdAt: '2026-08-20T10:00:00.000Z' }),
-      entry({ id: 'legacy-b', content: 'B', updatedAt: '2026-09-05T10:00:00.000Z' }),
-    ]);
-    expect(merged).toHaveLength(1);
-    expect(merged[0].content).toBe('A\n\nC\n\nB');
-    // The rows left out still date the day, as a fold would.
-    expect(merged[0].createdAt).toBe('2026-08-20T10:00:00.000Z');
-    expect(merged[0].updatedAt).toBe('2026-09-05T10:00:00.000Z');
-  });
-
-  it("still folds a legacy row the day's entry does not hold, oldest first", () => {
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: DAY_ID, content: 'C', updatedAt: '2026-09-02T10:00:00.000Z' }),
-      entry({ id: 'legacy-a', content: 'A', updatedAt: '2026-09-01T10:00:00.000Z', createdAt: '2026-08-30T10:00:00.000Z' }),
-      entry({ id: 'legacy-b', content: 'B', updatedAt: '2026-09-03T10:00:00.000Z' }),
-    ]);
-    expect(merged[0].content).toBe('A\n\nC\n\nB');
-    expect(merged[0].createdAt).toBe('2026-08-30T10:00:00.000Z');
-  });
-
   it('does not repeat identical text, and an empty side never blanks the other', () => {
     const merged = mergeJournalEntryDuplicates([
       entry({ id: 'a', content: 'same words', updatedAt: '2026-09-01T10:00:00.000Z' }),
@@ -311,40 +193,6 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].journalMode).toBe('soap');
   });
 
-  it("keeps the newer entry's answer on a prayer both entries hold", () => {
-    const merged = mergeJournalEntryDuplicates([
-      entry({
-        id: 'a',
-        updatedAt: '2026-09-01T10:00:00.000Z',
-        prayerRequests: [
-          { id: 'p1', text: 'for my family', isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' },
-          { id: 'p3', text: 'only on A', isAnswered: false, createdAt: '2026-09-01T10:00:00.000Z' },
-        ],
-      }),
-      entry({
-        id: 'b',
-        updatedAt: '2026-09-02T10:00:00.000Z',
-        prayerRequests: [
-          { id: 'p1', text: 'for my family', isAnswered: true, answeredAt: '2026-09-02T09:00:00.000Z', createdAt: '2026-09-01T10:00:00.000Z' },
-        ],
-      }),
-    ]);
-
-    expect(merged[0].prayerRequests).toEqual([
-      expect.objectContaining({ id: 'p1', isAnswered: true, answeredAt: '2026-09-02T09:00:00.000Z' }),
-      expect.objectContaining({ id: 'p3', isAnswered: false }),
-    ]);
-  });
-
-  it('keeps the newer list in its own order when it already holds every older value', () => {
-    const merged = mergeJournalEntryDuplicates([
-      entry({ id: 'a', updatedAt: '2026-09-01T10:00:00.000Z', deeperQuestions: ['B?'] }),
-      entry({ id: 'b', updatedAt: '2026-09-02T10:00:00.000Z', deeperQuestions: ['A?', 'B?'] }),
-    ]);
-
-    expect(merged[0].deeperQuestions).toEqual(['A?', 'B?']);
-  });
-
   it('keeps entries for different days separate', () => {
     const merged = mergeJournalEntryDuplicates([
       entry({ id: 'a', dayNumber: 1, content: 'day one' }),
@@ -353,37 +201,6 @@ describe('mergeJournalEntryDuplicates', () => {
     ]);
     expect(merged).toHaveLength(3);
     expect(merged.map((e) => e.content).sort()).toEqual(['day one', 'day two', 'other series']);
-  });
-});
-
-describe('prayer answers', () => {
-  it('stamps both marking a prayer answered and clearing it', () => {
-    const store = useUnfoldStore.getState();
-    const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'text', journalMode: 'freewrite' });
-    store.addPrayerRequest(id, 'Healing');
-    const prayerId = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0].id;
-
-    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
-    const answered = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
-    expect(answered.isAnswered).toBe(true);
-    expect(answered.answerChangedAt).toBe(answered.answeredAt);
-
-    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
-    const cleared = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
-    expect(cleared.isAnswered).toBe(false);
-    expect(cleared.answeredAt).toBeUndefined();
-    expect(cleared.answerChangedAt).toEqual(expect.any(String));
-  });
-});
-
-describe('onlyFillsEmptyFields', () => {
-  it('is false when the fold changes the journal mode', () => {
-    const own: JournalEntry = {
-      id: DAY_ID, devotionalId: 'dev-1', dayNumber: 1, content: 'Text.', journalMode: 'soap',
-      createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
-    };
-    expect(onlyFillsEmptyFields(own, { ...own, journalMode: 'freewrite' })).toBe(false);
-    expect(onlyFillsEmptyFields(own, { ...own })).toBe(true);
   });
 });
 
@@ -410,38 +227,5 @@ describe('migration v41→42: merge duplicate journal entries', () => {
 
   it('tolerates a missing journalEntries slice', () => {
     expect(() => migrateUnfoldStore({ user: null }, 41)).not.toThrow();
-  });
-});
-
-describe('rebaseJournalDraft', () => {
-  it('keeps the draft when the merge left the text alone', () => {
-    expect(rebaseJournalDraft('Mine.', 'Mine.', 'Mine, edited.')).toBe('Mine, edited.');
-  });
-
-  it('takes the merged text for a field with no edits', () => {
-    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine.')).toBe('Mine.\n\nTheirs.');
-  });
-
-  it('takes the merged text when it already holds the draft, without repeating words', () => {
-    expect(rebaseJournalDraft('Hope', 'Hope grows daily', 'Hope grows')).toBe('Hope grows daily');
-  });
-
-  it('still keeps a deletion when the merge added words after it', () => {
-    expect(rebaseJournalDraft('Hope is', 'Hope is here today', 'Hope')).toBe('Hope here today');
-  });
-
-  it('puts the edits where the base sat inside the merged text', () => {
-    expect(rebaseJournalDraft('Mine.', 'Theirs.\n\nMine.', 'Mine, edited.')).toBe('Theirs.\n\nMine, edited.');
-    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine, edited.')).toBe('Mine, edited.\n\nTheirs.');
-  });
-
-  it('keeps a draft that reads like a replacement pattern as written', () => {
-    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Cost $& more')).toBe('Cost $& more\n\nTheirs.');
-  });
-
-  it('follows the merged text with the draft when the base is not in it', () => {
-    expect(rebaseJournalDraft('', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
-    expect(rebaseJournalDraft('Old.', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
-    expect(rebaseJournalDraft('Old.', 'Theirs.', '')).toBe('Theirs.');
   });
 });
