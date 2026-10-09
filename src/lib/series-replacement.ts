@@ -33,29 +33,44 @@ export const REPLACED_SERIES_STATE_KEY = 'replaced-series-state-v1';
  * result of the job that answered that request. Only its result ends the
  * replaced series. An older job that lands meanwhile (a notification for an
  * earlier attempt) leaves it alone.
+ *
+ * The binding holds for that request only. Start over, a failed job's verdict
+ * and a dismissed failure each retire the request, and the next request binds
+ * the series it generates.
  */
 export const REPLACEMENT_SERIES_KEY = 'replaced-series-replacement-v1';
+
+interface ReplacementBinding {
+  requestId: string;
+  devotionalId: string;
+}
 
 export function recordReplacedSeries(devotionalId: string, seenStateAt = ''): void {
   mmkvStorage.setItem(REPLACED_SERIES_KEY, devotionalId);
   mmkvStorage.setItem(REPLACED_SERIES_STATE_KEY, seenStateAt);
-  clearReplacementBinding();
+  mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
 }
 
 /** Binds a pending replacement to the first series the server names for the current request. */
 export function bindReplacementSeries(replacementId: string): void {
-  if (!readReplacedSeries() || readReplacementSeries()) return;
-  mmkvStorage.setItem(REPLACEMENT_SERIES_KEY, replacementId);
+  const requestId = readInitialGenerationRequestId();
+  if (!requestId || !readReplacedSeries() || readReplacementSeries()) return;
+  const binding: ReplacementBinding = { requestId, devotionalId: replacementId };
+  mmkvStorage.setItem(REPLACEMENT_SERIES_KEY, JSON.stringify(binding));
 }
 
-/** "Start over with new answers": the choice now waits for the series those answers generate. */
-export function clearReplacementBinding(): void {
-  mmkvStorage.removeItem(REPLACEMENT_SERIES_KEY);
-}
-
+/** The bound replacement, while the request it was bound for is still the stored one. */
 export function readReplacementSeries(): string | null {
   const stored = mmkvStorage.getItem(REPLACEMENT_SERIES_KEY) as string | null;
-  return stored || null;
+  if (!stored) return null;
+  let binding: Partial<ReplacementBinding>;
+  try {
+    binding = JSON.parse(stored) as Partial<ReplacementBinding>;
+  } catch {
+    return null;
+  }
+  const requestId = readInitialGenerationRequestId();
+  return requestId && binding.requestId === requestId && binding.devotionalId ? binding.devotionalId : null;
 }
 
 /** The lifecycle clock recorded with the choice, or null for an older build's record. */

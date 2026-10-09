@@ -17,7 +17,7 @@ import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
-import { bindReplacementSeries, clearReplacementBinding } from '@/lib/series-replacement';
+import { bindReplacementSeries } from '@/lib/series-replacement';
 import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
@@ -1045,10 +1045,9 @@ export default function GeneratingScreen() {
     // and re-run the answers the reader just walked away from. The fresh
     // submission's own write replaces it.
     supersedeInflightGenerationJob(pendingJobId);
+    // Retiring the request also releases a waiting "Start a new series"
+    // choice from the abandoned series: the new answers' series binds it.
     clearInitialGenerationRequestId();
-    // A waiting "Start a new series" choice stays, now for the series the
-    // new answers generate, not the one just abandoned.
-    clearReplacementBinding();
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');
