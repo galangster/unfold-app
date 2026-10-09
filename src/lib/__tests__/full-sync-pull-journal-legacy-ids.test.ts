@@ -422,6 +422,28 @@ describe('pushing the writing a pull folded together', () => {
     });
   });
 
+  it('keeps a queued canonical repair when a crash left the store on the legacy row it folded', () => {
+    seedSeries();
+    // The store still holds the legacy row; the fold's repair, with an edit
+    // made after it, reached only the outbox.
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_one', 'Phone.', '2026-09-01T09:00:00.000Z')] },
+      timestamp: '2026-09-02T00:00:00.000Z',
+    } as never);
+    const canonical = queueWriteLostFromStore('Phone. Written after the fold.', '2026-09-06T00:00:00.000Z');
+
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_two', 'Tablet.', '2026-09-01T09:30:00.000Z')] },
+      timestamp: '2026-09-06T00:00:01.000Z',
+    } as never);
+
+    const queued = queuedJournal().find((change) => change.id === canonical)!;
+    expect(queued.clientUpdatedAt > '2026-09-06T00:00:00.000Z').toBe(true);
+    for (const text of ['Written after the fold.', 'Tablet.']) {
+      expect(queued.data.content).toContain(text);
+    }
+  });
+
   it('restores nothing on a pull that brings no row for the day', () => {
     seedSeries();
     const canonical = seedCanonicalEntry('Old draft.', '2026-09-02T10:00:00.000Z');

@@ -17,7 +17,7 @@ import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
-import { mergeJournalEntryDuplicates } from './journal-entry-merge';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates } from './journal-entry-merge';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -836,9 +836,10 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
         // repair below carries the reader's latest writing rather than
         // replacing it in the outbox. Only on a day this pull brings rows for,
         // in a series still here (a delete queued here or applied by this pull
-        // has removed it), and only for an entry whose row is older or whose
-        // day has no entry at all: a row that a fold or a delete removed stays
-        // gone.
+        // has removed it), and only for an entry whose row is older or gone. A
+        // legacy-id copy whose day already has an entry was folded into it and
+        // stays gone; the day's canonical copy always stands in, since a crash
+        // can leave the store on the legacy rows it was folded from.
         const dayKey = (entry: { devotionalId: string; dayNumber: number }) => `${entry.devotionalId}:${entry.dayNumber}`;
         const pulledDays = new Set((changes.journal_entries ?? [])
           .map((record) => mapJournalEntry(record))
@@ -849,7 +850,9 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
             || !devotionals.some((item) => item.id === queued.devotionalId)) return items;
           const current = items.find((item) => item.id === queued.id);
           if (current && (localUpdatedAt(current) ?? '') >= (queued.updatedAt ?? '')) return items;
-          if (!current && items.some((item) => dayKey(item) === dayKey(queued))) return items;
+          if (!current
+            && queued.id !== canonicalJournalEntryId(queued.devotionalId, queued.dayNumber)
+            && items.some((item) => dayKey(item) === dayKey(queued))) return items;
           // The queued copy carries every field but when the entry began.
           return current
             ? items.map((item) => (item.id === queued.id ? { ...queued, createdAt: item.createdAt } : item))
