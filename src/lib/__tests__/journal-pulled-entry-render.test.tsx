@@ -298,6 +298,78 @@ describe('the journal editor when a merge moves its entry', () => {
     act(() => tree.unmount());
   });
 
+  // 2026-10-09 release audit: ids are day-derived, so a pull can fold another
+  // device's writing in without moving the entry.
+  it('saves typing still pending when a pull folds writing into the same entry, and keeps that writing', () => {
+    const id = useUnfoldStore.getState().addJournalEntry({
+      devotionalId: 'dev-1',
+      dayNumber: 1,
+      content: 'Before the merge.',
+      journalMode: 'freewrite',
+    });
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const input = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+
+    act(() => { input.props.onChangeText('Before the merge, and more.'); });
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        journalEntries: state.journalEntries.map((entry) => (
+          entry.id === id ? { ...entry, content: 'Before the merge.\n\nFrom the other device.' } : entry
+        )),
+      }));
+    });
+    act(() => { jest.advanceTimersByTime(2_000); });
+
+    const day = useUnfoldStore.getState().journalEntries.find((entry) => entry.id === id);
+    expect(day?.content).toBe('Before the merge, and more.\n\nFrom the other device.');
+    // The save coming back from the store leaves the editor's text as it is.
+    const shown = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+    expect(shown.props.value).toBe('Before the merge, and more.\n\nFrom the other device.');
+    act(() => tree.unmount());
+  });
+
+  it('shows an answer a pull merged before the next keystroke can replace it', () => {
+    const question = 'What do you notice?';
+    const id = useUnfoldStore.getState().addJournalEntry({
+      devotionalId: 'dev-1',
+      dayNumber: 1,
+      content: '',
+      journalMode: 'freewrite',
+    });
+    const setAnswer = (response: string) => useUnfoldStore.setState((state) => ({
+      journalEntries: state.journalEntries.map((entry) => (
+        entry.id === id
+          ? { ...entry, deeperQuestions: [question], questionResponses: [{ question, response }] }
+          : entry
+      )),
+    }));
+    setAnswer('Mine.');
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const byLabel = (label: string) => tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === label && typeof node.type !== 'string',
+    )[0];
+    act(() => { byLabel(`Reflection prompt 1: ${question}`).props.onPress(); });
+    expect(byLabel('Response to prompt 1').props.value).toBe('Mine.');
+
+    act(() => { setAnswer('Mine.\n\nFrom the other device.'); });
+
+    expect(byLabel('Response to prompt 1').props.value).toBe('Mine.\n\nFrom the other device.');
+
+    // The next keystroke saves onto the merged answer, and its own save
+    // coming back leaves the answer as typed.
+    act(() => { byLabel('Response to prompt 1').props.onChangeText('Mine.\n\nFrom the other device. More.'); });
+    expect(byLabel('Response to prompt 1').props.value).toBe('Mine.\n\nFrom the other device. More.');
+    const saved = useUnfoldStore.getState().journalEntries.find((entry) => entry.id === id);
+    expect(saved?.questionResponses).toEqual([{ question, response: 'Mine.\n\nFrom the other device. More.' }]);
+    act(() => tree.unmount());
+  });
+
   it('keeps a SOAP field the merge filled while another field has a pending edit', () => {
     const legacyId = useUnfoldStore.getState().addJournalEntry({
       devotionalId: 'dev-1',

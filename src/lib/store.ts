@@ -1237,21 +1237,32 @@ export const useUnfoldStore = create<UnfoldState>()(
             buildPersonalDataSyncChange(table, id, {}, now, true);
           const ownedBy = <T extends { id: string; devotionalId: string }>(rows: T[]) =>
             rows.filter((row) => row.devotionalId === devotionalId);
-          // A journal write can sit in the outbox without its row, after a
-          // crash before the store reached disk. It is deleted too, stamped
-          // past the queued write so the delete is what goes out.
-          const queuedOnlyJournalDeletes = peekSyncOutbox()
+          // A journal write can sit in the outbox ahead of its row on disk:
+          // with no row after a crash before the store reached disk, or newer
+          // than the row (a clock-ahead repair). Every journal delete is
+          // stamped past both the row and its queued write, so the delete is
+          // what goes out.
+          const queuedJournalWrites = peekSyncOutbox()
             .filter((change) => change.table === 'journal_entries'
               && !change.deleted
-              && (change.data as { devotionalId?: unknown } | undefined)?.devotionalId === devotionalId
-              && !state.journalEntries.some((row) => row.id === change.id))
-            .map((change) => buildPersonalDataSyncChange(
+              && (change.data as { devotionalId?: unknown } | undefined)?.devotionalId === devotionalId);
+          const queuedClockById = new Map(queuedJournalWrites.map((change) => [change.id, change.clientUpdatedAt]));
+          const journalDelete = (id: string, rowUpdatedAt?: string) => {
+            const latest = [rowUpdatedAt, queuedClockById.get(id)]
+              .filter((clock): clock is string => !!clock)
+              .sort()
+              .pop();
+            return buildPersonalDataSyncChange(
               'journal_entries',
-              change.id,
+              id,
               {},
-              journalWriteClock({ updatedAt: change.clientUpdatedAt } as JournalEntry, now),
+              journalWriteClock({ updatedAt: latest } as JournalEntry, now),
               true,
-            ));
+            );
+          };
+          const queuedOnlyJournalDeletes = queuedJournalWrites
+            .filter((change) => !state.journalEntries.some((row) => row.id === change.id))
+            .map((change) => journalDelete(change.id));
           enqueueSyncChanges([
             ...(devotional ? [tombstone('devotionals', devotionalId)] : []),
             ...(devotional?.days ?? []).flatMap((day) => (day.id ? [tombstone('devotional_days', day.id)] : [])),
@@ -1259,8 +1270,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             // A journal entry can be dated ahead of this phone (a pulled row, or
             // a merge repair). Its delete is stamped past it, or the outbox and
             // the server keep the live writing.
-            ...ownedBy(state.journalEntries).map((row) =>
-              buildPersonalDataSyncChange('journal_entries', row.id, {}, journalWriteClock(row, now), true)),
+            ...ownedBy(state.journalEntries).map((row) => journalDelete(row.id, row.updatedAt)),
             ...ownedBy(state.checkIns).map((row) => tombstone('check_ins', row.id)),
             ...ownedBy(state.highlights).map((row) => tombstone('highlights', row.id)),
             ...ownedBy(state.bookmarks).map((row) => tombstone('bookmarks', row.id)),
@@ -1486,12 +1496,19 @@ export const useUnfoldStore = create<UnfoldState>()(
           if (!existing || isDevotionalArchived(existing)) return state;
           const archived = applyArchiveIntent(existing, new Date().toISOString());
           enqueueDevotionalRow(archived);
-          // A replacement already ended on another device stays off Today.
-          const replacement = state.devotionals.find((d) => d.id === replacementId && !isDevotionalArchived(d));
+          const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
+          // The replacement becomes current only as the strict active winner,
+          // the series the server writes. Beside a newer live series (one
+          // another device started or resumed) Today holds no series rather
+          // than the wrong one. A replacement ended elsewhere stays off too.
+          const replacement = devotionals.find((d) => d.id === replacementId && !isDevotionalArchived(d));
+          const nextCurrentId = replacement && isStrictActiveSeriesWinner(replacement.id, devotionals)
+            ? replacement.id
+            : null;
           return {
-            devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
+            devotionals,
             ...(state.currentDevotionalId === id
-              ? { currentDevotionalId: replacement?.id ?? null, scripturePracticeReturn: null }
+              ? { currentDevotionalId: nextCurrentId, scripturePracticeReturn: null }
               : {}),
           };
         }),

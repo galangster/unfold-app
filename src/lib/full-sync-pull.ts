@@ -17,7 +17,7 @@ import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
 import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates } from './journal-entry-merge';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields } from './journal-entry-merge';
 import type {
   BibleHighlight,
   BibleReadingPosition,
@@ -881,6 +881,20 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
               || acceptedSeriesDeletes.has(entry.devotionalId)))) {
             changed.delete(id);
           }
+        }
+        // A fold that only fills fields the day's own row holds empty, from
+        // rows no newer than it, stays on this device. That row can be a day
+        // the reader cleared after an earlier fold, and a repair would push
+        // the old text back over it on every device. The legacy rows stay on
+        // the server, so nothing is lost.
+        for (const id of changed) {
+          const own = pulled.find((item) => item.id === id);
+          const entry = collapsed.find((item) => item.id === id);
+          if (!own || !entry) continue;
+          const folded = pulled.filter((item) => item !== own
+            && item.devotionalId === own.devotionalId && item.dayNumber === own.dayNumber);
+          const ownIsNewest = folded.every((item) => (item.updatedAt ?? '') <= (own.updatedAt ?? ''));
+          if (ownIsNewest && onlyFillsEmptyFields(own, entry)) changed.delete(id);
         }
         if (changed.size === 0) return collapsed;
         const stamped = collapsed.map((entry) => (

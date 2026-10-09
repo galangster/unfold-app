@@ -176,6 +176,24 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].prayerRequests?.[0].isAnswered).toBe(true);
   });
 
+  // 2026-10-09 release audit: a device marked the prayer answered, then a text
+  // repair from another device, holding its older unanswered copy, folded the
+  // day later.
+  it('keeps a prayer answered when a later repair carries its unanswered copy', () => {
+    const prayer = (isAnswered: boolean) => ({
+      id: 'p', text: 'Healing', isAnswered, createdAt: '2026-09-01T10:00:00.000Z',
+      ...(isAnswered ? { answeredAt: '2026-09-02T10:05:00.000Z' } : {}),
+    });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'legacy-a', content: 'Old device.', prayerRequests: [prayer(true)], updatedAt: '2026-09-02T10:05:00.000Z' }),
+      entry({ id: DAY_ID, content: 'Old device.\n\nRepair.', prayerRequests: [prayer(false)], updatedAt: '2026-09-02T10:10:00.000Z' }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([
+      expect.objectContaining({ id: 'p', isAnswered: true, answeredAt: '2026-09-02T10:05:00.000Z' }),
+    ]);
+  });
+
   it('keeps every prayer under its own id when two older prayers share their text', () => {
     const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
     const merged = mergeJournalEntryDuplicates([
