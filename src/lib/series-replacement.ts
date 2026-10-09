@@ -19,9 +19,23 @@ import { readInflightGenerationJob } from '@/lib/inflight-generation-job';
 import { readInitialGenerationRequestId } from '@/lib/initial-generation-request';
 
 export const REPLACED_SERIES_KEY = 'replaced-series-v1';
+/**
+ * The replaced series' lifecycle clock (archivedStateAt, '' for none) when the
+ * reader chose to replace it. Any later pause or resume moves that clock, and
+ * comparing it to itself needs no device clock. A record an older build wrote
+ * has none.
+ */
+export const REPLACED_SERIES_STATE_KEY = 'replaced-series-state-v1';
 
-export function recordReplacedSeries(devotionalId: string): void {
+export function recordReplacedSeries(devotionalId: string, seenStateAt = ''): void {
   mmkvStorage.setItem(REPLACED_SERIES_KEY, devotionalId);
+  mmkvStorage.setItem(REPLACED_SERIES_STATE_KEY, seenStateAt);
+}
+
+/** The lifecycle clock recorded with the choice, or null for an older build's record. */
+export function readReplacedSeriesState(): string | null {
+  const stored = mmkvStorage.getItem(REPLACED_SERIES_STATE_KEY) as string | null;
+  return stored ?? null;
 }
 
 export function readReplacedSeries(): string | null {
@@ -31,6 +45,7 @@ export function readReplacedSeries(): string | null {
 
 export function clearReplacedSeries(): void {
   mmkvStorage.removeItem(REPLACED_SERIES_KEY);
+  mmkvStorage.removeItem(REPLACED_SERIES_STATE_KEY);
 }
 
 /**

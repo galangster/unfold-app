@@ -86,7 +86,7 @@ import {
 import { AUTO_TRIAL_INTENT_KEY } from '@/lib/auto-trial-intent';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { INITIAL_GENERATION_REQUEST_ID_KEY } from '@/lib/initial-generation-request';
-import { REPLACED_SERIES_KEY } from '@/lib/series-replacement';
+import { REPLACED_SERIES_KEY, REPLACED_SERIES_STATE_KEY } from '@/lib/series-replacement';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
 import {
   beginLocalResetSession,
@@ -120,6 +120,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   'inflight-generation-job',
   INITIAL_GENERATION_REQUEST_ID_KEY,
   REPLACED_SERIES_KEY,
+  REPLACED_SERIES_STATE_KEY,
   OUTBOX_KEY,
   // Devotional pull cursor is scoped to the device id; rotation below would
   // already invalidate it, but a wiped store must never carry a delta cursor.

@@ -1496,7 +1496,8 @@ export const useUnfoldStore = create<UnfoldState>()(
           set({ currentDevotionalId: null, scripturePracticeReturn: null });
           return;
         }
-        recordReplacedSeries(currentId);
+        const current = devotionals.find((d) => d.id === currentId);
+        recordReplacedSeries(currentId, current?.archivedStateAt ?? '');
       },
       archiveReplacedDevotional: (id, replacementId) =>
         set((state) => {
