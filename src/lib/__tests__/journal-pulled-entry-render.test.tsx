@@ -137,6 +137,7 @@ import { applyPulledUserData } from '@/lib/full-sync-pull';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUnfoldStore } from '@/lib/store';
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
+import { canonicalJournalEntryId } from '@/lib/journal-entry-merge';
 
 const DEVOTIONAL: any = {
   id: 'dev-1',
@@ -295,6 +296,67 @@ describe('the journal editor when a merge moves its entry', () => {
       id: 'journal-canonical-1',
       content: 'Before the merge, and more.\n\nFrom the other device.',
     });
+    act(() => tree.unmount());
+  });
+
+  // 2026-10-09 release audit round 2: the editor opened before the day had an
+  // entry, and a pull brought another device's entry before autosave ran.
+  it('keeps a pending draft when the day\'s first entry arrives from another device', () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const input = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+
+    act(() => { input.props.onChangeText('Typed here first.'); });
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        journalEntries: [...state.journalEntries, {
+          id: canonicalJournalEntryId('dev-1', 1),
+          devotionalId: 'dev-1',
+          dayNumber: 1,
+          content: 'From the other device.',
+          journalMode: 'freewrite',
+          createdAt: '2026-10-09T08:00:00.000Z',
+          updatedAt: '2026-10-09T08:00:00.000Z',
+        }],
+      }));
+    });
+    act(() => { jest.advanceTimersByTime(2_000); });
+
+    const entries = useUnfoldStore.getState().journalEntries
+      .filter((entry) => entry.devotionalId === 'dev-1' && entry.dayNumber === 1);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].content).toBe('From the other device.\n\nTyped here first.');
+    act(() => tree.unmount());
+  });
+
+  it('does not repeat a first draft the arriving entry already holds', () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const input = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Journal entry' && typeof node.type !== 'string',
+    )[0];
+
+    act(() => { input.props.onChangeText('My prayer'); });
+    act(() => {
+      useUnfoldStore.setState((state) => ({
+        journalEntries: [...state.journalEntries, {
+          id: canonicalJournalEntryId('dev-1', 1),
+          devotionalId: 'dev-1',
+          dayNumber: 1,
+          content: 'My prayer, continued',
+          journalMode: 'freewrite',
+          createdAt: '2026-10-09T08:00:00.000Z',
+          updatedAt: '2026-10-09T08:00:00.000Z',
+        }],
+      }));
+    });
+    act(() => { jest.advanceTimersByTime(2_000); });
+
+    const day = useUnfoldStore.getState().journalEntries
+      .find((entry) => entry.devotionalId === 'dev-1' && entry.dayNumber === 1);
+    expect(day?.content).toBe('My prayer, continued');
     act(() => tree.unmount());
   });
 

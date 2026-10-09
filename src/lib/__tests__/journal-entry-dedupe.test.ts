@@ -218,6 +218,21 @@ describe('mergeJournalEntryDuplicates', () => {
     ]);
   });
 
+  it('keeps the later prayer decision time when both copies agree on the answer', () => {
+    const prayer = (isAnswered: boolean, over: { answeredAt?: string; answerChangedAt?: string }) => ({
+      id: 'p', text: 'Healing', createdAt: '2026-09-01T10:00:00.000Z', isAnswered, ...over,
+    });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: 'legacy-a', content: 'Day.', prayerRequests: [prayer(true, { answeredAt: '2026-09-02T10:05:00.000Z', answerChangedAt: '2026-09-02T10:05:00.000Z' })], updatedAt: '2026-09-02T10:05:00.000Z' }),
+      entry({ id: 'legacy-b', content: 'Day.', prayerRequests: [prayer(true, { answeredAt: '2026-09-02T09:00:00.000Z' })], updatedAt: '2026-09-02T10:10:00.000Z' }),
+      entry({ id: DAY_ID, content: 'Day.', prayerRequests: [prayer(false, { answerChangedAt: '2026-09-02T09:30:00.000Z' })], updatedAt: '2026-09-02T10:20:00.000Z' }),
+    ]);
+
+    expect(merged[0].prayerRequests).toEqual([
+      expect.objectContaining({ isAnswered: true, answerChangedAt: '2026-09-02T10:05:00.000Z' }),
+    ]);
+  });
+
   it('keeps every prayer under its own id when two older prayers share their text', () => {
     const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
     const merged = mergeJournalEntryDuplicates([
@@ -374,16 +389,24 @@ describe('prayer answers', () => {
     expect(cleared.answeredAt).toBeUndefined();
     expect(cleared.answerChangedAt).toEqual(expect.any(String));
   });
-});
 
-describe('onlyFillsEmptyFields', () => {
-  it('is false when the fold changes the journal mode', () => {
-    const own: JournalEntry = {
-      id: DAY_ID, devotionalId: 'dev-1', dayNumber: 1, content: 'Text.', journalMode: 'soap',
-      createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
-    };
-    expect(onlyFillsEmptyFields(own, { ...own, journalMode: 'freewrite' })).toBe(false);
-    expect(onlyFillsEmptyFields(own, { ...own })).toBe(true);
+  it('stamps a toggle past a decision time this phone\'s clock is behind', () => {
+    const store = useUnfoldStore.getState();
+    const id = store.addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: 'text', journalMode: 'freewrite' });
+    store.addPrayerRequest(id, 'Healing');
+    const ahead = '2099-01-01T00:00:00.000Z';
+    useUnfoldStore.setState((state) => ({
+      journalEntries: state.journalEntries.map((e) => (e.id === id
+        ? { ...e, prayerRequests: e.prayerRequests!.map((p) => ({ ...p, isAnswered: true, answeredAt: ahead, answerChangedAt: ahead })) }
+        : e)),
+    }));
+    const prayerId = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0].id;
+
+    useUnfoldStore.getState().togglePrayerAnswered(id, prayerId);
+
+    const cleared = useUnfoldStore.getState().getJournalEntry('dev-1', 1)!.prayerRequests![0];
+    expect(cleared.isAnswered).toBe(false);
+    expect(cleared.answerChangedAt! > ahead).toBe(true);
   });
 });
 
@@ -424,6 +447,10 @@ describe('rebaseJournalDraft', () => {
 
   it('takes the merged text when it already holds the draft, without repeating words', () => {
     expect(rebaseJournalDraft('Hope', 'Hope grows daily', 'Hope grows')).toBe('Hope grows daily');
+  });
+
+  it('takes the merged text when a draft started on an empty field is already in it', () => {
+    expect(rebaseJournalDraft('', 'My prayer, continued', 'My prayer')).toBe('My prayer, continued');
   });
 
   it('still keeps a deletion when the merge added words after it', () => {

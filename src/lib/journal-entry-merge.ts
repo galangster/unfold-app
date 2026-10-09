@@ -98,7 +98,7 @@ function pairPrayers(existing: PrayerRequest[], incoming: PrayerRequest[]): Map<
 }
 
 /** When this copy last decided its answer: the reader's toggle, else the answer's own time. */
-function answerDecidedAt(prayer: PrayerRequest): string | undefined {
+export function answerDecidedAt(prayer: PrayerRequest): string | undefined {
   return prayer.answerChangedAt ?? (prayer.isAnswered ? prayer.answeredAt : undefined);
 }
 
@@ -111,16 +111,20 @@ function mergePrayerRequests(
   const pairs = pairPrayers(existing, incoming);
   // A prayer in both keeps the newer entry's copy. The newer entry is not
   // always the newer decision about the prayer: a text repair carries the
-  // prayer as it last saw it. So when the two copies disagree, the later
-  // decision wins: a reader's toggle, or the answer itself. A copy with no
-  // decision never undoes an answer, and a later "not answered" stands.
+  // prayer as it last saw it. So the later decision wins: a reader's toggle,
+  // or the answer itself, and its time travels with it even when both copies
+  // agree. A copy with no decision never undoes an answer, and a later "not
+  // answered" stands.
   const olderByNewer = new Map([...pairs].map(([older, newer]) => [newer, older] as const));
   const keepAnswer = (newer: PrayerRequest): PrayerRequest => {
     const older = olderByNewer.get(newer);
-    if (!older || older.isAnswered === newer.isAnswered) return newer;
+    if (!older) return newer;
     const olderDecidedAt = answerDecidedAt(older);
     const newerDecidedAt = answerDecidedAt(newer);
     if (!olderDecidedAt || (newerDecidedAt && newerDecidedAt >= olderDecidedAt)) return newer;
+    if (older.isAnswered === newer.isAnswered
+      && older.answeredAt === newer.answeredAt
+      && older.answerChangedAt === newer.answerChangedAt) return newer;
     return {
       ...newer,
       isAnswered: older.isAnswered,
@@ -169,8 +173,9 @@ export function rebaseJournalDraft(base: string, merged: string, draft: string):
   if (merged === base) return draft;
   if (draft === base) return merged;
   // The merge already holds the draft's additions, as when another device
-  // saved the same words and more. Rebasing again would repeat them.
-  if (base.trim() && draft.includes(base) && merged.includes(draft)) return merged;
+  // saved the same words and more. Rebasing again would repeat them. A draft
+  // started on an empty field counts too: all of it is the reader's addition.
+  if (draft.trim() && draft.includes(base) && merged.includes(draft)) return merged;
   const at = base.trim() ? merged.indexOf(base) : -1;
   if (at >= 0) return `${merged.slice(0, at)}${draft}${merged.slice(at + base.length)}`;
   if (!merged.trim()) return draft;

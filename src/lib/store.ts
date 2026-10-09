@@ -25,7 +25,7 @@ import {
 import { newId } from './sync-ids';
 import { recordReplacedSeries } from './series-replacement';
 import { allocateBibleReadingId } from './bible-reading-ids';
-import { canonicalJournalEntryId } from './journal-entry-merge';
+import { answerDecidedAt, canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
@@ -1101,6 +1101,12 @@ function logRefusedSeriesSelection(reason: 'archived' | 'missing'): void {
  * phone, and a merge repair is stamped past the rows it folds. A write
  * stamped before either would lose to it in the outbox and on the server.
  */
+/** A prayer toggle's time: now, or just past the copy's last decision when this clock is behind it. */
+function laterDecisionTime(previous: string | undefined, now: string): string {
+  if (!previous || previous < now) return now;
+  return new Date(Date.parse(previous) + 1).toISOString();
+}
+
 function journalWriteClock(entry: JournalEntry, now: string): string {
   const after = entry.updatedAt ? Date.parse(entry.updatedAt) + 1 : Number.NaN;
   if (!Number.isFinite(after)) return now;
@@ -1657,7 +1663,12 @@ export const useUnfoldStore = create<UnfoldState>()(
               ...e,
               prayerRequests: (e.prayerRequests ?? []).map((p) =>
                 p.id === prayerId
-                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? now : undefined, answerChangedAt: now }
+                  ? {
+                    ...p,
+                    isAnswered: !p.isAnswered,
+                    answeredAt: !p.isAnswered ? now : undefined,
+                    answerChangedAt: laterDecisionTime(answerDecidedAt(p), now),
+                  }
                   : p
               ),
               updatedAt: journalWriteClock(e, now),
