@@ -41,7 +41,7 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { applyPulledUserData } from '../full-sync-pull';
-import { canonicalJournalEntryId, mergeJournalEntryDuplicates } from '../journal-entry-merge';
+import { canonicalJournalEntryId, mergeJournalEntryDuplicates, rebaseJournalDraft } from '../journal-entry-merge';
 import { useUnfoldStore, type JournalEntry } from '../store';
 import { migrateUnfoldStore } from '../store-migrations';
 
@@ -261,5 +261,30 @@ describe('migration v41→42: merge duplicate journal entries', () => {
 
   it('tolerates a missing journalEntries slice', () => {
     expect(() => migrateUnfoldStore({ user: null }, 41)).not.toThrow();
+  });
+});
+
+describe('rebaseJournalDraft', () => {
+  it('keeps the draft when the merge left the text alone', () => {
+    expect(rebaseJournalDraft('Mine.', 'Mine.', 'Mine, edited.')).toBe('Mine, edited.');
+  });
+
+  it('takes the merged text for a field with no edits', () => {
+    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine.')).toBe('Mine.\n\nTheirs.');
+  });
+
+  it('puts the edits where the base sat inside the merged text', () => {
+    expect(rebaseJournalDraft('Mine.', 'Theirs.\n\nMine.', 'Mine, edited.')).toBe('Theirs.\n\nMine, edited.');
+    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Mine, edited.')).toBe('Mine, edited.\n\nTheirs.');
+  });
+
+  it('keeps a draft that reads like a replacement pattern as written', () => {
+    expect(rebaseJournalDraft('Mine.', 'Mine.\n\nTheirs.', 'Cost $& more')).toBe('Cost $& more\n\nTheirs.');
+  });
+
+  it('follows the merged text with the draft when the base is not in it', () => {
+    expect(rebaseJournalDraft('', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
+    expect(rebaseJournalDraft('Old.', 'Theirs.', 'Mine.')).toBe('Theirs.\n\nMine.');
+    expect(rebaseJournalDraft('Old.', 'Theirs.', '')).toBe('Theirs.');
   });
 });

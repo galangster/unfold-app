@@ -12,7 +12,7 @@ import {
 import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
 import { mmkvStorage } from './mmkv-storage';
 import { logger } from './logger';
-import { useUnfoldStore } from './store';
+import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
 import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
 import { newId } from './sync-ids';
@@ -33,7 +33,7 @@ import type {
   SeriesPersonaRecord,
   UsedScripture,
 } from './store';
-import { useCompanionChatStore } from './companion-chat-store';
+import { flushCompanionChatPersistAsync, useCompanionChatStore } from './companion-chat-store';
 import { forgetCompanionDraft, markCompanionDraftEmptied } from './companion-drafts';
 import type { CompanionMessage, Conversation } from './companion-chat-store';
 import type { SyncPullResponse, SyncPulledRecord, SyncPushResult, SyncTable } from './sync-types';
@@ -1011,6 +1011,12 @@ export async function pullAllUserData(options: PullAllUserDataOptions = {}): Pro
     const payload = await response.json() as SyncPullResponse;
     assertSyncSessionCurrent(session, 'sync pull');
     applyPulledUserData(payload);
+    // The cursor moves only once the pulled rows are on disk, in both stores
+    // the pull writes. Their writes wait up to a few seconds, and a kill in
+    // that window with the cursor already saved would skip those rows on
+    // every later pull.
+    await Promise.all([flushUnfoldStorePersistAsync(), flushCompanionChatPersistAsync()]);
+    assertSyncSessionCurrent(session, 'sync pull');
     mmkvStorage.setItem(LAST_PULLED_AT_KEY, payload.timestamp);
     return payload;
   } catch (error) {
