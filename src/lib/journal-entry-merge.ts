@@ -160,13 +160,11 @@ function mergePair(base: JournalEntry, incoming: JournalEntry): JournalEntry {
   };
 }
 
-const MERGED_FIELDS = [
-  'content', 'journalMode', 'soapResponses', 'questionResponses', 'prayerRequests', 'deeperQuestions',
-] as const;
+const TEXT_FIELDS = ['content', 'soapResponses', 'questionResponses'] as const;
 
-function addsNothingTo(base: JournalEntry, incoming: JournalEntry): boolean {
+function addsNoTextTo(base: JournalEntry, incoming: JournalEntry): boolean {
   const merged = mergePair(base, incoming);
-  return MERGED_FIELDS.every((field) => JSON.stringify(merged[field] ?? null) === JSON.stringify(base[field] ?? null));
+  return TEXT_FIELDS.every((field) => JSON.stringify(merged[field] ?? null) === JSON.stringify(base[field] ?? null));
 }
 
 /**
@@ -188,20 +186,24 @@ export function mergeJournalEntryDuplicates(entries: JournalEntry[]): JournalEnt
   const merged: JournalEntry[] = [];
   for (const group of groups.values()) {
     const id = canonicalJournalEntryId(group[0].devotionalId, group[0].dayNumber);
-    // A row the day's entry already holds adds nothing. Folding it with the
-    // other rows first could join texts that the entry holds apart, and the
-    // joined text would then be added again.
-    const canonical = group.find((entry) => entry.id === id);
-    const adding = canonical
-      ? group.filter((entry) => entry === canonical || !addsNothingTo(canonical, entry))
-      : group;
-    const [oldest, ...rest] = [...adding].sort(byUpdatedAtAscending);
+    const ordered = [...group].sort(byUpdatedAtAscending);
+    const [oldest, ...rest] = ordered;
     const folded = rest.reduce(mergePair, oldest);
+    // A row whose text the day's entry already holds stays out of the text
+    // fold: folding it with the other rows first could join texts the entry
+    // holds apart, and the joined text would be added again. Every row still
+    // counts for the newest mode and prayer state, the lists and the dates.
+    const canonical = group.find((entry) => entry.id === id);
+    const [firstText, ...restText] = canonical
+      ? ordered.filter((entry) => entry === canonical || !addsNoTextTo(canonical, entry))
+      : ordered;
+    const text = restText.reduce(mergePair, firstText);
     merged.push({
       ...folded,
       id,
-      createdAt: group.map((entry) => entry.createdAt).filter(Boolean).sort()[0] ?? folded.createdAt,
-      updatedAt: group.map((entry) => entry.updatedAt).filter(Boolean).sort().pop() ?? folded.updatedAt,
+      content: text.content,
+      soapResponses: text.soapResponses,
+      questionResponses: text.questionResponses,
     });
   }
   return merged;

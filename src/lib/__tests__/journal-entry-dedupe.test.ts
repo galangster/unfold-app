@@ -148,6 +148,34 @@ describe('mergeJournalEntryDuplicates', () => {
     expect(merged[0].createdAt).toBe('2026-09-01T10:00:00.000Z');
   });
 
+  it('does not repeat SOAP answers or question responses when folded rows arrive again', () => {
+    const soap = (scripture: string) => ({ scripture, observation: '', application: '', prayer: '' });
+    const merged = mergeJournalEntryDuplicates([
+      entry({
+        id: DAY_ID,
+        soapResponses: soap('A\n\nC\n\nB'),
+        questionResponses: [{ question: 'Q', response: 'A\n\nC\n\nB' }],
+        updatedAt: '2026-09-04T10:00:00.000Z',
+      }),
+      entry({ id: 'legacy-a', soapResponses: soap('A'), questionResponses: [{ question: 'Q', response: 'A' }], updatedAt: '2026-09-01T10:00:00.000Z' }),
+      entry({ id: 'legacy-b', soapResponses: soap('B'), questionResponses: [{ question: 'Q', response: 'B' }], updatedAt: '2026-09-03T10:00:00.000Z' }),
+    ]);
+    expect(merged[0].soapResponses?.scripture).toBe('A\n\nC\n\nB');
+    expect(merged[0].questionResponses).toEqual([{ question: 'Q', response: 'A\n\nC\n\nB' }]);
+  });
+
+  it('keeps the newest mode and prayer answer from a row whose text the day already holds', () => {
+    const prayer = (isAnswered: boolean) => ({ id: 'p', text: 'Healing', isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
+    const merged = mergeJournalEntryDuplicates([
+      entry({ id: DAY_ID, content: 'S', journalMode: 'soap', prayerRequests: [prayer(true)], updatedAt: '2026-09-01T10:00:00.000Z' }),
+      entry({ id: 'legacy-a', content: 'F', journalMode: 'freewrite', prayerRequests: [prayer(false)], updatedAt: '2026-09-02T10:00:00.000Z' }),
+      entry({ id: 'legacy-b', content: 'S', journalMode: 'soap', prayerRequests: [prayer(true)], updatedAt: '2026-09-03T10:00:00.000Z' }),
+    ]);
+    expect(merged[0].content).toBe('S\n\nF');
+    expect(merged[0].journalMode).toBe('soap');
+    expect(merged[0].prayerRequests?.[0].isAnswered).toBe(true);
+  });
+
   it('keeps every prayer under its own id when two older prayers share their text', () => {
     const prayer = (id: string, text: string, isAnswered = false) => ({ id, text, isAnswered, createdAt: '2026-09-01T10:00:00.000Z' });
     const merged = mergeJournalEntryDuplicates([
