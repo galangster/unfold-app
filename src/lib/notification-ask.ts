@@ -13,7 +13,8 @@ export type NotificationAskTrigger =
   | 'reminder_time'
   | 'series_reveal'
   | 'generating'
-  | 'later_entry_fallback';
+  | 'later_entry_fallback'
+  | 'trial_reminder';
 
 type PermissionBaseline = 'granted' | 'not_granted';
 
