@@ -1110,11 +1110,16 @@ function laterDecisionTime(previous: string | undefined, now: string): string {
  * phone, and a merge repair is stamped past the rows it folds. A write
  * stamped before either would lose to it in the outbox and on the server.
  */
-function journalWriteClock(entry: JournalEntry, now: string): string {
-  const after = entry.updatedAt ? Date.parse(entry.updatedAt) + 1 : Number.NaN;
+function journalWriteClock(clock: string | undefined, now: string): string {
+  const after = clock ? Date.parse(clock) + 1 : Number.NaN;
   if (!Number.isFinite(after)) return now;
   const next = new Date(after).toISOString();
   return next > now ? next : now;
+}
+
+/** The later of a journal row's clock and the clock of a change still queued for it. */
+function latestJournalClock(rowClock: string | undefined, queuedClock: string | undefined): string | undefined {
+  return queuedClock && queuedClock > (rowClock ?? '') ? queuedClock : rowClock;
 }
 
 /**
@@ -1126,8 +1131,7 @@ function journalWriteClock(entry: JournalEntry, now: string): string {
 function journalEditClock(entry: { id: string; updatedAt?: string }, now: string): string {
   const queued = peekSyncOutbox()
     .find((change) => change.table === 'journal_entries' && change.id === entry.id)?.clientUpdatedAt;
-  const latest = queued && queued > (entry.updatedAt ?? '') ? queued : entry.updatedAt;
-  return journalWriteClock({ updatedAt: latest } as JournalEntry, now);
+  return journalWriteClock(latestJournalClock(entry.updatedAt, queued), now);
 }
 
 /**
@@ -1139,18 +1143,36 @@ function journalEditClock(entry: { id: string; updatedAt?: string }, now: string
  * createdAt. A day keeps one entry, and an entry needs its series.
  */
 function restoreQueuedJournalEntries(entries: JournalEntry[], devotionals: Devotional[]): JournalEntry[] {
-  return queuedJournalEntries().reduce((items, queued) => {
-    if (!devotionals.some((devotional) => devotional.id === queued.devotionalId)) return items;
-    const current = items.find((item) => item.id === queued.id);
-    if (current) {
-      if ((current.updatedAt ?? current.createdAt ?? '') >= queued.updatedAt) return items;
-      return items.map((item) => (item === current ? { ...queued, createdAt: current.createdAt } : item));
+  const devotionalIds = new Set(devotionals.map((devotional) => devotional.id));
+  const dayKey = (entry: JournalEntry) => `${entry.devotionalId}:${entry.dayNumber}`;
+  const indexById = new Map<string, number>();
+  const entriesPerDay = new Map<string, number>();
+  const countDay = (entry: JournalEntry, delta: number) => {
+    entriesPerDay.set(dayKey(entry), (entriesPerDay.get(dayKey(entry)) ?? 0) + delta);
+  };
+  entries.forEach((entry, index) => {
+    if (!indexById.has(entry.id)) indexById.set(entry.id, index);
+    countDay(entry, 1);
+  });
+  const result = [...entries];
+  let restored = false;
+  for (const queued of queuedJournalEntries()) {
+    if (!devotionalIds.has(queued.devotionalId)) continue;
+    const index = indexById.get(queued.id);
+    if (index !== undefined) {
+      const current = result[index];
+      if ((current.updatedAt ?? current.createdAt ?? '') >= queued.updatedAt) continue;
+      result[index] = { ...queued, createdAt: current.createdAt };
+      countDay(current, -1);
+    } else {
+      if (entriesPerDay.get(dayKey(queued))) continue;
+      indexById.set(queued.id, result.length);
+      result.push(queued);
     }
-    if (items.some((item) => item.devotionalId === queued.devotionalId && item.dayNumber === queued.dayNumber)) {
-      return items;
-    }
-    return [...items, queued];
-  }, entries);
+    countDay(queued, 1);
+    restored = true;
+  }
+  return restored ? result : entries;
 }
 
 function enqueueDevotionalRow(devotional: Devotional): void {
@@ -1295,19 +1317,13 @@ export const useUnfoldStore = create<UnfoldState>()(
               && !change.deleted
               && (change.data as { devotionalId?: unknown } | undefined)?.devotionalId === devotionalId);
           const queuedClockById = new Map(queuedJournalWrites.map((change) => [change.id, change.clientUpdatedAt]));
-          const journalDelete = (id: string, rowUpdatedAt?: string) => {
-            const latest = [rowUpdatedAt, queuedClockById.get(id)]
-              .filter((clock): clock is string => !!clock)
-              .sort()
-              .pop();
-            return buildPersonalDataSyncChange(
-              'journal_entries',
-              id,
-              {},
-              journalWriteClock({ updatedAt: latest } as JournalEntry, now),
-              true,
-            );
-          };
+          const journalDelete = (id: string, rowUpdatedAt?: string) => buildPersonalDataSyncChange(
+            'journal_entries',
+            id,
+            {},
+            journalWriteClock(latestJournalClock(rowUpdatedAt, queuedClockById.get(id)), now),
+            true,
+          );
           const queuedOnlyJournalDeletes = queuedJournalWrites
             .filter((change) => !state.journalEntries.some((row) => row.id === change.id))
             .map((change) => journalDelete(change.id));

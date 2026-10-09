@@ -22,6 +22,7 @@ import {
   queuedJournalEntries,
 } from './personal-data-sync-records';
 import { newId } from './sync-ids';
+import { asArray, asNumber, asRecord, asString } from './sync-row-values';
 import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields } from './journal-entry-merge';
 import type {
   BibleHighlight,
@@ -63,23 +64,6 @@ function syncGet(key: string): string | null {
   return value instanceof Promise ? null : value;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
 function asPositiveInteger(value: unknown): number | undefined {
   const parsed = asNumber(value);
   return parsed !== undefined && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
@@ -87,10 +71,6 @@ function asPositiveInteger(value: unknown): number | undefined {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function asArray<T = unknown>(value: unknown): T[] {
-  return Array.isArray(value) ? value as T[] : [];
 }
 
 type PendingClientUpdatedAtByRecord = Map<string, string>;
