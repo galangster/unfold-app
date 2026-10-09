@@ -1,5 +1,5 @@
 import React from 'react';
-import { TextInput, TouchableOpacity } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { FeatureSummaryCarousel } from '../FeatureSummaryCarousel';
 import type { CompanionPersonality } from '@/lib/companion-personality';
@@ -77,11 +77,7 @@ jest.mock('@/app/how-it-works', () => ({
   AnimatedHeadline: (props: unknown) => mockAnimatedHeadline(props),
   AnimatedBody: (props: unknown) => mockAnimatedBody(props),
 }));
-jest.mock('@/lib/support-clarity', () => ({
-  COMPANION_INTRO_BODY: 'Companion body',
-  COMPANION_NAME_LATER_HINT: 'You can change this name later in Profile.',
-  COMPANION_NAME_MAX_LENGTH: 30,
-}));
+jest.mock('@/lib/support-clarity', () => ({ COMPANION_INTRO_BODY: 'Companion body' }));
 jest.mock('@/lib/companion-personality', () => ({
   COMPANION_PERSONALITIES: [
     { value: 'gentle', label: 'Gentle', description: 'A quiet guide' },
@@ -102,8 +98,6 @@ function createCarousel(currentPage = 0, onPageChange = jest.fn()) {
   return renderer.create(
     <FeatureSummaryCarousel
       colors={colors}
-      companionName=""
-      onCompanionNameChange={jest.fn()}
       companionPersonality="gentle"
       onCompanionPersonalityChange={jest.fn()}
       currentPage={currentPage}
@@ -146,8 +140,6 @@ describe('FeatureSummaryCarousel accessibility', () => {
     act(() => { tree.update(
       <FeatureSummaryCarousel
         colors={colors}
-        companionName=""
-        onCompanionNameChange={jest.fn()}
         companionPersonality="gentle"
         onCompanionPersonalityChange={jest.fn()}
         currentPage={0}
@@ -165,8 +157,6 @@ describe('FeatureSummaryCarousel accessibility', () => {
       const [personality, setPersonality] = React.useState<CompanionPersonality>('gentle');
       return <FeatureSummaryCarousel
         colors={colors}
-        companionName=""
-        onCompanionNameChange={jest.fn()}
         companionPersonality={personality}
         onCompanionPersonalityChange={setPersonality}
         currentPage={2}
@@ -187,35 +177,6 @@ describe('FeatureSummaryCarousel accessibility', () => {
     expect(choices()[1]).toBe(encouraging);
     expect(choices()[1].props.accessibilityState.checked).toBe(true);
     expect(tree.root.findByProps({ accessibilityLabel: 'Step 3 of 3' })).toBeDefined();
-  });
-
-  // 1.1.18 release smoke (F10): since 2026-09-13 onboarding did not ask the
-  // reader to name the companion, and every reader got the default name.
-  it('asks for the companion name on the companion card only', () => {
-    function Harness({ page }: { page: number }) {
-      const [name, setName] = React.useState('');
-      return <FeatureSummaryCarousel
-        colors={colors}
-        companionName={name}
-        onCompanionNameChange={setName}
-        companionPersonality="gentle"
-        onCompanionPersonalityChange={jest.fn()}
-        currentPage={page}
-        onPageChange={jest.fn()}
-        onComplete={jest.fn()}
-      />;
-    }
-    let tree!: renderer.ReactTestRenderer;
-    act(() => { tree = renderer.create(<Harness page={0} />); });
-    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
-
-    act(() => { tree.update(<Harness page={2} />); });
-    const field = tree.root.findByType(TextInput);
-    expect(field.props.accessibilityLabel).toBe('Companion name');
-    expect(field.props.maxLength).toBe(30);
-
-    act(() => { field.props.onChangeText('Selah'); });
-    expect(tree.root.findByType(TextInput).props.value).toBe('Selah');
   });
 
 });

@@ -50,7 +50,6 @@ import {
 import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
 import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
-import { askNotificationPermissionInContext, readNotificationPermissionState } from '@/lib/notification-ask';
 import { logger } from '@/lib/logger';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
@@ -179,22 +178,11 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
   if (!hasFreeTrial) {
     return isFinal ? 'Unlock Premium' : 'Continue';
   }
-  // Page 1 only moves on. Only the page that starts the trial asks for it.
-  if (page === 0) return 'Continue';
+  if (page === 0) return 'Start Free Trial';
   if (page === 1) return 'See your free trial';
   // No dollar figure in the CTA: a zero-dollar price there was the most
   // conspicuous price on the screen, competing with the billed amount (3.1.2c).
   return 'Start My Free Trial';
-}
-
-const TRIAL_REMINDER_HEADLINE = "We'll remind you before\nyour free trial ends";
-const TRIAL_REMINDER_PERMISSION_REASON = 'Allow notifications to get this reminder.';
-const PRICING_HEADLINE = 'The most personal\nBible experience\nin the world';
-
-/** VoiceOver joins words across a hard line break ("tryUnfold"), so each
- * headline also carries a label with normal spaces. */
-function spokenHeadline(headline: string): string {
-  return headline.replace(/\n/g, ' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -478,9 +466,6 @@ function ScreenProductInAction({
         availableWidth: wrapperLayout.width,
       })
     : null;
-  const headline = hasFreeTrial
-    ? `We want you to try\nUnfold for free.`
-    : `Unlock everything\nUnfold can do.`;
 
   return (
     <View style={styles.screen1Root}>
@@ -490,7 +475,6 @@ function ScreenProductInAction({
             {/* Top section: headline */}
             <View style={styles.screen1TopSection}>
               <Text
-                accessibilityLabel={spokenHeadline(headline)}
                 style={[
                   styles.headline,
                   {
@@ -502,7 +486,9 @@ function ScreenProductInAction({
                 // would otherwise eat the page area the phone mockup needs.
                 maxFontSizeMultiplier={1.3}
               >
-                {headline}
+                {hasFreeTrial
+                  ? `We want you to try\nUnfold for free.`
+                  : `Unlock everything\nUnfold can do.`}
               </Text>
             </View>
 
@@ -590,12 +576,9 @@ function ScreenProductInAction({
 function ScreenTrialReminder({
   colors,
   trialDays,
-  showPermissionReason,
 }: {
   colors: ColorTheme;
   trialDays: number | null;
-  /** True when the button below will ask for notification permission. */
-  showPermissionReason: boolean;
 }) {
   const reducedMotion = useReducedMotion();
   const nowMs = useRef(Date.now()).current;
@@ -626,7 +609,6 @@ function ScreenTrialReminder({
 
             {/* Headline */}
             <Text
-              accessibilityLabel={spokenHeadline(TRIAL_REMINDER_HEADLINE)}
               style={[
                 styles.headline,
                 {
@@ -636,7 +618,7 @@ function ScreenTrialReminder({
                 },
               ]}
             >
-              {TRIAL_REMINDER_HEADLINE}
+              We'll remind you before{'\n'}your free trial ends
             </Text>
 
             {/* Supporting body text */}
@@ -653,21 +635,6 @@ function ScreenTrialReminder({
             >
               {reminderLine}
             </Text>
-
-            {showPermissionReason && (
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.sm,
-                  lineHeight: 20,
-                  color: colors.textMuted,
-                  textAlign: 'center',
-                  marginTop: Spacing['3'],
-                }}
-              >
-                {TRIAL_REMINDER_PERMISSION_REASON}
-              </Text>
-            )}
           </View>
     </ScrollView>
   );
@@ -778,11 +745,8 @@ function ScreenPricing({
           tintColor={colors.accent}
           cachePolicy="memory-disk"
         />
-        <Text
-          accessibilityLabel={spokenHeadline(PRICING_HEADLINE)}
-          style={[styles.screen3Headline, { color: colors.text }]}
-        >
-          {PRICING_HEADLINE}
+        <Text style={[styles.screen3Headline, { color: colors.text }]}>
+          The most personal{'\n'}Bible experience{'\n'}in the world
         </Text>
 
         {/* Social proof — honest framing only: these are quotes from early
@@ -1380,41 +1344,6 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     setCurrentPage((p) => Math.min(p + 1, totalPages - 1));
   }, [totalPages]);
 
-  // The trial-reminder page promises a notification, and onboarding has not
-  // asked for permission yet. Its button asks in context and the page says
-  // why. A decided answer is never asked again, and every answer moves on.
-  const [reminderPermissionUndecided, setReminderPermissionUndecided] = useState(false);
-  const askingReminderPermissionRef = useRef(false);
-  useEffect(() => {
-    if (!stableHasFreeTrial) return;
-    let cancelled = false;
-    void readNotificationPermissionState().then(
-      (state) => {
-        if (!cancelled) setReminderPermissionUndecided(state === 'undetermined');
-      },
-      (error) => logger.log('[ThreeStepPaywall] trial reminder permission read failed:', error),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [stableHasFreeTrial]);
-
-  const leaveTrialReminderPage = useCallback(() => {
-    if (askingReminderPermissionRef.current) return;
-    askingReminderPermissionRef.current = true;
-    void readNotificationPermissionState()
-      .then((state) => {
-        if (state !== 'undetermined') return;
-        return askNotificationPermissionInContext({ trigger: 'trial_reminder', registration: 'background' });
-      })
-      .catch((error) => logger.log('[ThreeStepPaywall] trial reminder permission ask failed:', error))
-      .then(() => {
-        askingReminderPermissionRef.current = false;
-        setReminderPermissionUndecided(false);
-        nextPage();
-      });
-  }, [nextPage]);
-
   // -----------------------------------------------------------------------
   // Purchase / Restore
   // -----------------------------------------------------------------------
@@ -1601,10 +1530,6 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     );
 
     if (action === 'next') {
-      if (stableHasFreeTrial && currentPage === 1) {
-        leaveTrialReminderPage();
-        return;
-      }
       nextPage();
       return;
     }
@@ -1618,7 +1543,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     }
 
     handlePurchase();
-  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, leaveTrialReminderPage, handlePurchase, entitlementPendingMessage]);
+  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase, entitlementPendingMessage]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -1652,11 +1577,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             />
           )}
           {stableHasFreeTrial && currentPage === 1 && (
-            <ScreenTrialReminder
-              colors={colors}
-              trialDays={trialDays}
-              showPermissionReason={reminderPermissionUndecided}
-            />
+            <ScreenTrialReminder colors={colors} trialDays={trialDays} />
           )}
           {currentPage === totalPages - 1 && (
             <ScreenPricing
