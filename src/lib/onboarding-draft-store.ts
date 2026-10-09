@@ -48,6 +48,8 @@ export interface OnboardingDraftRecord {
   data: OnboardingData;
   /** The selected chat personality. Kept separate from devotional choices. */
   companionPersonality: CompanionPersonality;
+  /** The Companion name as typed so far. Null when the draft holds none. */
+  companionName: string | null;
   /** Whether the person already bought during this walk-through. */
   purchasedDuringOnboarding: boolean;
   /** Id of the generated sample devotional, once it exists. */
@@ -65,6 +67,7 @@ export interface SaveOnboardingDraftInput {
   stepId: string;
   data: OnboardingData;
   companionPersonality?: CompanionPersonality;
+  companionName?: string;
   purchasedDuringOnboarding?: boolean;
   sampleDevotionalId?: string | null;
   sampleDevotionalDay?: unknown | null;
@@ -83,6 +86,7 @@ export function saveOnboardingDraft(record: SaveOnboardingDraftInput): void {
     stepId: record.stepId,
     data: record.data,
     companionPersonality: resolveCompanionPersonality(record.companionPersonality),
+    companionName: record.companionName ?? null,
     purchasedDuringOnboarding: record.purchasedDuringOnboarding ?? false,
     sampleDevotionalId: record.sampleDevotionalId ?? null,
     sampleDevotionalDay: null,
@@ -173,6 +177,7 @@ export function getOnboardingDraft(options?: {
     stepId: parsed.stepId,
     data: parsed.data,
     companionPersonality: resolveCompanionPersonality(parsed.companionPersonality),
+    companionName: typeof parsed.companionName === 'string' ? parsed.companionName : null,
     purchasedDuringOnboarding: parsed.purchasedDuringOnboarding === true,
     sampleDevotionalId: parsed.sampleDevotionalId ?? null,
     // Written under its own key; a record from before that split may still
