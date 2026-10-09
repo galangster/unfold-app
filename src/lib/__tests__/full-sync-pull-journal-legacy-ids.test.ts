@@ -251,6 +251,33 @@ describe('pushing the writing a pull folded together', () => {
     expect(queuedJournal().map((change) => change.clientUpdatedAt)).toEqual(['2099-06-01T00:00:00.001Z']);
   });
 
+  it('queues a later edit past a repair dated ahead of this phone, so the edit is what gets pushed', () => {
+    const canonical = seedCanonicalEntry('Written after the upgrade.', '2026-09-02T10:00:00.000Z');
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow('journal_ahead', 'From a clock ahead.', '2099-06-01T00:00:00.000Z')] },
+      timestamp: '2099-06-01T00:00:01.000Z',
+    } as never);
+
+    useUnfoldStore.getState().updateJournalEntry(canonical, 'Typed after the repair.');
+
+    const queued = queuedJournal();
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ id: canonical, clientUpdatedAt: '2099-06-01T00:00:00.002Z' });
+    expect(queued[0].data.content).toBe('Typed after the repair.');
+  });
+
+  it('stamps an edit of a row dated ahead of this phone past that row', () => {
+    const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
+    applyPulledUserData({
+      changes: { journal_entries: [legacyRow(canonical, 'From a clock ahead.', '2099-06-01T00:00:00.000Z')] },
+      timestamp: '2099-06-01T00:00:01.000Z',
+    } as never);
+
+    useUnfoldStore.getState().updateJournalEntry(canonical, 'Edited here.');
+
+    expect(queuedJournal().map((change) => change.clientUpdatedAt)).toEqual(['2099-06-01T00:00:00.001Z']);
+  });
+
   it('leaves a queued delete of the day in place', () => {
     const canonical = canonicalJournalEntryId(DEVOTIONAL, DAY);
     enqueueSyncChanges([{ table: 'journal_entries', id: canonical, clientUpdatedAt: '2026-09-05T00:00:00.000Z', data: {}, deleted: true }]);
