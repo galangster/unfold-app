@@ -264,12 +264,11 @@ export default function RevealScreen() {
     // Mark this day as revealed — teaser card won't show again
     markDayAsRevealed(revealTarget.devotionalId, revealTarget.dayNumber);
     const { currentDevotionalId, devotionals: latestDevotionals } = useUnfoldStore.getState();
-    // A pull can show a newer series this device does not hold yet. It counts
-    // too, so only the series the server would pick becomes current.
-    const candidates = [
-      ...latestDevotionals,
-      ...pulledSeriesRef.current.filter((series) => !latestDevotionals.some((row) => row.id === series.id)),
-    ];
+    // A pull can show a newer series this device does not hold yet, or a
+    // newer resume of one it holds (applied later, by the full sync). Every
+    // pulled row counts beside the local ones, so only the series the server
+    // would pick becomes current: either copy of a sibling can block it.
+    const candidates = [...latestDevotionals, ...pulledSeriesRef.current];
     const activatesSeries = canRevealActivateSeries(revealTarget.devotionalId, currentDevotionalId, candidates);
     if (activatesSeries) {
       setCurrentDevotional(revealTarget.devotionalId);

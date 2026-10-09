@@ -166,7 +166,7 @@ function pulledSeries() {
 }
 
 // A pull that also carries the account's series rows.
-function pulledWithSeries(rows: { id: string; createdAt: string }[]) {
+function pulledWithSeries(rows: { id: string; createdAt: string; archivedAt?: string | null; archivedStateAt?: string }[]) {
   // The pulled series started after the one here (a pulled shell dates
   // itself by its start).
   const pulled = pulledSeries();
@@ -286,6 +286,30 @@ describe('reveal for a series this device does not hold yet', () => {
       pathname: '/(tabs)/(today)/reading',
       params: { devotionalId: PULLED_ID, dayNumber: '1', readOnly: '1' },
     });
+  });
+
+  it('keeps Today on a held series that was resumed elsewhere after the pushed one began', async () => {
+    // This device holds a paused series. Another device resumed it after the
+    // pushed series started; only the pull carries that newer clock.
+    const paused = {
+      ...localSeries,
+      id: 'paused-series',
+      createdAt: '2026-10-08T06:00:00.000Z',
+      seriesStartDate: '2026-10-08T06:00:00.000Z',
+      archivedAt: '2026-10-08T07:00:00.000Z',
+      archivedStateAt: '2026-10-08T07:00:00.000Z',
+    } as unknown as Devotional;
+    useUnfoldStore.setState({ devotionals: [localSeries, paused], currentDevotionalId: LOCAL_ID, resumeContext: null });
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledWithSeries([
+      { id: LOCAL_ID, createdAt: NOW },
+      { id: PULLED_ID, createdAt: '2026-10-09T09:00:00.000Z' },
+      { id: 'paused-series', createdAt: '2026-10-08T06:00:00.000Z', archivedAt: null, archivedStateAt: '2026-10-09T10:00:00.000Z' },
+    ]));
+    await openReadyPush(PULLED_ID);
+    pressReveal();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(LOCAL_ID);
+    expect(mockRouterReplace.mock.calls[0][0].params.readOnly).toBe('1');
   });
 
   it('holds both swipes while the pull is out, then frees the one the layout uses', async () => {
