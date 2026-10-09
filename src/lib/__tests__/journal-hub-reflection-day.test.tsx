@@ -224,6 +224,40 @@ describe('journal hub: the day the reflections row and badge point at', () => {
     act(() => tree.unmount());
   });
 
+  it('opens the last unanswered question from the card when no Go Deeper row shows', () => {
+    useUnfoldStore.setState({
+      journalEntries: [
+        {
+          id: 'journal-day-1',
+          devotionalId: 'dev-1',
+          dayNumber: 1,
+          content: '',
+          createdAt: '2026-09-01T08:00:00.000Z',
+          updatedAt: '2026-09-01T08:00:00.000Z',
+          questionResponses: [
+            { question: DAY_1_QUESTIONS[0], response: 'One answered' },
+            { question: DAY_1_QUESTIONS[1], response: 'Two answered' },
+          ],
+        },
+      ],
+    });
+    let tree: any;
+    act(() => { tree = renderer.create(<JournalHubScreen />); });
+
+    const row = findTouchable(tree, (node) =>
+      node.findAll((child: any) => child.type === Text && /more reflections? to explore/.test(textOf(child))).length > 0,
+    );
+    expect(row).toBeUndefined();
+    const card = findTouchable(tree, (node) => node.props.accessibilityLabel === "Continue today's reflection");
+    act(() => { card.props.onPress(); });
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(tabs)/(journal)/entry',
+      params: { devotionalId: 'dev-1', dayNumber: '1', focusQuestion: '2' },
+    });
+    act(() => tree.unmount());
+  });
+
   it('the reflection card knows the last read day already has an entry', () => {
     let tree: any;
     act(() => { tree = renderer.create(<JournalHubScreen />); });

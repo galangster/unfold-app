@@ -1809,7 +1809,14 @@ export default function JournalHubScreen() {
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
                 >
                   <TouchableOpacity
-                    onPress={handleWriteToday}
+                    // The card opens the question it shows. The Go Deeper row
+                    // below only counts the questions after this one, so for
+                    // the last question the card is the only way in.
+                    onPress={
+                      firstUnansweredQuestion
+                        ? () => handleQuestionTap(firstUnansweredQuestion.index)
+                        : handleWriteToday
+                    }
                     activeOpacity={0.7}
                     accessibilityRole="button"
                     accessibilityLabel={
