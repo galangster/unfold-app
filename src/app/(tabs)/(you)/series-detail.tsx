@@ -99,7 +99,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
         {chrome !== 'tabRoot' && <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} accessibilityRole="button" accessibilityLabel="Close book" style={styles.backButton}><CaretLeftIcon size={22} color={colors.textMuted} /></TouchableOpacity>
           <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>Your library</Text>
-          <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} days completed` : `${progress.read} of ${progress.total} completed`}</Text>
+          <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} ${progress.total === 1 ? 'day' : 'days'} completed` : `${progress.read} of ${progress.total} completed`}</Text>
         </View>}
         <ScrollView testID="series-detail-scroll" showsVerticalScrollIndicator={false} onContentSizeChange={() => markShelfContentsReady(shelfOpening)}
           contentContainerStyle={{ paddingHorizontal: spread ? 0 : 24, paddingTop: chrome === 'tabRoot' ? 24 : 18, paddingBottom: 120 }}>
