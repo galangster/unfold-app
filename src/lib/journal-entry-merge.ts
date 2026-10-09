@@ -1,7 +1,6 @@
 import { normalizeSoapResponses, SOAP_FIELDS } from './journal-entry-state';
 import type { JournalEntry, PrayerRequest, SoapResponses } from './store';
 import { compositeId } from './sync-ids';
-import type { SyncPushChange } from './sync-types';
 
 /**
  * One journal entry per (devotionalId, dayNumber).
@@ -273,34 +272,4 @@ export function mergeJournalEntryDuplicates(entries: JournalEntry[]): JournalEnt
     });
   }
   return merged;
-}
-
-/** The journal fields a queued change carries (journalEntrySyncData drops undefined ones). */
-const QUEUED_JOURNAL_FIELDS = [
-  'content', 'journalMode', 'soapResponses', 'prayerRequests', 'questionResponses', 'deeperQuestions',
-] as const;
-
-/**
- * Brings each journal entry up to a newer change the outbox still holds for
- * it. The outbox is written at once and the store on a delay, so after a crash
- * the outbox can hold writing the stored entry lacks, such as a clock-ahead
- * repair. Edits then build on that writing, not on the older copy. Only the
- * fields the change carries are taken, so nothing the entry holds is dropped.
- */
-export function withQueuedJournalWriting(entries: JournalEntry[], queue: readonly SyncPushChange[]): JournalEntry[] {
-  const newer = new Map(queue
-    .filter((change) => change.table === 'journal_entries' && !change.deleted)
-    .map((change) => [change.id, change]));
-  if (newer.size === 0) return entries;
-  let changed = false;
-  const next = entries.map((entry) => {
-    const change = newer.get(entry.id);
-    if (!change || change.clientUpdatedAt <= (entry.updatedAt ?? '')) return entry;
-    changed = true;
-    const fields = Object.fromEntries(QUEUED_JOURNAL_FIELDS
-      .filter((field) => change.data[field] !== undefined)
-      .map((field) => [field, change.data[field]]));
-    return { ...entry, ...fields, updatedAt: change.clientUpdatedAt };
-  });
-  return changed ? next : entries;
 }
