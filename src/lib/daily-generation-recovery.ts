@@ -11,6 +11,7 @@ import {
 import { isSyncSessionCurrent, SyncSessionInvalidatedError } from './generation-session';
 import type { DevotionalDay } from './store';
 import { drainSyncChange, peekSyncOutbox } from './sync-outbox';
+import { requeueHeldDayRead } from './devotional-read-sync';
 import type { SyncPushChange } from './sync-types';
 
 export const DAILY_GENERATION_POLL_INTERVAL_MS = 15_000;
@@ -44,6 +45,8 @@ export interface DailyGenerationRecoveryDependencies {
   retryJob: typeof retryJob;
   peekSyncOutbox: typeof peekSyncOutbox;
   drainSyncChange: typeof drainSyncChange;
+  /** Queues again a read of that day this phone holds and the server lacks. */
+  requeueLocalRead: (devotionalId: string, dayNumber: number) => SyncPushChange | undefined;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
   isSessionCurrent: (session: number) => boolean;
@@ -75,6 +78,14 @@ const defaultDependencies: DailyGenerationRecoveryDependencies = {
   retryJob,
   peekSyncOutbox,
   drainSyncChange,
+  requeueLocalRead: (devotionalId, dayNumber) => {
+    // Loaded on first use: the store brings the whole data layer, and this
+    // module's callers and tests stay free of it.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useUnfoldStore } = require('./store') as typeof import('./store');
+    const devotional = useUnfoldStore.getState().devotionals.find((candidate) => candidate.id === devotionalId);
+    return requeueHeldDayRead(devotional, dayNumber);
+  },
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => Date.now(),
   isSessionCurrent: isSyncSessionCurrent,
@@ -426,10 +437,14 @@ export function createDailyGenerationRecovery(options: ControllerOptions): Daily
         }
         // Wait briefly for that read, then check once more. One re-check per
         // discovery keeps a read the server keeps refusing from spending the
-        // generate-day budget.
-        if (queuedRead && isWaitingOnRead(error)) {
+        // generate-day budget. With nothing queued, a read this phone holds
+        // but never delivered (an app kill mid-push) is queued again first.
+        const read = isWaitingOnRead(error) && !readSyncAttempted && dayNumber > 1
+          ? queuedRead ?? deps.requeueLocalRead(devotionalId, dayNumber - 1)
+          : undefined;
+        if (read) {
           publish({ status: 'blocked', reason: 'read-sync-pending' });
-          const saved = await saveQueuedRead(queuedRead);
+          const saved = await saveQueuedRead(read);
           if (!isCurrent()) return;
           if (saved) {
             await discover(true);
