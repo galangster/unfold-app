@@ -120,10 +120,11 @@ export function ReadDevotionalStep({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleComplete}
+            accessibilityRole="button"
             style={[styles.button, { backgroundColor: colors.accent }]}
           >
             <Text style={[styles.buttonText, { color: colors.background }]}>
-              I've finished reading
+              I’ve finished reading
             </Text>
           </TouchableOpacity>
         </View>
