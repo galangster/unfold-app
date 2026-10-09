@@ -5,7 +5,7 @@
  * session bookkeeping, whichever screen sees the job finish.
  */
 import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
-import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { abandonAutoTrialIntentForDeletedSeries, readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
 import { isSeriesComplete } from '@/lib/book-of-seasons';
 import { isDevotionalArchived } from '@/lib/devotional-lifecycle';
@@ -332,6 +332,7 @@ export function settleInflightInitialArcWatch(
         clearInflightGenerationJob();
         if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
         store.clearGenerationSession();
+        abandonAutoTrialIntentForDeletedSeries(outcome.result.devotionalId ?? '', Date.now());
         return;
       }
       const message = err instanceof Error ? err.message : String(err);

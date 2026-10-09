@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  abandonAutoTrialIntentForDeletedSeries,
   buildRevealGuardKey,
   hasSupersedingUserSeries,
   isAutoTrialIntentExpired,
@@ -342,6 +343,8 @@ export function useAutoTrialGeneration(intentId: string | null): {
             // left to poll or reveal.
             clearInflightGenerationJob();
             useUnfoldStore.getState().clearGenerationSession();
+            abandonAutoTrialIntentForDeletedSeries(payload.devotionalId ?? '', Date.now());
+            intent = readAutoTrialIntent();
             apply({ type: 'go_to_today' });
             return;
           }

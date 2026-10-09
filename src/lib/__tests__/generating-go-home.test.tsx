@@ -1215,6 +1215,8 @@ describe('a finished job for a series deleted here', () => {
       expect(readInflightGenerationJob()).toBeNull();
       expect(useUnfoldStore.getState().generationSession.status).toBe('idle');
       expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(false);
+      // Round 8 review again: a submitted intent reopened /generating on the deleted job at the next launch.
+      expect(readAutoTrialIntent()).toMatchObject({ status: 'abandoned', abandonReason: 'series_deleted' });
     } finally {
       resetDeletedSeriesForTesting();
     }

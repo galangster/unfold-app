@@ -1098,6 +1098,23 @@ describe('H8 applyInitialArcResult auto-trial settle', () => {
     expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
   });
 
+  // 2026-10-09 release audit round 8 review: a deleted trial's intent stayed
+  // submitted, so each launch reopened /generating on the deleted job.
+  it('abandons a pending trial intent whose series was deleted here when Today\'s watch lands it', () => {
+    seedSubmittedIntent();
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    try {
+      settleInflightInitialArcWatch(
+        { kind: 'complete', result: { ...result, devotionalDay: { ...day1, devotionalId: 'devo-1', id: 'devo-1:1' } } },
+        { jobId: 'job-1', session: captureSyncSession() },
+      );
+      expect(readAutoTrialIntent()).toMatchObject({ status: 'abandoned', abandonReason: 'series_deleted' });
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
   it('settles the matching id in the else branch', () => {
     seedSubmittedIntent();
     applyInitialArcResult(

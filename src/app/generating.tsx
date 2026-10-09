@@ -77,7 +77,7 @@ import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
 import { useRerenderAt } from '@/hooks/useRerenderAt';
-import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { abandonAutoTrialIntentForDeletedSeries, readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { resolveGeneratingCloseCopy, resolveGeneratingGoHomeLabel } from '@/lib/support-clarity';
 import { resolveGeneratingPalette } from '@/lib/generating-palette';
@@ -556,6 +556,7 @@ export default function GeneratingScreen() {
         clearInflightGenerationJob();
         if (requestId !== null && requestId === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
         clearGenerationSession();
+        abandonAutoTrialIntentForDeletedSeries(result.devotionalId ?? '', Date.now());
         router.replace('/(tabs)/(today)');
         return;
       }
