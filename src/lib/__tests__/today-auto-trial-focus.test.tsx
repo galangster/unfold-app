@@ -979,6 +979,16 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     expect(cardProps().nonblockingResume).toBeNull();
   });
 
+  // 2026-10-09 release 1.1.19 lane: a sync can bring the new series' row
+  // before its first day. That series has not landed, so the wait stays open.
+  it('keeps the inline resume while the new series is here without its first day', async () => {
+    mockTodayStoreState.devotionals = [olderSeries, { ...olderSeries, id: 'series-new', title: 'New Series', days: [] }];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    await renderToday();
+
+    expect(cardProps().nonblockingResume).not.toBeNull();
+  });
+
   it('offers the inline resume beside a readable series, until the new series lands', async () => {
     mockTodayStoreState.devotionals = [olderSeries];
     mockTodayStoreState.currentDevotionalId = 'today-series';

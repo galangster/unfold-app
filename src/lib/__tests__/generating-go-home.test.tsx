@@ -740,6 +740,23 @@ describe('Go home after the server ruled on the first series', () => {
     expect(todayCreateNewAction()).toBe('start-fresh');
   });
 
+  // 2026-10-09 release 1.1.19 lane: the refusal left Try again on screen, and
+  // each tap asked the server for a retry it had already refused.
+  it('stops offering Try again once the server refuses a retry for an exhausted job', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: true });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    mockRetryJob.mockRejectedValue(Object.assign(new Error('Job has exhausted all manual retries'), { status: 409, code: 'MAX_RETRIES_EXCEEDED' }));
+    await press(tree, 'Try again');
+    await flush();
+
+    expect(showsError(tree)).toBe(true);
+    expect(hasPressable(tree, 'Try again')).toBe(false);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(true);
+  });
+
   it('binds a waiting "Start a new series" choice to the series its job generates', async () => {
     recordReplacedSeries('old-series');
     mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });

@@ -946,9 +946,12 @@ export default function HomeScreen() {
   // A kept record gets the pending card. Continue re-enters /generating on
   // the record, as the check does once the server answers. Only a series the
   // record names counts as landed: a record without one (an adopted job)
-  // says nothing about the series already here.
+  // says nothing about the series already here. A sync can bring the row
+  // before its first day, and that series has not landed yet.
   const keptSeriesId = keptInflightJob?.devotionalId;
-  const keptSeriesLanded = keptSeriesId != null && landedSeries.some((row) => row.id === keptSeriesId);
+  const keptSeriesLanded = keptSeriesId != null && landedSeries.some((row) => (
+    row.id === keptSeriesId && row.days.some((day) => day.dayNumber === 1)
+  ));
   const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
     ? { onResume: handleResumeKeptInflight }
     : null;
