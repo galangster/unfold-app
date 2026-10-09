@@ -73,13 +73,11 @@ import {
   summarizeRenderableDevotionalDays,
 } from '@/lib/devotional-canonical-days';
 import {
-  BLOCKED_FORWARD_MESSAGES,
-  type BlockedForwardReason,
+  blockedForwardMessage,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   isDevotionalDaySelectable,
-  resolveBlockedForwardReason,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
@@ -431,7 +429,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // follows through the silent HIGHLIGHTS_CHANGED that comes back.
   const [highlightToast, setHighlightToast] = useState<{ message: string; undo: () => void } | null>(null);
   const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
-  const [lockedDayToast, setLockedDayToast] = useState<BlockedForwardReason | null>(null);
+  const [lockedDayToast, setLockedDayToast] = useState<string | null>(null);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number; key: string } | null>(null);
   const [layoutGeneration, setLayoutGeneration] = useState(1);
@@ -1375,7 +1373,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // The reason is fixed when the swipe is blocked, so moving to another day
   // while the toast shows does not rewrite it.
   const showBlockedForwardToast = useCallback(() => {
-    setLockedDayToast(resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));
+    setLockedDayToast(blockedForwardMessage(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));
   }, [currentDevotional, viewingDay, totalDays, isViewingActiveSeries]);
 
   const panGesture = useMemo(() =>
@@ -3207,7 +3205,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           ]}
         >
           <Text style={styles.toastText}>
-            {BLOCKED_FORWARD_MESSAGES[lockedDayToast]}
+            {lockedDayToast}
           </Text>
         </Animated.View>
       )}

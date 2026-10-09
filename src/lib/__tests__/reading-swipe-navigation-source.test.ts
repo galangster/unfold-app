@@ -40,9 +40,9 @@ describe('reading swipe navigation source contract', () => {
     const lockedToastBlock = readingSource.match(/\{lockedDayToast && \([\s\S]{0,900}?<\/Animated\.View>\s*\)\}/)?.[0] ?? '';
     // The message names why, and the reason is fixed when the swipe is
     // blocked, so moving to another day does not rewrite it.
-    expect(lockedToastBlock).toContain('BLOCKED_FORWARD_MESSAGES[lockedDayToast]');
+    expect(lockedToastBlock).toContain('{lockedDayToast}');
     expect(readingSource).toContain(
-      'setLockedDayToast(resolveBlockedForwardReason(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));',
+      'setLockedDayToast(blockedForwardMessage(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));',
     );
     expect(lockedToastBlock).toContain('styles.toastContainer');
     expect(lockedToastBlock).toContain('styles.toastText');

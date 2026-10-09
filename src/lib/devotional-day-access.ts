@@ -112,11 +112,30 @@ export function resolveBlockedForwardReason(
 
 export const BLOCKED_FORWARD_MESSAGES: Record<BlockedForwardReason, string> = {
   'series-finished': 'This is the last day of this series',
-  paused: "This series is paused, so its next day wasn't prepared",
+  paused: "This series is paused, and its next day isn't on this device",
   'daily-pace': "Tomorrow's reading unlocks after midnight",
   'finish-current': 'Finish this reading to open the next day',
   'not-ready': "The next day isn't ready yet",
 };
+
+/**
+ * The toast text for a blocked forward swipe. The day to finish is the
+ * series' current day, which can sit before a read day the reader is on.
+ */
+export function blockedForwardMessage(
+  devotional: Devotional | null | undefined,
+  viewingDay: number,
+  totalDays: number,
+  seriesPaused: boolean,
+  now = new Date(),
+): string {
+  const reason = resolveBlockedForwardReason(devotional, viewingDay, totalDays, seriesPaused, now);
+  const currentDay = devotional?.currentDay || viewingDay;
+  if (reason === 'finish-current' && currentDay !== viewingDay) {
+    return `Finish Day ${currentDay} to open the next day`;
+  }
+  return BLOCKED_FORWARD_MESSAGES[reason];
+}
 
 export function getTodayReaderDayNumber(
   devotional: DevotionalReadingProgress | null | undefined,

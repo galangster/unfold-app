@@ -12,6 +12,7 @@ import {
   isDevotionalDaySelectable,
   isPausedSeries,
   isPausedSeriesUnpreparedDay,
+  blockedForwardMessage,
   resolveBlockedForwardReason,
   resolveInitialReadingDayNumber,
 } from '../devotional-day-access';
@@ -637,7 +638,8 @@ describe('resolveBlockedForwardReason', () => {
     });
 
     expect(resolveBlockedForwardReason(series, 5, 7, true, now)).toBe('paused');
-    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe("This series is paused, so its next day wasn't prepared");
+    // The day may be on the server, so the toast does not say it was never prepared.
+    expect(BLOCKED_FORWARD_MESSAGES.paused).toBe("This series is paused, and its next day isn't on this device");
   });
 
   it('keeps the daily pace for a paused series whose next day is here', () => {
@@ -659,6 +661,22 @@ describe('resolveBlockedForwardReason', () => {
     });
 
     expect(resolveBlockedForwardReason(series, 1, 7, false, now)).toBe('finish-current');
-    expect(BLOCKED_FORWARD_MESSAGES['finish-current']).toBe('Finish this reading to open the next day');
+    expect(blockedForwardMessage(series, 1, 7, false, now)).toBe('Finish this reading to open the next day');
+  });
+
+  it('names the unfinished day when the reader is on a later day already read', () => {
+    const series = devotional({
+      currentDay: 2,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2 }),
+        day({ dayNumber: 3, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 5 }),
+      ],
+    });
+
+    expect(getSelectableDayLimit(series, now)).toBe(4);
+    expect(blockedForwardMessage(series, 4, 7, false, now)).toBe('Finish Day 2 to open the next day');
   });
 });
