@@ -22,6 +22,7 @@ import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/a
 import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
 
 // ---------------------------------------------------------------------------
 // MMKV cache instance
@@ -156,7 +157,7 @@ async function postToBackend(
   let lastError: unknown = null;
 
   const payload = {
-    model: 'claude-haiku-4-5-20251001',
+    model: HAIKU_REQUEST_MODEL,
     max_tokens: 2000,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,
