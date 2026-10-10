@@ -7,6 +7,7 @@
  */
 
 import type { DevotionalDay, Devotional } from '@/lib/store';
+import { seriesDisplayNames } from '@/lib/auto-trial-series';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import type { ReflectionStatus } from '@/lib/reflection-status';
 import type { DailyGenerationRecoveryState } from '@/lib/daily-generation-recovery';
@@ -95,7 +96,7 @@ export type DevotionalCardState =
       totalDays: number;
       onReveal: () => void;
     }
-  | { type: 'journey-complete'; seriesTitle: string; onCreateNew: () => void };
+  | { type: 'journey-complete'; seriesTitle: string; devotionalTitle: string; onCreateNew: () => void };
 
 // ─── Input shape ────────────────────────────────────────────────
 
@@ -249,7 +250,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     isJourneyComplete
     && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
   ) {
-    return { type: 'journey-complete', seriesTitle, onCreateNew };
+    const { seriesName, devotionalTitle } = seriesDisplayNames(currentDevotional);
+    return { type: 'journey-complete', seriesTitle: seriesName, devotionalTitle, onCreateNew };
   }
 
   // 2. Confirmed churned users should not see generation-progress copy for a

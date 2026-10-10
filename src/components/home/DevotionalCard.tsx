@@ -756,9 +756,11 @@ function PremiumPausedState({
 
 function JourneyCompleteStateFallback({
   seriesTitle,
+  devotionalTitle,
   ambienceVisible,
 }: {
   seriesTitle: string;
+  devotionalTitle: string;
   ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
@@ -772,11 +774,11 @@ function JourneyCompleteStateFallback({
           style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
           maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
         >
-          {seriesTitle} · Complete
+          {seriesTitle}
         </Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
-          {seriesTitle} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.
+          {devotionalTitle} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.
         </Text>
       </HeroGround>
     </View>
@@ -806,12 +808,14 @@ function JourneyCompleteCreateAction({ onCreateNew }: { onCreateNew: () => void 
 
 function JourneyCompleteState({
   seriesTitle,
+  devotionalTitle,
   onCreateNew,
   gateCreation,
   storedPick,
   ambienceVisible,
 }: {
   seriesTitle: string;
+  devotionalTitle: string;
   onCreateNew: () => void;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
@@ -821,6 +825,7 @@ function JourneyCompleteState({
     <View>
       <JourneyCompleteStateFallback
         seriesTitle={seriesTitle}
+        devotionalTitle={devotionalTitle}
         ambienceVisible={ambienceVisible}
       />
       {/* The recommendation carries the next step: Begin the Next Study, with
@@ -1256,6 +1261,7 @@ export function DevotionalCard({
       {cardState.type === 'journey-complete' && (
         <JourneyCompleteState
           seriesTitle={cardState.seriesTitle}
+          devotionalTitle={cardState.devotionalTitle}
           onCreateNew={cardState.onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}

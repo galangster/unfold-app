@@ -278,7 +278,7 @@ describe('DevotionalCard journey-complete next steps', () => {
   });
 
   function journeyCompleteState(onCreateNew = jest.fn()): DevotionalCardState {
-    return { type: 'journey-complete', seriesTitle: 'Your First Devotional', onCreateNew };
+    return { type: 'journey-complete', seriesTitle: 'Your First Devotional', devotionalTitle: 'Synthetic First Reading', onCreateNew };
   }
 
   it('leaves the next step to the recommendation instead of a second Create Series button', () => {

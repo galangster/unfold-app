@@ -1,4 +1,5 @@
 import {
+  ONBOARDING_FIRST_READING_SERIES_NAME,
   isAutoTrialSeries,
   isOnboardingFirstReading,
   isOnboardingSampleDevotionalId,
@@ -25,7 +26,7 @@ const EMPTY_CONTEXT: Devotional['userContext'] = {
 
 function preservedTitle(existing: Devotional | undefined, day: DevotionalDay): string {
   const current = existing?.title?.trim();
-  if (current && current !== 'Your First Devotional') return current;
+  if (current && current !== ONBOARDING_FIRST_READING_SERIES_NAME) return current;
   return day.title?.trim() || current || '';
 }
 
