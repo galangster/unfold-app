@@ -15,9 +15,14 @@ import { logger } from './logger';
 import { flushUnfoldStorePersistAsync, useUnfoldStore } from './store';
 import { enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
 import { rememberDeletedSeries, wasSeriesDeleted } from './deleted-series';
-import { buildPersonalDataSyncChange, journalEntrySyncData } from './personal-data-sync-records';
+import {
+  buildPersonalDataSyncChange,
+  journalEntryFromSyncData,
+  journalEntrySyncData,
+  queuedJournalEntries,
+} from './personal-data-sync-records';
 import { newId } from './sync-ids';
-import { normalizeJournalMode, normalizeSoapResponses } from './journal-entry-state';
+import { asArray, asNumber, asRecord, asString } from './sync-row-values';
 import { canonicalJournalEntryId, mergeJournalEntryDuplicates, onlyFillsEmptyFields } from './journal-entry-merge';
 import type {
   BibleHighlight,
@@ -59,23 +64,6 @@ function syncGet(key: string): string | null {
   return value instanceof Promise ? null : value;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
 function asPositiveInteger(value: unknown): number | undefined {
   const parsed = asNumber(value);
   return parsed !== undefined && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
@@ -83,10 +71,6 @@ function asPositiveInteger(value: unknown): number | undefined {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function asArray<T = unknown>(value: unknown): T[] {
-  return Array.isArray(value) ? value as T[] : [];
 }
 
 type PendingClientUpdatedAtByRecord = Map<string, string>;
@@ -105,24 +89,6 @@ function pendingClientUpdatedAtsByRecord(): PendingClientUpdatedAtByRecord {
     }
   }
   return pending;
-}
-
-/**
- * Journal entries as their live changes still queued here say they are. A
- * write reaches the outbox at once and the store's disk a moment later, so
- * after a crash in between, the queued copy is newer than the row on this
- * device, or the row is gone.
- */
-function queuedJournalEntries(): JournalEntry[] {
-  return peekSyncOutbox()
-    .filter((change) => change.table === 'journal_entries' && !change.deleted)
-    .map((change) => mapJournalEntry({
-      id: change.id,
-      data: change.data,
-      updatedAt: change.clientUpdatedAt,
-      deleted: false,
-    } as SyncPulledRecord))
-    .filter((entry): entry is JournalEntry => entry != null);
 }
 
 function pendingDeletedRecords(): Set<string> {
@@ -260,29 +226,7 @@ function journalEntriesChangedByCollapse(before: JournalEntry[], after: JournalE
 }
 
 function mapJournalEntry(record: SyncPulledRecord): JournalEntry | null {
-  const row = asRecord(record.data);
-  const devotionalId = asString(row.devotionalId);
-  const dayNumber = asNumber(row.dayNumber);
-  const content = asString(row.content) ?? '';
-  if (!devotionalId || !dayNumber) return null;
-  return {
-    id: record.id,
-    devotionalId,
-    dayNumber,
-    content,
-    createdAt: asString(row.createdAt) ?? recordUpdatedAt(record),
-    updatedAt: recordUpdatedAt(record),
-    // Normalise the same way the entry screen does: a synced "guided" value
-    // (or anything else unrecognised) has no matching UI, so it becomes
-    // "freewrite" here rather than reaching the screen unnormalised.
-    journalMode: normalizeJournalMode(asString(row.journalMode)),
-    // NULL column (every freewrite entry) → no object; the journal screens
-    // read the four fields unguarded, so never hand them `{}` or a partial.
-    soapResponses: normalizeSoapResponses(row.soapResponses),
-    prayerRequests: asArray(row.prayerRequests) as JournalEntry['prayerRequests'],
-    questionResponses: asArray(row.questionResponses) as JournalEntry['questionResponses'],
-    deeperQuestions: asArray<string>(row.deeperQuestions),
-  };
+  return journalEntryFromSyncData(record.id, record.data, recordUpdatedAt(record));
 }
 
 function mapBookmark(record: SyncPulledRecord): Bookmark | null {
@@ -868,8 +812,8 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
           if (!current
             && queued.id !== canonicalJournalEntryId(queued.devotionalId, queued.dayNumber)
             && items.some((item) => dayKey(item) === dayKey(queued))) return items;
-          // The queued copy carries every field but when the entry began: the
-          // row's own date, or the server's copy of it in this pull.
+          // The copy keeps when the entry began: the row's own date, else the
+          // server's copy of it in this pull, else the date the copy carries.
           if (current) return items.map((item) => (item.id === queued.id ? { ...queued, createdAt: item.createdAt } : item));
           const serverCopy = (changes.journal_entries ?? []).find((record) => record.id === queued.id && !record.deleted);
           const began = serverCopy ? mapJournalEntry(serverCopy)?.createdAt : undefined;
