@@ -267,6 +267,24 @@ describe('a journal edit after a crash left the outbox ahead of the store', () =
     expect(storedEntry()?.soapResponses?.prayer).toBe('A prayer typed after the crash.');
   });
 
+  it('keeps the day a recovered new entry began', async () => {
+    seed([]);
+    let began: string | undefined;
+    crashBeforeTheStoreReachesDisk(() => {
+      useUnfoldStore.getState().addJournalEntry({
+        devotionalId: DEVOTIONAL, dayNumber: DAY, content: 'First words.', journalMode: 'freewrite',
+      });
+      began = storedEntry()?.createdAt;
+      useUnfoldStore.getState().updateJournalEntry(ENTRY_ID, 'First words, then more.');
+    });
+    await relaunch();
+
+    expect(began).toBeTruthy();
+    expect(storedEntry()?.content).toBe('First words, then more.');
+    expect(storedEntry()?.updatedAt).not.toBe(began);
+    expect(storedEntry()?.createdAt).toBe(began);
+  });
+
   it('keeps a stored row that is newer than its queued copy', async () => {
     seed([{ content: 'Newer words on disk.', updatedAt: STORED_AT }]);
     crashBeforeTheStoreReachesDisk(() => {
@@ -318,5 +336,46 @@ describe('a journal edit after a crash left the outbox ahead of the store', () =
     expect(queued?.data.content).toBe('First words after the crash.');
     expect(queued!.clientUpdatedAt > REPAIR_AT).toBe(true);
     expect(storedEntry()?.updatedAt).toBe(queued?.clientUpdatedAt);
+  });
+});
+
+describe('the v42 upgrade with a queued edit from one of two entries for a day', () => {
+  /** A v41 blob on disk: the day still has one entry per device, under random ids. */
+  function storeV41(entries: Partial<JournalEntry>[]) {
+    seed([]);
+    const blob = JSON.parse(mmkvStorage.getItem(STORE_KEY) as string);
+    blob.version = 41;
+    blob.state.journalEntries = entries.map((entry) => ({
+      devotionalId: DEVOTIONAL,
+      dayNumber: DAY,
+      journalMode: 'freewrite',
+      createdAt: CREATED_AT,
+      ...entry,
+    }));
+    mmkvStorage.setItem(STORE_KEY, JSON.stringify(blob));
+  }
+
+  it("keeps both entries' words through the restore and the next save", async () => {
+    storeV41([
+      { id: 'journal_first', content: 'Words from the first entry.', updatedAt: '2026-09-01T09:00:00.000Z' },
+      { id: 'journal_second', content: 'Words from the second entry.', updatedAt: STORED_AT },
+    ]);
+    // The second entry's edit reached the outbox, and the app died before the store reached disk.
+    enqueueSyncChanges([{
+      table: 'journal_entries',
+      id: 'journal_second',
+      data: { devotionalId: DEVOTIONAL, dayNumber: DAY, content: 'Second entry, edited before the crash.' },
+      clientUpdatedAt: '2026-09-01T11:00:00.000Z',
+      deleted: false,
+    }]);
+    await relaunch();
+
+    const both = 'Words from the first entry.\n\nSecond entry, edited before the crash.';
+    expect(storedEntry()?.id).toBe(ENTRY_ID);
+    expect(storedEntry()?.content).toBe(both);
+    useUnfoldStore.getState().updateJournalEntry(ENTRY_ID, `${storedEntry()?.content} And more.`);
+
+    expect(queuedEntry()?.data.content).toBe(`${both} And more.`);
+    expect(storedEntry()?.content).toBe(`${both} And more.`);
   });
 });

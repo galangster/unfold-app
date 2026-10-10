@@ -812,8 +812,8 @@ function applyMainStoreChanges(payload: SyncPullResponse): void {
           if (!current
             && queued.id !== canonicalJournalEntryId(queued.devotionalId, queued.dayNumber)
             && items.some((item) => dayKey(item) === dayKey(queued))) return items;
-          // The queued copy carries every field but when the entry began: the
-          // row's own date, or the server's copy of it in this pull.
+          // The copy keeps when the entry began: the row's own date, else the
+          // server's copy of it in this pull, else the date the copy carries.
           if (current) return items.map((item) => (item.id === queued.id ? { ...queued, createdAt: item.createdAt } : item));
           const serverCopy = (changes.journal_entries ?? []).find((record) => record.id === queued.id && !record.deleted);
           const began = serverCopy ? mapJournalEntry(serverCopy)?.createdAt : undefined;

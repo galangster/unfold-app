@@ -56,6 +56,9 @@ export function journalEntrySyncData(entry: JournalEntry): Record<string, unknow
     devotionalId: entry.devotionalId,
     dayNumber: entry.dayNumber,
     content: entry.content,
+    // The server keeps its own created_at. This copy is for a restore from
+    // the outbox, so a recovered entry keeps the day it began.
+    createdAt: entry.createdAt,
     journalMode: entry.journalMode,
     soapResponses: entry.soapResponses,
     prayerRequests: entry.prayerRequests,
