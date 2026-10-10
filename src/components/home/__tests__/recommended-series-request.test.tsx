@@ -384,14 +384,14 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
 
   const fetchedPick = { theme: 'trust', themeName: 'Learning to Trust', type: 'personal', suggestedLength: 7 };
 
-  it('renders a stored pick line without its markdown heading', async () => {
+  it('shows the descriptor in place of a stored pick line', async () => {
     const tree = await mount({
       storedPick: { ...storedPick, line: '# Recommendation\n\nBecause this season is asking for patience.' },
     });
 
     const texts = renderedTexts(tree);
-    expect(texts).toContain('Because this season is asking for patience.');
-    expect(texts.join(' ')).not.toContain('#');
+    expect(texts).toContain('A 7-day series on a quiet strength — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('patience');
   });
 
   it.each([
@@ -403,13 +403,15 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
   });
 
-  it('renders a fetched reason without its markdown heading', async () => {
+  it('shows the descriptor in place of a fetched reason', async () => {
     const tree = await mountFetched({
       ...fetchedPick,
       reason: '# Recommendation\n\nThis series meets you where doubt feels more honest.',
     });
 
-    expect(renderedTexts(tree)).toContain('This series meets you where doubt feels more honest.');
+    const texts = renderedTexts(tree);
+    expect(texts).toContain('A 7-day series on learning to trust — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('doubt');
   });
 
   it.each([
@@ -439,12 +441,10 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain(expected);
   });
 
-  it('renders the QA fixture reason unchanged', async () => {
+  it('shows the descriptor for the QA fixture', async () => {
     const tree = await mount();
 
-    expect(renderedTexts(tree)).toContain(
-      'Because this season is asking for patience without passivity — a study on waiting, courage, and hearing God clearly.',
-    );
+    expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
   });
 
   it('does not POST /api/jobs on render', async () => {

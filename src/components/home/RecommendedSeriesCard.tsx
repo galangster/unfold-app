@@ -1,7 +1,7 @@
 /**
  * Recommendation card shown when user has no active series.
  * Fetches a personalized recommendation from the backend and displays
- * theme, reason text, and quick-start CTA.
+ * theme, a short series descriptor, and quick-start CTA.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -35,7 +35,6 @@ interface Recommendation {
   themeName: string;
   type: string;
   subject?: string;
-  reason: string;
   suggestedLength: 7 | 14;
 }
 
@@ -55,7 +54,6 @@ function toRecommendation(pick: NextPick): Recommendation {
     theme: pick.theme,
     themeName: pick.themeName,
     type: pick.type,
-    reason: pick.line,
     suggestedLength: pick.suggestedLength,
   };
 }
@@ -68,11 +66,13 @@ function displayThemeName(value: unknown): string {
 const PLAIN_FALLBACK_REASON = 'A new series — right where you are right now.';
 
 /**
- * The plain fallback the backend serves when its reason text is unusable. The
- * theme name is data, so the sentence is cleaned too, and a constant covers a
- * theme name the cleaner refuses.
+ * The card's body. The backend writes a new reason on each fetch, and a
+ * stored pick carries its own line, so the body would change from one mount
+ * to the next. The card shows this short descriptor from the
+ * length and the theme instead. The theme name is data, so the sentence is
+ * cleaned too, and a constant covers a theme name the cleaner refuses.
  */
-function fallbackReason(suggestedLength: number, themeName: string) {
+function seriesDescriptor(suggestedLength: number, themeName: string) {
   const theme = themeName.trim() ? themeName.toLowerCase() : 'this theme';
   return cleanRecommendationReason(`A ${suggestedLength}-day series on ${theme} — right where you are right now.`)
     ?? PLAIN_FALLBACK_REASON;
@@ -90,8 +90,6 @@ const QA_TODAY_RECOMMENDATION: Recommendation = {
   theme: 'discernment',
   themeName: 'A Quiet Strength',
   type: 'theme',
-  reason:
-    'Because this season is asking for patience without passivity — a study on waiting, courage, and hearing God clearly.',
   suggestedLength: 7,
 };
 
@@ -273,8 +271,7 @@ export function RecommendedSeriesCard({
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
   const themeName = displayThemeName(recommendation!.themeName);
-  const reasonText = cleanRecommendationReason(recommendation!.reason)
-    ?? fallbackReason(recommendation!.suggestedLength, themeName);
+  const descriptor = seriesDescriptor(recommendation!.suggestedLength, themeName);
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
@@ -291,7 +288,7 @@ export function RecommendedSeriesCard({
           </Text>
 
           <Text style={[styles.reason, { color: colors.textMuted }]}>
-            {reasonText}
+            {descriptor}
           </Text>
 
           <View style={styles.metaRow}>
