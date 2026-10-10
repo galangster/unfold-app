@@ -81,6 +81,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
+import { HAIKU_REQUEST_MODEL } from '@/lib/ai-model';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string }[] = [
   {
@@ -825,7 +826,7 @@ Their journal entry:
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: HAIKU_REQUEST_MODEL,
           max_tokens: 400,
           temperature: 0.8,
           system: systemPrompt,

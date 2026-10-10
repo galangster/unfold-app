@@ -32,6 +32,7 @@ import {
   nearestPrecedingUserMessage,
   shouldEnqueueCompanionMessage,
 } from './companion-chat-request';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -415,7 +416,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                   feedback,
                   messageContent: msg.content?.slice(0, 5000),
                   userMessage: prevMsg?.content?.slice(0, 5000),
-                  model: 'claude-haiku-4-5-20251001',
+                  model: HAIKU_REQUEST_MODEL,
                   companionName: null,
                   contextSummary: activeConv?.topicTags?.join(', '),
                   reason: feedback === 'negative' ? reason ?? null : null,

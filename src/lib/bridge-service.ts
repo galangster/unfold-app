@@ -18,6 +18,7 @@ import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/a
 import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
 
 // ---------------------------------------------------------------------------
 // MMKV cache (dedicated instance — not the Zustand store)
@@ -349,7 +350,7 @@ export async function generateBridge(
 
   try {
     const result = await postBridgeRequest({
-      model: 'claude-haiku-4-5-20251001',
+      model: HAIKU_REQUEST_MODEL,
       max_tokens: 500,
       temperature: 0.7,
       system: systemPrompt,

@@ -29,6 +29,7 @@ import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -365,7 +366,7 @@ async function fallbackNonStreaming(
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: HAIKU_REQUEST_MODEL,
         context: companionContext,
         messages: chatMessages,
         stream: false,
@@ -641,7 +642,7 @@ export function useCompanionChat() {
             headers,
             JSON.stringify({
               messages: chatMessages,
-              model: 'claude-haiku-4-5-20251001',
+              model: HAIKU_REQUEST_MODEL,
               conversationId: streamConversationId,
               context: companionContext,
             }),
