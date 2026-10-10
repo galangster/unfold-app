@@ -51,8 +51,12 @@ function storedWriteClock(existing: Devotional | undefined): string | undefined 
 function replacesStoredSample(existing: Devotional | undefined, incoming: DevotionalDay): boolean {
   const stored = firstDay(existing);
   if (!stored || stored.bodyText === incoming.bodyText) return false;
-  const completedAt = lifecycleTimestampMs(incoming.updatedAt ?? incoming.generatedAt);
-  return completedAt > lifecycleTimestampMs(storedWriteClock(existing));
+  return lifecycleTimestampMs(serverStamp(incoming)) > lifecycleTimestampMs(storedWriteClock(existing));
+}
+
+/** The server's stamp on a finished job's day: the job's completion time. */
+function serverStamp(day: DevotionalDay): string | undefined {
+  return day.updatedAt ?? day.generatedAt;
 }
 
 function sameContext(
@@ -89,8 +93,12 @@ function shouldKeepExistingCurrent(state: {
   return !isOnboardingSampleDevotionalId(current.id);
 }
 
-function nextWriteAt(previous: string | undefined): string {
-  return new Date(Math.max(Date.now(), lifecycleTimestampMs(previous) + 1)).toISOString();
+function nextWriteAt(previous: string | undefined, floor: string | undefined): string {
+  return new Date(Math.max(
+    Date.now(),
+    lifecycleTimestampMs(previous) + 1,
+    lifecycleTimestampMs(floor),
+  )).toISOString();
 }
 
 export function persistOnboardingFirstReading(input: {
@@ -136,8 +144,10 @@ export function persistOnboardingFirstReading(input: {
   if (alreadyMarked) return true;
 
   // The saved day carries the write's clock, so a pull of an older row of the
-  // same day cannot replace it.
-  const updatedAt = nextWriteAt(storedWriteClock(existingSameId));
+  // same day cannot replace it. The server's stamp on the result is the floor:
+  // on a phone whose clock runs slow, the old sample can carry a later stamp
+  // than this phone's clock, and the pull would take it back.
+  const updatedAt = nextWriteAt(storedWriteClock(existingSameId), serverStamp(input.day));
   // A sample the first life's trial retired comes back live, on a clock past
   // its retirement, so the server takes the resume.
   const lifecycle = replacesStored && existingSameId && isDevotionalArchived(existingSameId)

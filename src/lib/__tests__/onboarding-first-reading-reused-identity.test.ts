@@ -121,13 +121,13 @@ const TRIAL_DAYS = 3;
 
 type Lifecycle = { archivedAt?: string | null; archivedStateAt?: string };
 
-function serverHoldsOldSample(lifecycle: Lifecycle = {}) {
+function serverHoldsOldSample(lifecycle: Lifecycle = {}, at = FIRST_RUN_AT) {
   return {
-    timestamp: FIRST_RUN_AT,
+    timestamp: at,
     changes: {
       devotionals: [{
         id: SAMPLE_ID,
-        updatedAt: lifecycle.archivedStateAt ?? FIRST_RUN_AT,
+        updatedAt: lifecycle.archivedStateAt ?? at,
         deleted: false,
         data: {
           ...lifecycle,
@@ -135,9 +135,9 @@ function serverHoldsOldSample(lifecycle: Lifecycle = {}) {
           title: OLD_DAY.title,
           totalDays: 1,
           currentDay: 1,
-          createdAt: FIRST_RUN_AT,
-          clientUpdatedAt: FIRST_RUN_AT,
-          seriesStartDate: FIRST_RUN_AT,
+          createdAt: at,
+          clientUpdatedAt: at,
+          seriesStartDate: at,
           generationMode: 'progressive',
           seriesArc: {
             totalDaysPlanned: 1,
@@ -145,16 +145,16 @@ function serverHoldsOldSample(lifecycle: Lifecycle = {}) {
             narrativeShape: '',
             dayHints: [],
             isOpenEnded: false,
-            createdAt: FIRST_RUN_AT,
+            createdAt: at,
             origin: 'onboarding_first',
           },
         },
       }],
       devotional_days: [{
         id: `day-${SAMPLE_ID}-1`,
-        updatedAt: FIRST_RUN_AT,
+        updatedAt: at,
         deleted: false,
-        data: { ...OLD_DAY, isRead: true, readAt: FIRST_RUN_AT },
+        data: { ...OLD_DAY, isRead: true, readAt: at },
       }],
     },
   };
@@ -341,6 +341,24 @@ describe('a second onboarding under a reused identity', () => {
     });
 
     expect(sampleInStore()?.days[0]).toMatchObject({ bodyText: NEW_DAY.bodyText, isRead: true });
+  });
+
+  // The phone's clock runs eight minutes slow, and the first onboarding
+  // finished inside those eight minutes. The new result lands before the
+  // app-start pull brings the old sample back.
+  it('keeps the new first reading when the old sample arrives after it on a phone whose clock runs slow', () => {
+    const firstJobCompletedAt = '2026-10-09T20:34:00.000Z';
+    jest.setSystemTime(new Date(Date.parse(SECOND_RUN_AT) - 8 * 60_000));
+
+    persistOnboardingFirstReading({ id: SAMPLE_ID, day: NEW_DAY });
+    applyPulledUserData(serverHoldsOldSample({}, firstJobCompletedAt));
+
+    const sample = sampleInStore();
+    expect({
+      title: sample?.title,
+      body: sample?.days[0]?.bodyText,
+      stampedAtServerResult: Date.parse(sample?.days[0]?.updatedAt ?? '') >= Date.parse(SECOND_JOB_COMPLETED_AT),
+    }).toEqual({ title: NEW_DAY.title, body: NEW_DAY.bodyText, stampedAtServerResult: true });
   });
 
   // The server never writes another day of the finished trial, so the

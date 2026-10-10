@@ -1,5 +1,8 @@
+import { DELETED_SERIES_KEY, keepNewestDeletes, parseDeletedSeriesClocks } from './mmkv-recovery-outbox';
 import { mmkvStorage } from './mmkv-storage';
 import { peekSyncOutbox } from './sync-outbox';
+
+export { DELETED_SERIES_KEY };
 
 /**
  * Series deleted here, or by a sync that applied another device's delete,
@@ -11,27 +14,14 @@ import { peekSyncOutbox } from './sync-outbox';
  *
  * The clocks are kept on disk, so a finished generation job that lands after
  * a restart cannot bring a deleted series back once its tombstone has left
- * the outbox. Only the newest deletes are kept. `full-reset.ts` wipes the key
- * with the account's other data.
+ * the outbox. Only the newest deletes are kept. A normal boot merges the
+ * clocks a recovery session wrote into the real store (`mmkv-storage.ts`).
+ * `full-reset.ts` wipes the key with the account's other data.
  */
-export const DELETED_SERIES_KEY = 'deleted-series-v1';
-const MAX_REMEMBERED_DELETES = 100;
-
 let deletedAtById: Map<string, number> | null = null;
 
-function readDeletedClocks(): Map<string, number> {
-  try {
-    const raw = mmkvStorage.getItem(DELETED_SERIES_KEY) as string | null;
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map();
-    return new Map(Object.entries(parsed).filter((entry): entry is [string, number] => Number.isFinite(entry[1])));
-  } catch {
-    return new Map();
-  }
-}
-
 function deletedClocks(): Map<string, number> {
-  deletedAtById ??= readDeletedClocks();
+  deletedAtById ??= parseDeletedSeriesClocks(mmkvStorage.getItem(DELETED_SERIES_KEY) as string | null);
   return deletedAtById;
 }
 
@@ -42,10 +32,7 @@ export function rememberDeletedSeries(devotionalId: string, deletedAt: string): 
   const known = clocks.get(devotionalId);
   if (known !== undefined && known >= at) return;
   clocks.set(devotionalId, at);
-  if (clocks.size > MAX_REMEMBERED_DELETES) {
-    const oldest = [...clocks].sort((a, b) => b[1] - a[1]).slice(MAX_REMEMBERED_DELETES);
-    for (const [id] of oldest) clocks.delete(id);
-  }
+  keepNewestDeletes(clocks);
   try {
     mmkvStorage.setItem(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(clocks)));
   } catch {

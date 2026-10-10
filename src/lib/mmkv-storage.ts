@@ -28,7 +28,12 @@ import {
   EPHEMERAL_DEVICE_ID_PREFIX,
   type ResolveKeychainReadResult,
 } from '@/lib/device-id';
-import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY } from '@/lib/mmkv-recovery-outbox';
+import {
+  DELETED_SERIES_KEY,
+  mergeRecoveryDeletedSeries,
+  mergeRecoveryOutbox,
+  RECOVERY_OUTBOX_KEY,
+} from '@/lib/mmkv-recovery-outbox';
 
 // Re-export so consumers only need one import location (backward compat).
 export type { KVAccessor } from '@/lib/mmkv-recovery-outbox';
@@ -296,11 +301,13 @@ if (openPlan.clearOnOpen) {
   // unmerged entries before the merge ever gets a chance to run. Carry the
   // outbox across the wipe: it is a pending-upload queue, not the "current"
   // session data REVM-4 exists to keep from resurrecting, and the eventual
-  // merge dedupes per table:id (newer clientUpdatedAt wins).
-  const unmergedOutbox = mmkv.getString(RECOVERY_OUTBOX_KEY);
+  // merge dedupes per table:id (newer clientUpdatedAt wins). The series
+  // delete clocks cross the same way: a synced tombstone leaves the outbox,
+  // and only its clock still stops a finished job from restoring the series.
+  const carried = [RECOVERY_OUTBOX_KEY, DELETED_SERIES_KEY].map((key) => [key, mmkv.getString(key)] as const);
   mmkv.clearAll();
-  if (unmergedOutbox !== undefined) {
-    mmkv.set(RECOVERY_OUTBOX_KEY, unmergedOutbox);
+  for (const [key, value] of carried) {
+    if (value !== undefined) mmkv.set(key, value);
   }
 }
 
@@ -335,8 +342,9 @@ if (openPlan.recrypt) {
 
 // ---------------------------------------------------------------------------
 // Recovery-outbox merge (RS2-1): on a normal (non-recovery) open, drain any
-// sync-outbox entries written during a previous recovery session into the real
-// store. See mmkv-recovery-outbox.ts for the pure merge logic + unit tests.
+// sync-outbox entries and series delete clocks written during a previous
+// recovery session into the real store. See mmkv-recovery-outbox.ts for the
+// pure merge logic + unit tests.
 // ---------------------------------------------------------------------------
 
 function mergeRecoveryOutboxOnNormalBoot(): void {
@@ -344,11 +352,15 @@ function mergeRecoveryOutboxOnNormalBoot(): void {
 
   try {
     const recoveryMmkv = new MMKV({ id: 'unfold-store-v2-recovery' });
-    // Quick-exit: skip if the recovery namespace has nothing for this key.
-    if (!recoveryMmkv.getString(RECOVERY_OUTBOX_KEY)) return;
-
-    mergeRecoveryOutbox(mmkv, recoveryMmkv, RECOVERY_OUTBOX_KEY);
-    logger.log('[MMKV] Merged recovery-outbox entries into real store');
+    // Skip each merge when the recovery namespace has nothing for its key.
+    if (recoveryMmkv.getString(RECOVERY_OUTBOX_KEY)) {
+      mergeRecoveryOutbox(mmkv, recoveryMmkv, RECOVERY_OUTBOX_KEY);
+      logger.log('[MMKV] Merged recovery-outbox entries into real store');
+    }
+    if (recoveryMmkv.getString(DELETED_SERIES_KEY)) {
+      mergeRecoveryDeletedSeries(mmkv, recoveryMmkv);
+      logger.log('[MMKV] Merged recovery delete clocks into real store');
+    }
   } catch (error) {
     logger.warn('[MMKV] Recovery-outbox merge failed; entries may be lost', error);
   }

@@ -7,6 +7,7 @@
  * store. Entries are deduplicated by table:id@clientUpdatedAt (newer wins;
  * on an equal timestamp the recovery entry wins — it was written later).
  * The recovery namespace key is cleared afterwards so it stays EMPTY (REVM-4).
+ * The series delete clocks cross the same way, newest clock per id.
  *
  * Separated from mmkv-storage.ts so the pure merge logic can be unit-tested
  * without pulling in native MMKV / expo-secure-store / uuid bindings.
@@ -73,4 +74,50 @@ export function mergeRecoveryOutbox(
 
   realKV.set(outboxKey, JSON.stringify(Array.from(map.values())));
   recoveryKV.delete(outboxKey);
+}
+
+/**
+ * Single owner of the series delete-clock key, re-exported by
+ * deleted-series.ts. During a recovery session the clocks are written to the
+ * recovery namespace, so they cross to the real store with the outbox. A
+ * delete made during recovery must still stop a finished generation job once
+ * its tombstone has left the outbox.
+ */
+export const DELETED_SERIES_KEY = 'deleted-series-v1';
+const MAX_REMEMBERED_DELETES = 100;
+
+/** Delete clocks by series id, read from their stored JSON. */
+export function parseDeletedSeriesClocks(raw: string | null | undefined): Map<string, number> {
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map();
+    return new Map(Object.entries(parsed).filter((entry): entry is [string, number] => Number.isFinite(entry[1])));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Keep only the newest deletes. */
+export function keepNewestDeletes(clocks: Map<string, number>): void {
+  if (clocks.size <= MAX_REMEMBERED_DELETES) return;
+  const oldest = [...clocks].sort((a, b) => b[1] - a[1]).slice(MAX_REMEMBERED_DELETES);
+  for (const [id] of oldest) clocks.delete(id);
+}
+
+/**
+ * Merges the delete clocks a recovery session wrote into the real store,
+ * newest clock per id, then clears the recovery copy (REVM-4).
+ */
+export function mergeRecoveryDeletedSeries(realKV: KVAccessor, recoveryKV: KVAccessor): void {
+  const recovered = parseDeletedSeriesClocks(recoveryKV.getString(DELETED_SERIES_KEY));
+  if (recovered.size > 0) {
+    const clocks = parseDeletedSeriesClocks(realKV.getString(DELETED_SERIES_KEY));
+    for (const [id, at] of recovered) {
+      const known = clocks.get(id);
+      if (known === undefined || at > known) clocks.set(id, at);
+    }
+    keepNewestDeletes(clocks);
+    realKV.set(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(clocks)));
+  }
+  recoveryKV.delete(DELETED_SERIES_KEY);
 }
