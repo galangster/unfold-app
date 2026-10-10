@@ -390,7 +390,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     });
 
     const texts = renderedTexts(tree);
-    expect(texts).toContain('A 7-day series on a quiet strength — right where you are right now.');
+    expect(texts).toContain('A 7-day series on A Quiet Strength — right where you are right now.');
     expect(texts.join(' ')).not.toContain('patience');
   });
 
@@ -400,7 +400,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   ])('shows the plain fallback when a stored pick line is %s', async (_label, line) => {
     const tree = await mount({ storedPick: { ...storedPick, line } });
 
-    expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
+    expect(renderedTexts(tree)).toContain('A 7-day series on A Quiet Strength — right where you are right now.');
   });
 
   it('shows the descriptor in place of a fetched reason', async () => {
@@ -410,7 +410,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     });
 
     const texts = renderedTexts(tree);
-    expect(texts).toContain('A 7-day series on learning to trust — right where you are right now.');
+    expect(texts).toContain('A 7-day series on Learning to Trust — right where you are right now.');
     expect(texts.join(' ')).not.toContain('doubt');
   });
 
@@ -420,7 +420,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   ])('shows the plain fallback when a fetched reason is %s', async (_label, reason) => {
     const tree = await mountFetched({ ...fetchedPick, ...reason });
 
-    expect(renderedTexts(tree)).toContain('A 7-day series on learning to trust — right where you are right now.');
+    expect(renderedTexts(tree)).toContain('A 7-day series on Learning to Trust — right where you are right now.');
   });
 
   it.each([
@@ -433,7 +433,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   });
 
   it.each([
-    ['markdown', '**Trust**\nGod', 'A 7-day series on trust god — right where you are right now.'],
+    ['markdown', '**Trust**\nGod', 'A 7-day series on Trust God — right where you are right now.'],
     ['html', '<b>Trust</b>', 'A new series — right where you are right now.'],
   ])('keeps the fallback plain when the theme name carries %s', async (_label, themeName, expected) => {
     const tree = await mountFetched({ ...fetchedPick, themeName, reason: null });
@@ -444,7 +444,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   it('shows the descriptor for the QA fixture', async () => {
     const tree = await mount();
 
-    expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
+    expect(renderedTexts(tree)).toContain('A 7-day series on A Quiet Strength — right where you are right now.');
   });
 
   it('does not POST /api/jobs on render', async () => {

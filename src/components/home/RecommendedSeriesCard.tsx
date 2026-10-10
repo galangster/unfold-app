@@ -69,11 +69,13 @@ const PLAIN_FALLBACK_REASON = 'A new series — right where you are right now.';
  * The card's body. The backend writes a new reason on each fetch, and a
  * stored pick carries its own line, so the body would change from one mount
  * to the next. The card shows this short descriptor from the
- * length and the theme instead. The theme name is data, so the sentence is
- * cleaned too, and a constant covers a theme name the cleaner refuses.
+ * length and the theme instead. The theme name keeps its case, so a name
+ * such as "Honest Before God" reads as written. The theme name is data, so
+ * the sentence is cleaned too, and a constant covers a theme name the
+ * cleaner refuses.
  */
 function seriesDescriptor(suggestedLength: number, themeName: string) {
-  const theme = themeName.trim() ? themeName.toLowerCase() : 'this theme';
+  const theme = themeName.trim() ? themeName : 'this theme';
   return cleanRecommendationReason(`A ${suggestedLength}-day series on ${theme} — right where you are right now.`)
     ?? PLAIN_FALLBACK_REASON;
 }

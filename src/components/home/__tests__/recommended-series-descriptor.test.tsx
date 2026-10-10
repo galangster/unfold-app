@@ -103,7 +103,7 @@ import { RecommendedSeriesCard } from '../RecommendedSeriesCard';
 import { flushUnfoldStorePersist, useUnfoldStore, type NextPick } from '@/lib/store';
 
 const RECOMMENDATION = { theme: 'trust', themeName: 'Learning to Trust', type: 'theme', suggestedLength: 7 as const };
-const DESCRIPTOR = 'A 7-day series on learning to trust — right where you are right now.';
+const DESCRIPTOR = 'A 7-day series on Learning to Trust — right where you are right now.';
 // Synthetic stand-in for a first-person rationale.
 const FIRST_PERSON_RATIONALE = 'Since I know nothing about where you are right now, I picked a study on trust that I think can meet you.';
 
@@ -162,5 +162,17 @@ describe('the next-study card body', () => {
     expect(before).toContain(DESCRIPTOR);
     expect(before).not.toContain(FIRST_PERSON_RATIONALE);
     expect(after).toEqual(before);
+  });
+
+  // The backend theme catalog holds names such as "Honest Before God".
+  it('keeps the case of a theme name with a proper noun', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...RECOMMENDATION, theme: 'conviction', themeName: 'Honest Before God', reason: null }),
+    });
+    const texts = await renderCard();
+
+    expect(texts).toContain('A 7-day series on Honest Before God — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('god');
   });
 });
