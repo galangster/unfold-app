@@ -99,8 +99,8 @@ export type DevotionalCardState =
   | {
       type: 'journey-complete';
       seriesTitle: string;
-      devotionalTitle: string;
-      isFirstReading: boolean;
+      /** The finished sentence under the series name. */
+      subtitle: string;
       onCreateNew: () => void;
     };
 
@@ -249,15 +249,24 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     return { type: 'empty', onCreateNew };
   }
 
-  const seriesTitle = currentDevotional.title;
+  // One source for the series name in every state, so the first reading
+  // reads the same whichever writer set its stored title.
+  const { seriesName: seriesTitle, devotionalTitle, isFirstReading } = seriesDisplayNames(currentDevotional);
 
   // Auto trial: journey-complete wins over premium-denied (TS-6).
   if (
     isJourneyComplete
     && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
   ) {
-    const { seriesName, devotionalTitle, isFirstReading } = seriesDisplayNames(currentDevotional);
-    return { type: 'journey-complete', seriesTitle: seriesName, devotionalTitle, isFirstReading, onCreateNew };
+    // The first reading does not count toward the streak, so its sentence
+    // makes no streak claim. The rhythm card below says when the streak starts.
+    const streakLine = isFirstReading ? '' : ' Your streak continues across series.';
+    return {
+      type: 'journey-complete',
+      seriesTitle,
+      subtitle: `${devotionalTitle} is complete.${streakLine} Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+      onCreateNew,
+    };
   }
 
   // 2. Confirmed churned users should not see generation-progress copy for a

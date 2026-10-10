@@ -756,20 +756,15 @@ function PremiumPausedState({
 
 function JourneyCompleteStateFallback({
   seriesTitle,
-  devotionalTitle,
-  isFirstReading,
+  subtitle,
   ambienceVisible,
 }: {
   seriesTitle: string;
-  devotionalTitle: string;
-  isFirstReading: boolean;
+  subtitle: string;
   ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
   const textCap = heroCopyCap(ambienceVisible);
-  // The first reading does not count toward the streak, so its sentence makes
-  // no streak claim. The rhythm card below says when the streak starts.
-  const streakLine = isFirstReading ? '' : ' Your streak continues across series.';
 
   return (
     <View style={styles.heroStateBlock}>
@@ -783,7 +778,7 @@ function JourneyCompleteStateFallback({
         </Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
-          {`${devotionalTitle} is complete.${streakLine} Prepare your next study now or tomorrow, then return for tomorrow’s reading.`}
+          {subtitle}
         </Text>
       </HeroGround>
     </View>
@@ -813,16 +808,14 @@ function JourneyCompleteCreateAction({ onCreateNew }: { onCreateNew: () => void 
 
 function JourneyCompleteState({
   seriesTitle,
-  devotionalTitle,
-  isFirstReading,
+  subtitle,
   onCreateNew,
   gateCreation,
   storedPick,
   ambienceVisible,
 }: {
   seriesTitle: string;
-  devotionalTitle: string;
-  isFirstReading: boolean;
+  subtitle: string;
   onCreateNew: () => void;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
@@ -832,8 +825,7 @@ function JourneyCompleteState({
     <View>
       <JourneyCompleteStateFallback
         seriesTitle={seriesTitle}
-        devotionalTitle={devotionalTitle}
-        isFirstReading={isFirstReading}
+        subtitle={subtitle}
         ambienceVisible={ambienceVisible}
       />
       {/* The recommendation carries the next step: Begin the Next Study, with
@@ -1269,8 +1261,7 @@ export function DevotionalCard({
       {cardState.type === 'journey-complete' && (
         <JourneyCompleteState
           seriesTitle={cardState.seriesTitle}
-          devotionalTitle={cardState.devotionalTitle}
-          isFirstReading={cardState.isFirstReading}
+          subtitle={cardState.subtitle}
           onCreateNew={cardState.onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}

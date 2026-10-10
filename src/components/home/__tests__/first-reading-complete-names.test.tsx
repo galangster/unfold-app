@@ -136,7 +136,7 @@ jest.mock('@/hooks/useAccessibility', () => ({
 }));
 
 import { DevotionalCard } from '../DevotionalCard';
-import { computeDevotionalState } from '../compute-devotional-state';
+import { computeDevotionalState, type DevotionalCardState } from '../compute-devotional-state';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { extractPulledDevotionalContent } from '@/lib/devotional-sync-pull';
 import { persistOnboardingFirstReading } from '@/lib/onboarding-first-reading';
@@ -144,6 +144,7 @@ import {
   flushUnfoldStorePersist,
   updateSyncedDevotionals,
   useUnfoldStore,
+  type Devotional,
   type DevotionalDay,
 } from '@/lib/store';
 
@@ -185,30 +186,48 @@ function pullSeriesRow(data: Record<string, unknown>, at: string) {
 
 const storedTitle = () => useUnfoldStore.getState().devotionals.find((row) => row.id === SAMPLE_ID)?.title;
 
-function renderTodayCard(): string[] {
+const FINISHED = {
+  hasReadToday: true,
+  isJourneyComplete: true,
+  premiumPolicy: 'denied',
+  daysCompleted: 1,
+  progress: 100,
+} as const;
+
+const UNREAD = {
+  hasReadToday: false,
+  isJourneyComplete: false,
+  premiumPolicy: 'granted',
+  daysCompleted: 0,
+  progress: 0,
+} as const;
+
+function renderTodayCard(
+  progress: typeof FINISHED | typeof UNREAD = FINISHED,
+  expectedType: DevotionalCardState['type'] = 'journey-complete',
+): string[] {
   const { devotionals, currentDevotionalId } = useUnfoldStore.getState();
   const current = devotionals.find((row) => row.id === currentDevotionalId) ?? null;
   expect(current?.id).toBe(SAMPLE_ID);
-  const state = computeDevotionalState({
+  return renderCard(computeDevotionalState({
+    ...progress,
     currentDevotional: current,
     currentDayData: current?.days[0] ?? null,
-    hasReadToday: true,
     dayLabel: 'Today',
-    isJourneyComplete: true,
     isPreparing: false,
-    premiumPolicy: 'denied',
-    daysCompleted: 1,
     totalDays: 1,
-    progress: 100,
     tomorrowTeaser: null,
     onContinue: noop,
     onCreateNew: noop,
     onOpenBible: noop,
     onRenewPremium: noop,
     onReveal: noop,
-    ctaText: '',
-  });
-  expect(state.type).toBe('journey-complete');
+    ctaText: 'Begin',
+  }), expectedType);
+}
+
+function renderCard(state: DevotionalCardState, expectedType: DevotionalCardState['type']): string[] {
+  expect(state.type).toBe(expectedType);
   const { Text } = require('react-native');
   let tree!: ReturnType<typeof renderer.create>;
   act(() => {
@@ -221,7 +240,7 @@ function renderTodayCard(): string[] {
   return texts;
 }
 
-describe('the finished first devotional on Today', () => {
+describe('the first devotional on Today', () => {
   beforeEach(() => {
     useUnfoldStore.getState().reset();
     flushUnfoldStorePersist();
@@ -257,22 +276,41 @@ describe('the finished first devotional on Today', () => {
     expect(before.join(' ')).not.toContain('Your streak continues');
   });
 
+  // One source for the name: every state uses it, not only the finished one.
+  it('shows the series name on the unread first devotional before and after the server title lands', () => {
+    expect(persistOnboardingFirstReading({ id: SAMPLE_ID, day: firstDay })).toBe(true);
+    expect(storedTitle()).toBe(DAY_TITLE);
+    const before = renderTodayCard(UNREAD, 'unread');
+
+    pullSeriesRow({ title: SERVER_SERIES_TITLE }, '2099-01-01T00:00:00.000Z');
+    expect(storedTitle()).toBe(SERVER_SERIES_TITLE);
+    const after = renderTodayCard(UNREAD, 'unread');
+
+    expect(after).toEqual(before);
+    expect(before).toContain(SERVER_SERIES_TITLE);
+  });
+
   it('keeps the streak line for a finished series that is not the first reading', () => {
-    const { Text } = require('react-native');
-    let tree!: ReturnType<typeof renderer.create>;
-    act(() => {
-      tree = renderer.create(<DevotionalCard state={{
-        type: 'journey-complete',
-        seriesTitle: 'Synthetic Series',
-        devotionalTitle: 'Synthetic Series',
-        isFirstReading: false,
-        onCreateNew: noop,
-      }} />);
-    });
-    const texts = tree.root.findAllByType(Text).map((node: { props: { children: unknown } }) => (
-      ([] as unknown[]).concat(node.props.children).join('')
-    ));
-    act(() => tree.unmount());
+    const series = {
+      id: 'synthetic-series',
+      title: 'Synthetic Series',
+      days: [{ ...firstDay, isRead: true }],
+    } as Devotional;
+    const texts = renderCard(computeDevotionalState({
+      ...FINISHED,
+      currentDevotional: series,
+      currentDayData: series.days[0],
+      dayLabel: 'Today',
+      isPreparing: false,
+      totalDays: 1,
+      tomorrowTeaser: null,
+      onContinue: noop,
+      onCreateNew: noop,
+      onOpenBible: noop,
+      onRenewPremium: noop,
+      onReveal: noop,
+      ctaText: '',
+    }), 'journey-complete');
 
     expect(texts).toContain(
       'Synthetic Series is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.',

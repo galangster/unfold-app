@@ -11,6 +11,11 @@ function calendarDaySpan(from: Date, to: Date): number {
 /** The onboarding devotional is read today but does not count toward the streak. */
 export const STREAK_STARTS_TOMORROW_COPY = 'Your streak starts with tomorrow’s reading.';
 
+/** Today is read, but no streak day is counted yet, so the streak starts tomorrow. */
+export function startsTomorrow(streakCount: number, hasReadToday: boolean): boolean {
+  return streakCount === 0 && hasReadToday;
+}
+
 /** Maximum freezes a premium user can hold (free users cannot hold any). */
 export const MAX_FREEZES = 99;
 

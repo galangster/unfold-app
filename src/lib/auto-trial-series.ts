@@ -20,16 +20,24 @@ export function isOnboardingFirstReading(
 export const ONBOARDING_FIRST_READING_SERIES_NAME = 'Your First Devotional';
 
 /**
+ * Whether a row is the first reading. A pull can drop the first-reading arc,
+ * so the sample id marks the row too.
+ */
+export function isFirstReadingRow(devotional: Pick<Devotional, 'id' | 'seriesArc'>): boolean {
+  return isOnboardingSampleDevotionalId(devotional.id) || isOnboardingFirstReading(devotional);
+}
+
+/**
  * The series name and the devotional title for a series. A first reading's
  * stored title has two writers: this phone names the row by its day, and the
  * server's onboarding job names it "Your First Devotional". A pull takes the
- * one the server holds, and can drop the first-reading arc with it, so the
- * sample id marks the row and day 1 names the devotional.
+ * one the server holds, so the series name is the constant and day 1 names
+ * the devotional.
  */
 export function seriesDisplayNames(
   devotional: Pick<Devotional, 'id' | 'title' | 'days' | 'seriesArc'>,
 ): { seriesName: string; devotionalTitle: string; isFirstReading: boolean } {
-  if (!isOnboardingSampleDevotionalId(devotional.id) && !isOnboardingFirstReading(devotional)) {
+  if (!isFirstReadingRow(devotional)) {
     return { seriesName: devotional.title, devotionalTitle: devotional.title, isFirstReading: false };
   }
   const dayTitle = asTrimmedString(devotional.days.find((day) => day.dayNumber === 1)?.title);

@@ -30,12 +30,18 @@ import { cleanRecommendationReason } from '@/lib/recommendation-text';
 import type { NextPick } from '@/lib/store';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
-interface Recommendation {
+/** The fields the backend serves and a stored pick carries. */
+interface RecommendationFields {
   theme: string;
   themeName: string;
   type: string;
   subject?: string;
   suggestedLength: 7 | 14;
+}
+
+interface Recommendation extends RecommendationFields {
+  /** The card body, built once when the recommendation is created. */
+  descriptor: string;
 }
 
 interface RecommendedSeriesCardProps {
@@ -49,21 +55,12 @@ interface RecommendedSeriesCardProps {
   premiumPolicy?: PremiumAccessPolicy;
 }
 
-function toRecommendation(pick: NextPick): Recommendation {
-  return {
-    theme: pick.theme,
-    themeName: pick.themeName,
-    type: pick.type,
-    suggestedLength: pick.suggestedLength,
-  };
-}
-
 /** Fetched JSON is unchecked, so a theme name renders only when it is text. */
 function displayThemeName(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-const PLAIN_FALLBACK_REASON = 'A new series — right where you are right now.';
+const PLAIN_FALLBACK_DESCRIPTOR = 'A new series — right where you are right now.';
 
 /**
  * The card's body. The backend writes a new reason on each fetch, and a
@@ -77,7 +74,20 @@ const PLAIN_FALLBACK_REASON = 'A new series — right where you are right now.';
 function seriesDescriptor(suggestedLength: number, themeName: string) {
   const theme = themeName.trim() ? themeName : 'this theme';
   return cleanRecommendationReason(`A ${suggestedLength}-day series on ${theme} — right where you are right now.`)
-    ?? PLAIN_FALLBACK_REASON;
+    ?? PLAIN_FALLBACK_DESCRIPTOR;
+}
+
+function withDescriptor(fields: RecommendationFields): Recommendation {
+  return { ...fields, descriptor: seriesDescriptor(fields.suggestedLength, displayThemeName(fields.themeName)) };
+}
+
+function toRecommendation(pick: NextPick): Recommendation {
+  return withDescriptor({
+    theme: pick.theme,
+    themeName: pick.themeName,
+    type: pick.type,
+    suggestedLength: pick.suggestedLength,
+  });
 }
 
 function formatRecommendationType(type: string) {
@@ -88,12 +98,12 @@ function formatRecommendationType(type: string) {
 
 const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 
-const QA_TODAY_RECOMMENDATION: Recommendation = {
+const QA_TODAY_RECOMMENDATION = withDescriptor({
   theme: 'discernment',
   themeName: 'A Quiet Strength',
   type: 'theme',
   suggestedLength: 7,
-};
+});
 
 export function RecommendedSeriesCard({
   variant,
@@ -153,9 +163,9 @@ export function RecommendedSeriesCard({
         const headers = await getAuthHeaders();
         const res = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/recommendations/next-series`, { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data: Recommendation = await res.json();
+        const data: RecommendationFields = await res.json();
         if (!cancelled) {
-          setRecommendation(data);
+          setRecommendation(withDescriptor(data));
           setLoading(false);
         }
       } catch {
@@ -273,7 +283,6 @@ export function RecommendedSeriesCard({
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
   const themeName = displayThemeName(recommendation!.themeName);
-  const descriptor = seriesDescriptor(recommendation!.suggestedLength, themeName);
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
@@ -289,8 +298,8 @@ export function RecommendedSeriesCard({
             {themeName}
           </Text>
 
-          <Text style={[styles.reason, { color: colors.textMuted }]}>
-            {descriptor}
+          <Text style={[styles.descriptor, { color: colors.textMuted }]}>
+            {recommendation!.descriptor}
           </Text>
 
           <View style={styles.metaRow}>
@@ -382,7 +391,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.15,
     marginBottom: Spacing['3'],
   },
-  reason: {
+  descriptor: {
     width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 15,

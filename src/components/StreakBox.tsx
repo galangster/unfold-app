@@ -10,7 +10,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
-import { STREAK_STARTS_TOMORROW_COPY } from '@/lib/streak-helpers';
+import { STREAK_STARTS_TOMORROW_COPY, startsTomorrow } from '@/lib/streak-helpers';
 
 interface DayData {
   day: string;
@@ -29,7 +29,8 @@ const BODY_TEXT_MAX_SCALE = 1.24;
 const LABEL_TEXT_MAX_SCALE = 1.14;
 
 function getRhythmCopy(streak: number, hasReadToday: boolean): string {
-  if (streak === 0) return hasReadToday ? STREAK_STARTS_TOMORROW_COPY : 'Begin with today’s reading.';
+  if (startsTomorrow(streak, hasReadToday)) return STREAK_STARTS_TOMORROW_COPY;
+  if (streak === 0) return 'Begin with today’s reading.';
   if (streak === 1) return 'One faithful day at a time.';
   if (streak < 7) return 'Your rhythm is taking root.';
   if (streak < 30) return 'A steady devotional rhythm.';
@@ -108,9 +109,9 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
   );
   const rhythmCopy = useMemo(() => getRhythmCopy(streakCount, hasReadToday), [streakCount, hasReadToday]);
   const streakLabel = streakCount === 1 ? 'day' : 'days';
-  const todayStatus = hasReadToday
-    ? (streakCount === 0 ? STREAK_STARTS_TOMORROW_COPY : 'Today is complete.')
-    : 'Today is not complete yet.';
+  const todayStatus = startsTomorrow(streakCount, hasReadToday)
+    ? STREAK_STARTS_TOMORROW_COPY
+    : hasReadToday ? 'Today is complete.' : 'Today is not complete yet.';
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(260).easing(Ease.out)}>

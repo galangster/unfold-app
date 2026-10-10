@@ -1,8 +1,10 @@
 /**
- * Recommendation reason text for the Today card. The backend cleans the
- * reasons it serves, but a trial finale's stored pick line reaches the card
- * from the device store, so the card cleans it again before rendering.
- * Mirrors unfold-backend src/lib/recommendation-reason.ts.
+ * Plain text for the next-study card's series descriptor. The card builds
+ * the descriptor from the suggested length and the theme name. The theme
+ * name is data from the backend or a stored pick, so the card cleans the
+ * built sentence before it renders.
+ * Mirrors unfold-backend src/lib/recommendation-reason.ts, which cleans the
+ * reasons the backend serves.
  */
 
 // A reason is one sentence, and both writers keep it under 200 characters.
