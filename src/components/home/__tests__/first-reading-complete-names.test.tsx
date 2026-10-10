@@ -249,8 +249,33 @@ describe('the finished first devotional on Today', () => {
 
     expect(after).toEqual(before);
     expect(before).toContain(SERVER_SERIES_TITLE);
+    // The first reading does not count toward the streak, and the rhythm card
+    // says the streak starts tomorrow, so this sentence makes no streak claim.
     expect(before).toContain(
-      `${DAY_TITLE} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+      `${DAY_TITLE} is complete. Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+    );
+    expect(before.join(' ')).not.toContain('Your streak continues');
+  });
+
+  it('keeps the streak line for a finished series that is not the first reading', () => {
+    const { Text } = require('react-native');
+    let tree!: ReturnType<typeof renderer.create>;
+    act(() => {
+      tree = renderer.create(<DevotionalCard state={{
+        type: 'journey-complete',
+        seriesTitle: 'Synthetic Series',
+        devotionalTitle: 'Synthetic Series',
+        isFirstReading: false,
+        onCreateNew: noop,
+      }} />);
+    });
+    const texts = tree.root.findAllByType(Text).map((node: { props: { children: unknown } }) => (
+      ([] as unknown[]).concat(node.props.children).join('')
+    ));
+    act(() => tree.unmount());
+
+    expect(texts).toContain(
+      'Synthetic Series is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.',
     );
   });
 });

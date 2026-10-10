@@ -96,7 +96,13 @@ export type DevotionalCardState =
       totalDays: number;
       onReveal: () => void;
     }
-  | { type: 'journey-complete'; seriesTitle: string; devotionalTitle: string; onCreateNew: () => void };
+  | {
+      type: 'journey-complete';
+      seriesTitle: string;
+      devotionalTitle: string;
+      isFirstReading: boolean;
+      onCreateNew: () => void;
+    };
 
 // ─── Input shape ────────────────────────────────────────────────
 
@@ -250,8 +256,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     isJourneyComplete
     && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
   ) {
-    const { seriesName, devotionalTitle } = seriesDisplayNames(currentDevotional);
-    return { type: 'journey-complete', seriesTitle: seriesName, devotionalTitle, onCreateNew };
+    const { seriesName, devotionalTitle, isFirstReading } = seriesDisplayNames(currentDevotional);
+    return { type: 'journey-complete', seriesTitle: seriesName, devotionalTitle, isFirstReading, onCreateNew };
   }
 
   // 2. Confirmed churned users should not see generation-progress copy for a

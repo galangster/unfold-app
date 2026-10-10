@@ -28,12 +28,16 @@ export const ONBOARDING_FIRST_READING_SERIES_NAME = 'Your First Devotional';
  */
 export function seriesDisplayNames(
   devotional: Pick<Devotional, 'id' | 'title' | 'days' | 'seriesArc'>,
-): { seriesName: string; devotionalTitle: string } {
+): { seriesName: string; devotionalTitle: string; isFirstReading: boolean } {
   if (!isOnboardingSampleDevotionalId(devotional.id) && !isOnboardingFirstReading(devotional)) {
-    return { seriesName: devotional.title, devotionalTitle: devotional.title };
+    return { seriesName: devotional.title, devotionalTitle: devotional.title, isFirstReading: false };
   }
   const dayTitle = asTrimmedString(devotional.days.find((day) => day.dayNumber === 1)?.title);
-  return { seriesName: ONBOARDING_FIRST_READING_SERIES_NAME, devotionalTitle: dayTitle ?? devotional.title };
+  return {
+    seriesName: ONBOARDING_FIRST_READING_SERIES_NAME,
+    devotionalTitle: dayTitle ?? devotional.title,
+    isFirstReading: true,
+  };
 }
 
 export function withOnboardingFirstReadingArc(
