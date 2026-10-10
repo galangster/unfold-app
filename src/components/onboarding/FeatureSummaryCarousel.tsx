@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, memo } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, memo } from 'react';
 import { useIsFocused } from 'expo-router';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Keyboard, useWindowDimensions } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -79,6 +79,9 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   // field sits, so the field stays above Next.
   const scrollRef = useRef<ScrollView>(null);
   const nameFocusedRef = useRef(false);
+  // A page change unmounts the field without a blur event, so the flag
+  // resets with the page. Otherwise later pages would open scrolled to the end.
+  useLayoutEffect(() => { nameFocusedRef.current = false; }, [currentPage]);
   const keepNameFieldInView = useCallback(() => {
     if (nameFocusedRef.current) scrollRef.current?.scrollToEnd({ animated: false });
   }, []);

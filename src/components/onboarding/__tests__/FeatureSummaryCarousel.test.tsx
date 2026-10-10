@@ -1,5 +1,5 @@
 import React from 'react';
-import { TextInput, TouchableOpacity } from 'react-native';
+import { ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { FeatureSummaryCarousel } from '../FeatureSummaryCarousel';
 import type { CompanionPersonality } from '@/lib/companion-personality';
@@ -69,9 +69,13 @@ jest.mock('@/hooks/useAccessibility', () => ({
 }));
 jest.mock('@/components/CompanionOrb', () => ({ CompanionOrb: () => null }));
 jest.mock('@/app/how-it-works', () => ({
+  // Four pages, as in the app: the companion card goes in after the third,
+  // so it is not the last page.
   FEATURE_PAGES: [
     { headline: 'First', body: 'First body', animation: 'dots' },
     { headline: 'Second', body: 'Second body', animation: 'lines' },
+    { headline: 'Third', body: 'Third body', animation: 'dots' },
+    { headline: 'Fourth', body: 'Fourth body', animation: 'lines' },
   ],
   CardAnimation: (props: unknown) => mockCardAnimation(props),
   AnimatedHeadline: (props: unknown) => mockAnimatedHeadline(props),
@@ -129,7 +133,7 @@ describe('FeatureSummaryCarousel accessibility', () => {
     expect(mockCardAnimation).toHaveBeenLastCalledWith(expect.objectContaining({ reducedMotion: true }));
     expect(mockAnimatedHeadline).toHaveBeenLastCalledWith(expect.objectContaining({ reducedMotion: true }));
     expect(mockAnimatedBody).toHaveBeenLastCalledWith(expect.objectContaining({ reducedMotion: true }));
-    expect(tree.root.findByProps({ accessibilityLabel: 'Step 1 of 3' }).props.accessibilityRole).toBe('text');
+    expect(tree.root.findByProps({ accessibilityLabel: 'Step 1 of 5' }).props.accessibilityRole).toBe('text');
     const nextButton = tree.root.findAllByType(TouchableOpacity)
       .find((node) => node.props.accessibilityLabel === 'Next');
     expect(nextButton?.props.accessibilityRole).toBe('button');
@@ -169,7 +173,7 @@ describe('FeatureSummaryCarousel accessibility', () => {
         onCompanionNameChange={jest.fn()}
         companionPersonality={personality}
         onCompanionPersonalityChange={setPersonality}
-        currentPage={2}
+        currentPage={3}
         onPageChange={jest.fn()}
         onComplete={jest.fn()}
       />;
@@ -186,7 +190,7 @@ describe('FeatureSummaryCarousel accessibility', () => {
 
     expect(choices()[1]).toBe(encouraging);
     expect(choices()[1].props.accessibilityState.checked).toBe(true);
-    expect(tree.root.findByProps({ accessibilityLabel: 'Step 3 of 3' })).toBeDefined();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Step 4 of 5' })).toBeDefined();
   });
 
   // 1.1.18 release smoke (F10): since 2026-09-13 onboarding did not ask the
@@ -209,7 +213,7 @@ describe('FeatureSummaryCarousel accessibility', () => {
     act(() => { tree = renderer.create(<Harness page={0} />); });
     expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
 
-    act(() => { tree.update(<Harness page={2} />); });
+    act(() => { tree.update(<Harness page={3} />); });
     const field = tree.root.findByType(TextInput);
     expect(field.props.accessibilityLabel).toBe('Companion name');
     expect(field.props.maxLength).toBe(30);
@@ -218,4 +222,45 @@ describe('FeatureSummaryCarousel accessibility', () => {
     expect(tree.root.findByType(TextInput).props.value).toBe('Selah');
   });
 
+  // V1 keeps Next above the keyboard, so a reader can tap Next while the name
+  // field has focus. The page change unmounts the field and no blur arrives.
+  it('scrolls to the name field only while it has focus on the companion page', () => {
+    function Harness() {
+      const [page, setPage] = React.useState(3);
+      return <FeatureSummaryCarousel
+        colors={colors}
+        companionName=""
+        onCompanionNameChange={jest.fn()}
+        companionPersonality="gentle"
+        onCompanionPersonalityChange={jest.fn()}
+        currentPage={page}
+        onPageChange={(next) => setPage((prev) => (typeof next === 'function' ? next(prev) : next))}
+        onComplete={jest.fn()}
+      />;
+    }
+    let tree!: renderer.ReactTestRenderer;
+    act(() => { tree = renderer.create(<Harness />); });
+    // The page remounts its scroll view, so the spy is taken again after Next.
+    const spyOnScroll = () => jest.spyOn(tree.root.findByType(ScrollView).instance, 'scrollToEnd');
+    const companionScroll = spyOnScroll();
+    const layout = () => act(() => {
+      tree.root.findByType(ScrollView).props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 400 } } });
+    });
+
+    act(() => { tree.root.findByType(TextInput).props.onFocus(); });
+    layout();
+    expect(companionScroll).toHaveBeenCalledTimes(1);
+
+    const next = tree.root.findAllByType(TouchableOpacity)
+      .find((node) => node.props.accessibilityLabel === 'Next');
+    act(() => { next!.props.onPress(); });
+    expect(tree.root.findByProps({ accessibilityLabel: 'Step 5 of 5' })).toBeDefined();
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+
+    const nextPageScroll = spyOnScroll();
+    nextPageScroll.mockClear();
+    layout();
+    layout();
+    expect(nextPageScroll).not.toHaveBeenCalled();
+  });
 });
