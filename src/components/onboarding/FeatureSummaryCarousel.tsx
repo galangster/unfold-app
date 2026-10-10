@@ -1,7 +1,7 @@
-import { useCallback, memo } from 'react';
+import { useCallback, useRef, useState, memo } from 'react';
 import { useIsFocused } from 'expo-router';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Keyboard, useWindowDimensions } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Keyboard, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -74,6 +74,23 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
   const isCompanionPage = 'type' in page && page.type === 'companion';
+  // The keyboard lifts the whole step, so the page area shrinks. While the
+  // name field has focus, each shrink scrolls the page to its end, where the
+  // field sits, so the field stays above Next.
+  const scrollRef = useRef<ScrollView>(null);
+  const nameFocusedRef = useRef(false);
+  const keepNameFieldInView = useCallback(() => {
+    if (nameFocusedRef.current) scrollRef.current?.scrollToEnd({ animated: false });
+  }, []);
+  // The avoiding view takes its frame relative to its parent, so it needs the
+  // distance from the top of the window. The step fills its parent, so that is
+  // the step's own top. The avoiding view's ref never attaches under
+  // NativeWind, so an opted-out view at its top edge measures it.
+  const frameRef = useRef<View>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const measureKeyboardOffset = useCallback(() => {
+    frameRef.current?.measureInWindow((_x, y) => setKeyboardOffset(y));
+  }, []);
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLastPage) {
@@ -105,7 +122,15 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
     });
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={keyboardOffset} style={{ flex: 1 }}>
+      <View
+        ref={frameRef}
+        cssInterop={false}
+        collapsable={false}
+        onLayout={measureKeyboardOffset}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       {/* Swipeable pages */}
       <GestureDetector gesture={swipeGesture}>
         <View style={{ flex: 1 }}>
@@ -115,11 +140,13 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={StyleSheet.absoluteFill}
           >
-            <KeyboardAwareScrollView
+            <ScrollView
+              ref={scrollRef}
+              cssInterop={false}
               style={{ flex: 1 }}
               contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: isCompanionPage ? Spacing['3'] : Spacing['6'] }}
               keyboardShouldPersistTaps="handled"
-              bottomOffset={24}
+              onLayout={keepNameFieldInView}
             >
               <View style={{ alignItems: 'center', gap: isCompanionPage ? 20 : 36, alignSelf: 'stretch' }}>
                 {/* Animation or companion orb */}
@@ -221,12 +248,14 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                         returnKeyType="done"
                         submitBehavior="blurAndSubmit"
                         onSubmitEditing={Keyboard.dismiss}
+                        onFocus={() => { nameFocusedRef.current = true; }}
+                        onBlur={() => { nameFocusedRef.current = false; }}
                       />
                     </Animated.View>
                   )}
                 </View>
               </View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
           </Animated.View>
         </View>
       </GestureDetector>
@@ -279,7 +308,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
           </View>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 });
 

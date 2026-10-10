@@ -24,7 +24,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 20, left: 0 }),
 }));
 jest.mock('react-native-keyboard-controller', () => ({
-  KeyboardAwareScrollView: jest.requireActual('react-native').View,
+  KeyboardAvoidingView: jest.requireActual('react-native').View,
 }));
 jest.mock('react-native-gesture-handler', () => {
   const native = jest.requireActual('react-native');
