@@ -157,6 +157,7 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 import { act, create } from 'react-test-renderer';
+import { Text } from 'react-native';
 
 import GeneratingScreen from '@/app/generating';
 import {
@@ -174,7 +175,13 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
-import { createAutoTrialIntent, readAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
+import {
+  createAutoTrialIntent,
+  readAutoTrialIntent,
+  transitionAutoTrialIntent,
+  type CreateAutoTrialIntentInput,
+} from '../auto-trial-intent';
+import { LONG_SERIES_LONG_RUNNING_AFTER_MS, SHORT_SERIES_LONG_RUNNING_AFTER_MS } from '../generation-poll-outcome';
 import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '../deleted-series';
 import { mmkvStorage } from '../mmkv-storage';
 import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordReplacedSeries } from '../series-replacement';
@@ -196,6 +203,25 @@ const user = {
 } as unknown as UserProfile;
 
 type Tree = ReturnType<typeof create>;
+
+function makeTrialIntent(overrides: Partial<CreateAutoTrialIntentInput> = {}): CreateAutoTrialIntentInput {
+  return {
+    deviceId: 'test-device-id',
+    entry: 'onboarding',
+    surface: 'onboarding_paywall',
+    source: 'purchase',
+    simulated: false,
+    trialDays: 3,
+    purchasedAt: '2026-09-08T17:00:00.000Z',
+    expiresAt: '2026-09-11T17:00:00.000Z',
+    timeZone: 'America/Chicago',
+    isSandbox: false,
+    productIdentifier: 'unfold_premium_yearly',
+    switchFetchedAt: '2026-09-08T17:00:00.000Z',
+    nowMs: 1_800_000_000_000,
+    ...overrides,
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -943,21 +969,7 @@ describe('Go home after the server ruled on the first series', () => {
 describe('H10 generating auto-trial handoff', () => {
   it('routes a declined auto claim to series setup instead of the error card', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
-    });
+    createAutoTrialIntent(makeTrialIntent({ nowMs: Date.parse('2026-09-10T17:00:00.000Z') }));
     useUnfoldStore.setState({
       user: { ...user, hasCompletedOnboarding: true } as UserProfile,
     });
@@ -986,21 +998,7 @@ describe('H10 generating auto-trial handoff', () => {
 
   it('keeps auto-trial on generating without the screen submit or a generation session write', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    createAutoTrialIntent(makeTrialIntent());
     const sessionBefore = useUnfoldStore.getState().generationSession;
     const tree = await renderScreen();
     mounted.push(tree);
@@ -1009,21 +1007,7 @@ describe('H10 generating auto-trial handoff', () => {
   });
 
   it('ready copy on the auto path uses trial days, not profile length', async () => {
-    const created = createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    const created = createAutoTrialIntent(makeTrialIntent());
     transitionAutoTrialIntent(
       'submitted',
       { jobId: 'job-ready', devotionalId: 'devo-ready' },
@@ -1181,21 +1165,7 @@ describe('a finished job for a series deleted here', () => {
 
   // 2026-10-09 release audit round 8 review: the trial's refused result read as a lost connection, so the reveal kept polling a finished job.
   it('retires a trial job and opens Today', async () => {
-    const created = createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    const created = createAutoTrialIntent(makeTrialIntent());
     transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
     writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
     mockSearchParams.autoTrialIntentId = created.intentId;
@@ -1225,21 +1195,7 @@ describe('a finished job for a series deleted here', () => {
   // 2026-10-09 release audit round 8 review: the trial hook settled the trial
   // a second time without the undated guard and handed it Today.
   it('keeps an undated trial off Today beside a chosen series the phone holds', async () => {
-    const created = createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    const created = createAutoTrialIntent(makeTrialIntent());
     transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
     writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
     mockSearchParams.autoTrialIntentId = created.intentId;
@@ -1259,5 +1215,195 @@ describe('a finished job for a series deleted here', () => {
 
     expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(true);
     expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-trial');
+  });
+});
+
+async function renderPolling(devotionalLength: number): Promise<Tree> {
+  useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+  mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-wait', devotionalId: 'devo-1' });
+  mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+  const tree = await renderScreen();
+  mounted.push(tree);
+  return tree;
+}
+
+describe('honest wait line on /generating', () => {
+  const TWO_MINUTES = 'This usually takes about two minutes.';
+  const THREE_MINUTES = 'This usually takes about three minutes.';
+  const THIRTY_DAYS = 'A 30-day series usually takes four to six minutes.';
+  const LONGER = 'A longer series usually takes four to six minutes.';
+  const LEAVE_NOTE = 'You can leave this screen. We\u2019ll let you know when Day 1 is ready.';
+
+  async function renderWaiting(devotionalLength: number): Promise<Tree> {
+    useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+    mockSubmitGenerationJob.mockReturnValue(new Promise(() => undefined));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    return tree;
+  }
+
+  function textNodes(tree: Tree, text: string) {
+    return tree.root.findAllByType(Text).filter((node) => node.props.children === text);
+  }
+
+  it.each([
+    [3, TWO_MINUTES],
+    [7, TWO_MINUTES],
+    [8, THREE_MINUTES],
+    [14, THREE_MINUTES],
+    [15, LONGER],
+    [21, LONGER],
+    [30, THIRTY_DAYS],
+  ])('a %i-day series shows one fixed wait line', async (days, line) => {
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, line)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('keeps one wait line while the waiting messages cycle', async () => {
+    const tree = await renderWaiting(7);
+    expect(textNodes(tree, 'Reading your story')).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+
+    expect(textNodes(tree, 'Choosing scripture')).toHaveLength(1);
+    expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+  });
+
+  it.each([
+    [30, THIRTY_DAYS],
+    [21, LONGER],
+  ])('a %i-day series with notifications on says the reader can leave', async (days, line) => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, `${line} ${LEAVE_NOTE}`)).toHaveLength(1);
+  });
+
+  it('a long series with notifications off does not promise a notification', async () => {
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a long series whose token registration failed does not promise a notification', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('failed');
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a 14-day series with notifications on keeps the short line', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(14);
+
+    expect(textNodes(tree, THREE_MINUTES)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  describe('one notification promise at a time', () => {
+    const joined = (children: unknown): string => {
+      if (typeof children === 'string' || typeof children === 'number') return String(children);
+      if (Array.isArray(children)) return children.map(joined).join('');
+      return '';
+    };
+
+    function notificationPromises(tree: Tree): string[] {
+      return tree.root.findAllByType(Text)
+        .map((node) => joined(node.props.children))
+        .filter((text) => /We\u2019ll (notify you|let you know)/.test(text));
+    }
+
+    async function renderAccepted(devotionalLength: number): Promise<Tree> {
+      const tree = await renderPolling(devotionalLength);
+      findPressable(tree, GO_HOME_LABEL);
+      return tree;
+    }
+
+    beforeEach(() => {
+      mockAreNotificationsEnabled.mockResolvedValue(true);
+      mockRegisterPushToken.mockResolvedValue('registered');
+    });
+
+    it('a 30-day series says it once on the wait line before the job is accepted', async () => {
+      const tree = await renderWaiting(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+    });
+
+    it('a 30-day series says it once on the wait line after the job is accepted', async () => {
+      const tree = await renderAccepted(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+      expect(textNodes(tree, 'We\u2019ll keep writing your first devotional.')).toHaveLength(1);
+    });
+
+    it('a 7-day series keeps its one promise beside the exit', async () => {
+      const tree = await renderAccepted(7);
+
+      expect(notificationPromises(tree)).toEqual([
+        'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.',
+      ]);
+      expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+    });
+  });
+});
+
+describe('long-running copy on /generating follows the series length', () => {
+  const LONG_RUNNING = 'Still writing \u2014 taking a little longer';
+
+  async function advancePolling(ms: number) {
+    for (let elapsed = 0; elapsed < ms; elapsed += 5000) {
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+      });
+      await flush();
+    }
+  }
+
+  it.each([
+    [3, SHORT_SERIES_LONG_RUNNING_AFTER_MS],
+    [30, LONG_SERIES_LONG_RUNNING_AFTER_MS],
+  ])('softens a %i-day wait only at its long-running threshold', async (days, thresholdMs) => {
+    const tree = await renderPolling(days);
+
+    await advancePolling(thresholdMs - 30_000);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
+  });
+
+  it('softens a 3-day trial wait four minutes after the trial job is accepted', async () => {
+    const nowMs = Date.now();
+    const created = createAutoTrialIntent(makeTrialIntent({
+      purchasedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 3 * 24 * 60 * 60_000).toISOString(),
+      switchFetchedAt: new Date(nowMs).toISOString(),
+      nowMs,
+    }));
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({ user: { ...user, hasCompletedOnboarding: true, devotionalLength: 30 } as UserProfile });
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-trial', devotionalId: 'devo-trial' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    await advancePolling(SHORT_SERIES_LONG_RUNNING_AFTER_MS - 30_000);
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+    expect(JSON.stringify(tree.toJSON())).toContain('This usually takes about two minutes.');
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
   });
 });

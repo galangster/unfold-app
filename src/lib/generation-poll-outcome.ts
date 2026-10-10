@@ -167,14 +167,35 @@ export function getNextPollDelayMs(elapsedMs: number, rng: () => number = Math.r
 // ── Liveness: the wall clock is never a verdict ───────────────────────────
 
 /**
- * Elapsed polling time after which the waiting UI softens to "still writing".
- * Formerly a hard 10-minute cap that declared failure WITHOUT asking the
- * server. A 30-day arc can legitimately outlive it (three worker attempts of
- * ~2.5–4 min each plus 60 s / 120 s backoff), and the clock kept running while
- * the app was backgrounded, so a return after ten minutes errored instantly
- * on a job that was still processing or already complete.
+ * Elapsed polling time after which the waiting UI softens to "still writing",
+ * for a series of 14 days or fewer. A longer series uses
+ * LONG_SERIES_LONG_RUNNING_AFTER_MS; `resolveLongRunningAfterMs` picks one.
+ * Measured first-series waits (production, 2026-10-09): 7 days 109 s median
+ * and 142 s p90, 14 days 179 s median, 30 days 253 s median and 362 s p90.
+ *
+ * Formerly one 10-minute value for every length, and before that a hard cap
+ * that declared failure WITHOUT asking the server. A 30-day arc can
+ * legitimately outlive any cap (three worker attempts plus backoff), so this
+ * only softens the copy. Background time does not count (`shiftPollStart`).
  */
-export const LONG_RUNNING_AFTER_MS = 10 * 60 * 1000;
+export const SHORT_SERIES_LONG_RUNNING_AFTER_MS = 4 * 60 * 1000;
+/** The long-running threshold for a series of more than 14 days. */
+export const LONG_SERIES_LONG_RUNNING_AFTER_MS = 7 * 60 * 1000;
+/** A series longer than this takes the longer threshold and wait copy. */
+const LONG_SERIES_AFTER_DAYS = 14;
+/** A series this long or shorter takes the shortest wait copy. */
+export const WEEK_SERIES_DAYS = 7;
+/** The one series length the wait copy names. */
+export const MONTH_SERIES_DAYS = 30;
+
+/** A non-finite length reads as a short series. */
+export function isLongSeries(totalDays: number): boolean {
+  return totalDays > LONG_SERIES_AFTER_DAYS;
+}
+
+export function resolveLongRunningAfterMs(totalDays: number): number {
+  return isLongSeries(totalDays) ? LONG_SERIES_LONG_RUNNING_AFTER_MS : SHORT_SERIES_LONG_RUNNING_AFTER_MS;
+}
 /**
  * Consecutive status requests that may fail (network / 5xx) before the client
  * stops waiting. Only the SERVER can fail a job; this cap exists so a dead
@@ -199,7 +220,7 @@ export function evaluateGenerationDeadline(input: {
 }): GenerationDeadlineDecision {
   const maxNetworkErrors = input.maxNetworkErrors ?? MAX_CONSECUTIVE_POLL_NETWORK_ERRORS;
   if (input.consecutiveNetworkErrors >= maxNetworkErrors) return 'network-error';
-  const maxDurationMs = input.maxDurationMs ?? LONG_RUNNING_AFTER_MS;
+  const maxDurationMs = input.maxDurationMs ?? SHORT_SERIES_LONG_RUNNING_AFTER_MS;
   // A NaN or negative elapsed value (unset start, clock skew) fails this
   // comparison and stays on the normal path.
   if (input.elapsedMs >= maxDurationMs) return 'long-running';

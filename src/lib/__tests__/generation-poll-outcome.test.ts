@@ -19,14 +19,16 @@ import {
   resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
+  resolveLongRunningAfterMs,
   resolveRetryFailureCleanup,
   shiftPollStart,
-  LONG_RUNNING_AFTER_MS,
+  LONG_SERIES_LONG_RUNNING_AFTER_MS,
   MAX_CONSECUTIVE_POLL_NETWORK_ERRORS,
   MAX_UNKNOWN_GENERATION_STATUS,
   POLL_DELAY_AFTER_1_MIN_MS,
   POLL_DELAY_AFTER_3_MIN_MS,
   POLL_DELAY_INITIAL_MS,
+  SHORT_SERIES_LONG_RUNNING_AFTER_MS,
 } from '../generation-poll-outcome';
 import { ApiError } from '../generation-api';
 
@@ -201,16 +203,34 @@ describe('getNextPollDelayMs', () => {
   });
 });
 
+describe('resolveLongRunningAfterMs — the soft threshold follows the series length', () => {
+  it('softens a series of 14 days or fewer at the short-series threshold', () => {
+    for (const days of [1, 3, 7, 8, 14]) {
+      expect(resolveLongRunningAfterMs(days)).toBe(SHORT_SERIES_LONG_RUNNING_AFTER_MS);
+    }
+  });
+
+  it('softens a series of more than 14 days at the long-series threshold', () => {
+    for (const days of [15, 21, 30]) {
+      expect(resolveLongRunningAfterMs(days)).toBe(LONG_SERIES_LONG_RUNNING_AFTER_MS);
+    }
+  });
+
+  it('reads an unknown length as a short series', () => {
+    expect(resolveLongRunningAfterMs(Number.NaN)).toBe(SHORT_SERIES_LONG_RUNNING_AFTER_MS);
+  });
+});
+
 describe('evaluateGenerationDeadline — the wall clock is never a verdict', () => {
   it('keeps polling before the long-running threshold', () => {
-    expect(LONG_RUNNING_AFTER_MS).toBe(10 * 60 * 1000);
-    for (const elapsed of [0, 1, 60_000, LONG_RUNNING_AFTER_MS - 1]) {
+    expect(SHORT_SERIES_LONG_RUNNING_AFTER_MS).toBe(4 * 60 * 1000);
+    for (const elapsed of [0, 1, 60_000, SHORT_SERIES_LONG_RUNNING_AFTER_MS - 1]) {
       expect(evaluateGenerationDeadline({ elapsedMs: elapsed, consecutiveNetworkErrors: 0 })).toBe('poll');
     }
   });
 
   it('softens to long-running past the threshold and never errors on time alone', () => {
-    for (const elapsed of [LONG_RUNNING_AFTER_MS, 11 * 60_000, 25 * 60_000, 3 * 60 * 60_000]) {
+    for (const elapsed of [SHORT_SERIES_LONG_RUNNING_AFTER_MS, 11 * 60_000, 25 * 60_000, 3 * 60 * 60_000]) {
       expect(evaluateGenerationDeadline({ elapsedMs: elapsed, consecutiveNetworkErrors: 0 })).toBe('long-running');
     }
     expect(evaluateGenerationDeadline({ elapsedMs: 5_000, maxDurationMs: 4_000, consecutiveNetworkErrors: 0 })).toBe(
@@ -225,7 +245,7 @@ describe('evaluateGenerationDeadline — the wall clock is never a verdict', () 
       expect(outcome.kind).toBe('waiting');
       consecutive = countConsecutiveNetworkErrors(consecutive, true);
       expect(
-        evaluateGenerationDeadline({ elapsedMs: LONG_RUNNING_AFTER_MS + i * 8_000, consecutiveNetworkErrors: consecutive }),
+        evaluateGenerationDeadline({ elapsedMs: SHORT_SERIES_LONG_RUNNING_AFTER_MS + i * 8_000, consecutiveNetworkErrors: consecutive }),
       ).toBe('long-running');
     }
   });
