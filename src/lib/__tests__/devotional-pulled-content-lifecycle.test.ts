@@ -236,7 +236,8 @@ function fullPullOf(local: Devotional) {
 
 // The series the server writes is the strict active winner of every series
 // row, and a pull of the current series can carry one this device does not
-// hold yet. Today never moves to an older series in its place: it stays empty.
+// hold yet. Today never moves to an older series in its place: it stays empty
+// until a full sync brings the winner here, and then it takes that series.
 describe('pull of the current series when the series the server writes is not on this device', () => {
   const STARTED_AT = '2026-09-12T16:20:00.000Z';
   const liveX = series('series-x', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
@@ -264,7 +265,7 @@ describe('pull of the current series when the series the server writes is not on
 
     const state = useUnfoldStore.getState();
     expect(state.devotionals.some((item) => item.id === 'series-n')).toBe(true);
-    expect(state.currentDevotionalId).toBeNull();
+    expect(state.currentDevotionalId).toBe('series-n');
   });
 
   // An earlier build left series-m live, day 1 unread, while the reader moved
@@ -294,7 +295,7 @@ describe('pull of the current series when the series the server writes is not on
     // Once the new series is here, the older one no longer proves itself the
     // server's series from the rows this device holds.
     expect(isStrictActiveSeriesWinner('series-m', state.devotionals)).toBe(false);
-    expect(state.currentDevotionalId).toBeNull();
+    expect(state.currentDevotionalId).toBe('series-n');
   });
 
   it('keeps a current series the pull leaves live', () => {
@@ -329,8 +330,10 @@ function fullPullLifecycleOf(local: Devotional, lifecycle: Pick<Devotional, 'arc
 
 // Another device resumed series-b, which paused series-x, and then started
 // series-n. Once this device holds series-n, Today never follows the older
-// resume, whether a scoped pull or a full sync carries the change. Nothing
-// proves series-n by an explicit resume, so Today stays empty.
+// resume, whether a scoped pull or a full sync carries the change. A series
+// already held here takes Today only by an explicit resume, so a scoped pull
+// leaves Today empty. A full sync that brings series-n here gives it Today as
+// the strict active winner.
 describe('a resume elsewhere followed by a newer series', () => {
   const STARTED_AT = '2026-09-12T16:20:00.000Z';
   const liveX = series('series-x', { createdAt: '2026-09-05T00:00:00.000Z', seriesStartDate: '2026-09-05T00:00:00.000Z' });
@@ -376,6 +379,6 @@ describe('a resume elsewhere followed by a newer series', () => {
     expect(state.devotionals.find((item) => item.id === 'series-x')).toMatchObject({
       archivedAt: RESUME_AT, archivedStateAt: RESUME_AT,
     });
-    expect(state.currentDevotionalId).toBeNull();
+    expect(state.currentDevotionalId).toBe('series-n');
   });
 });

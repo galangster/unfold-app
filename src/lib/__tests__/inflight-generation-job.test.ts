@@ -198,11 +198,13 @@ describe('markInflightJobLeftForHome', () => {
 });
 
 describe('hasInflightSeriesLanded', () => {
-  const devotionals = [{ id: 'devo-old' }];
+  const devotionals = [{ id: 'devo-old', days: [{ dayNumber: 1 }] }];
 
-  it('is true only once the named series is in the store', () => {
+  it('is true only once the named series is in the store with its first day', () => {
     expect(hasInflightSeriesLanded('devo-1', devotionals, true)).toBe(false);
-    expect(hasInflightSeriesLanded('devo-1', [...devotionals, { id: 'devo-1' }], true)).toBe(true);
+    // A sync can bring the series row before its first day.
+    expect(hasInflightSeriesLanded('devo-1', [...devotionals, { id: 'devo-1', days: [] }], true)).toBe(false);
+    expect(hasInflightSeriesLanded('devo-1', [...devotionals, { id: 'devo-1', days: [{ dayNumber: 1 }] }], true)).toBe(true);
   });
 
   it('does not mistake the finished journey the reader started the new series from for the new series', () => {

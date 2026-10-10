@@ -1079,8 +1079,11 @@ export default function GeneratingScreen() {
       setIsReconnecting(false);
       setError(errorMessage);
       // The server refusing a retry because the job spent them all is its
-      // final verdict on that job. Any other failure leaves the job unanswered.
-      setErrorIsServerVerdict(isRetryLimitRefusal(err));
+      // final verdict on that job, and no retry is left to offer. Any other
+      // failure leaves the job unanswered.
+      const retriesSpent = isRetryLimitRefusal(err);
+      setErrorIsServerVerdict(retriesSpent);
+      if (retriesSpent) setCanRetry(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };

@@ -691,9 +691,7 @@ export default function HomeScreen() {
       const finishedId = step.kind === 'settled' && step.outcome.kind === 'complete'
         ? step.outcome.result.devotionalId
         : null;
-      const day1Landed = finishedId !== null && useUnfoldStore.getState().devotionals.some(
-        (row) => row.id === finishedId && row.days.some((day) => day.dayNumber === 1),
-      );
+      const day1Landed = hasInflightSeriesLanded(finishedId, useUnfoldStore.getState().devotionals, false);
       if (resume === 'resume' && !day1Landed) {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
@@ -948,7 +946,7 @@ export default function HomeScreen() {
   // record names counts as landed: a record without one (an adopted job)
   // says nothing about the series already here.
   const keptSeriesId = keptInflightJob?.devotionalId;
-  const keptSeriesLanded = keptSeriesId != null && landedSeries.some((row) => row.id === keptSeriesId);
+  const keptSeriesLanded = hasInflightSeriesLanded(keptSeriesId, landedSeries, false);
   const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
     ? { onResume: handleResumeKeptInflight }
     : null;

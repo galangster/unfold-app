@@ -979,6 +979,16 @@ describe('Today app-kill recovery while the server cannot be reached', () => {
     expect(cardProps().nonblockingResume).toBeNull();
   });
 
+  // 2026-10-09 release 1.1.19 lane: a sync can bring the new series' row
+  // before its first day. That series has not landed, so the wait stays open.
+  it('keeps the inline resume while the new series is here without its first day', async () => {
+    mockTodayStoreState.devotionals = [olderSeries, { ...olderSeries, id: 'series-new', title: 'New Series', days: [] }];
+    mockTodayStoreState.currentDevotionalId = 'today-series';
+    await renderToday();
+
+    expect(cardProps().nonblockingResume).not.toBeNull();
+  });
+
   it('offers the inline resume beside a readable series, until the new series lands', async () => {
     mockTodayStoreState.devotionals = [olderSeries];
     mockTodayStoreState.currentDevotionalId = 'today-series';
@@ -1777,6 +1787,22 @@ describe('Today while a new series replaces the current one', () => {
     mockTodayStoreState.generationSession = {
       status: 'error',
       devotionalId: sessionDevotionalId,
+      title: null,
+      error: 'Something went wrong',
+    };
+
+    expect(await cardStateType()).toBe('first-series-failed');
+  });
+
+  // 2026-10-09 release 1.1.19 lane: the server can write the failed series'
+  // row without its first day. That series has not landed, so the failure stays.
+  it('shows the failed card when the failed series is here without its first day', async () => {
+    mockReplacedSeries = 'today-series';
+    const [current] = mockTodayStoreState.devotionals as Array<{ id: string }>;
+    mockTodayStoreState.devotionals = [current, { ...current, id: 'series-new', title: 'New Series', days: [] }];
+    mockTodayStoreState.generationSession = {
+      status: 'error',
+      devotionalId: 'series-new',
       title: null,
       error: 'Something went wrong',
     };

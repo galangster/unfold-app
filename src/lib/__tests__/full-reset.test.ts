@@ -168,6 +168,7 @@ import {
   resetSyncSessionFenceForTesting,
 } from '../sync-session-fence';
 import { USER_PROFILE_CONFLICT_KEY } from '../user-profile-sync';
+import { DELETED_SERIES_KEY, rememberDeletedSeries } from '../deleted-series';
 import {
   mmkvStorage,
   rotateDeviceId,
@@ -278,6 +279,25 @@ describe('performFullLocalReset', () => {
 
   it('forgets the series a new series would replace', () => {
     expect(FULL_RESET_MMKV_KEYS).toContain('replaced-series-v1');
+  });
+
+  it('forgets the series deleted on this phone', () => {
+    expect(FULL_RESET_MMKV_KEYS).toContain('deleted-series-v1');
+  });
+
+  // The delete clocks are also held in memory. A delete after the reset must
+  // not write the clocks of the reset account back to storage.
+  it('drops the delete clocks held in memory, so a later delete stores only its own', async () => {
+    const oldAt = '2026-10-01T00:00:00.000Z';
+    const newAt = '2026-10-09T00:00:00.000Z';
+    rememberDeletedSeries('series-old', oldAt);
+    expect(mockStore.has(DELETED_SERIES_KEY)).toBe(true);
+
+    await performFullLocalReset();
+    expect(mockStore.has(DELETED_SERIES_KEY)).toBe(false);
+
+    rememberDeletedSeries('series-new', newAt);
+    expect(JSON.parse(mockStore.get(DELETED_SERIES_KEY) ?? 'null')).toEqual({ 'series-new': Date.parse(newAt) });
   });
 
   it('D13 includes the auto-trial intent key and the completion marker', () => {

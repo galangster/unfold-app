@@ -800,8 +800,8 @@ describe('a new series the sync pull lands before the job result', () => {
       currentDevotionalId: null,
     });
     pullLandedSeries();
-    // The pull alone keeps its rule: a series with no resume clock is not adopted.
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    // The pull adopts the series the server writes, though it has no resume clock.
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
 
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
@@ -829,7 +829,7 @@ describe('a new series the sync pull lands before the job result', () => {
     });
     useUnfoldStore.setState({ devotionals: [finished], currentDevotionalId: finished.id });
     pullLandedSeries();
-    expect(useUnfoldStore.getState().currentDevotionalId).toBe(finished.id);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
 
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
@@ -869,18 +869,18 @@ describe('a new series the sync pull lands before the job result', () => {
   });
 
   it.each([
-    ['a newer series another device started', '2026-09-04T08:30:00.000Z', null],
+    ['a newer series another device started', '2026-09-04T08:30:00.000Z', 'devo-other'],
     ['a series created at the same instant', '2026-09-04T08:05:00.000Z', null],
     ['an older live series', '2026-09-04T07:30:00.000Z', 'devo-1'],
   ])('with %s in the same pull, becomes current only as the series the server writes', (_label, otherCreatedAt, expected) => {
-    // The pull brings both series and selects neither; then this device's
-    // job finishes its local poll. Only a strict winner may take Today.
+    // The pull brings both series and selects only a strict winner; then this
+    // device's job finishes its local poll. Only a strict winner takes Today.
     useUnfoldStore.setState({
       devotionals: [localSeries('devo-old', { archivedAt: ARCHIVED_AT, archivedStateAt: ARCHIVED_AT })],
       currentDevotionalId: null,
     });
     pullLandedSeries(undefined, [{ id: 'devo-other', createdAt: otherCreatedAt }]);
-    expect(useUnfoldStore.getState().currentDevotionalId).toBeNull();
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe(expected);
 
     applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
 
@@ -890,13 +890,21 @@ describe('a new series the sync pull lands before the job result', () => {
     expect(state.generationSession.status).toBe('complete');
   });
 
-  it.each([
-    ['the finished journey the reader started it from', localSeries('devo-finished', {
+  it('moves the finished journey the reader started it from off Today for a newer series another device started', () => {
+    const finished = localSeries('devo-finished', {
       totalDays: 1,
       days: [{ ...day1, id: 'devo-finished:1', devotionalId: 'devo-finished', isRead: true }],
-    })],
-    ...FIRST_READING_ROWS,
-  ] as [string, Devotional][])('keeps %s on Today beside a newer series another device started', (_label, held) => {
+    });
+    useUnfoldStore.setState({ devotionals: [finished], currentDevotionalId: finished.id });
+    pullLandedSeries(undefined, [{ id: 'devo-other', createdAt: '2026-09-04T08:30:00.000Z' }]);
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-other');
+
+    applyInitialArcResult(result, { user, devotionalLength: 7, session: captureSyncSession() });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-other');
+  });
+
+  it.each(FIRST_READING_ROWS)('keeps %s on Today beside a newer series another device started', (_label, held) => {
     // Today holds a row the landing may replace, but the same pull brought a
     // newer live series, so the server writes that one and not this one.
     useUnfoldStore.setState({ devotionals: [held], currentDevotionalId: held.id });
