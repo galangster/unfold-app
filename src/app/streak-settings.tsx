@@ -23,6 +23,8 @@ import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { hasReadDevotionalToday } from '@/lib/home-devotional-state';
+import { STREAK_STARTS_TOMORROW_COPY } from '@/lib/streak-helpers';
 
 // --- Streak Society Tiers ---
 
@@ -139,6 +141,10 @@ export default function StreakSettingsScreen() {
   const isPremium = premiumPolicy === 'granted';
   const weekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
   const lastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
+  const hasReadToday = useUnfoldStore((s) => hasReadDevotionalToday({
+    devotionals: s.devotionals,
+    currentDevotionalId: s.currentDevotionalId,
+  }));
   const toggleWeekendAmnesty = useUnfoldStore((s) => s.toggleWeekendAmnesty);
 
   const handleBack = () => {
@@ -245,7 +251,9 @@ export default function StreakSettingsScreen() {
           <Text style={[ssStyles.lastReadText, { color: colors.textHint }]}>
             {lastReadDate
               ? `Last devotional: ${new Date(lastReadDate).toLocaleDateString()}`
-              : 'Start your streak by completing a devotional'}
+              : hasReadToday
+                ? STREAK_STARTS_TOMORROW_COPY
+                : 'Start your streak by completing a devotional'}
           </Text>
         </Animated.View>
 

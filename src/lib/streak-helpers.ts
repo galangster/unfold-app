@@ -8,6 +8,9 @@ function calendarDaySpan(from: Date, to: Date): number {
   return Math.floor((localCalendarDayUtcNoon(to) - localCalendarDayUtcNoon(from)) / DAY_MS);
 }
 
+/** The onboarding devotional is read today but does not count toward the streak. */
+export const STREAK_STARTS_TOMORROW_COPY = 'Your streak starts with tomorrow’s reading.';
+
 /** Maximum freezes a premium user can hold (free users cannot hold any). */
 export const MAX_FREEZES = 99;
 
