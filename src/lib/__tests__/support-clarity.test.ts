@@ -224,7 +224,7 @@ describe('copy is wired where the questions arise', () => {
     expect(carousel).toContain('COMPANION_INTRO_BODY');
     expect(carousel).toContain('COMPANION_PERSONALITIES');
     expect(carousel).toContain('accessibilityRole="radiogroup"');
-    expect(carousel).toContain('KeyboardAwareScrollView');
+    expect(carousel).toContain('KeyboardAvoidingView');
     expect(carousel).toContain('flexShrink: 1');
     expect(empty).not.toContain('COMPANION_EMPTY_STATE_NOTE');
     expect(empty).not.toContain('Explore Scripture');

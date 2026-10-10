@@ -183,7 +183,7 @@ describe("bookshelf reading progress", () => {
 });
 
 describe("bookshelf first-reading label", () => {
-  it("names only an origin-marked book Your first devotional", () => {
+  it("names an origin-marked book Your first devotional, and not an ordinary one", () => {
     const first = book({
       title: "The Name That Found You",
       totalDays: 1,
@@ -195,6 +195,13 @@ describe("bookshelf first-reading label", () => {
     expect(filterShelf([first], "all", "name that found")[0]?.title).toBe("The Name That Found You");
     expect(filterShelf([first, ordinary], "all", "first devotional").map((item) => item.id)).toEqual([first.id]);
     expect(filterShelf([first, ordinary], "all", "quiet hour").map((item) => item.id)).toEqual([ordinary.id]);
+  });
+
+  // A pull can drop the first-reading arc. The sample id still marks the row.
+  it("names a sample-id book without the arc Your first devotional", () => {
+    const pulled = book({ id: "onboarding-sample-shelf", title: "The Name That Found You", totalDays: 1 });
+    expect(firstReadingLabel(pulled)).toBe("Your first devotional");
+    expect(filterShelf([pulled], "all", "first devotional").map((item) => item.id)).toEqual([pulled.id]);
   });
 });
 

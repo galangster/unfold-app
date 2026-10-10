@@ -756,9 +756,11 @@ function PremiumPausedState({
 
 function JourneyCompleteStateFallback({
   seriesTitle,
+  subtitle,
   ambienceVisible,
 }: {
   seriesTitle: string;
+  subtitle: string;
   ambienceVisible: boolean;
 }) {
   const { colors } = useTheme();
@@ -772,11 +774,11 @@ function JourneyCompleteStateFallback({
           style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
           maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
         >
-          {seriesTitle} · Complete
+          {seriesTitle}
         </Text>
 
         <Text style={[styles.journeyCompleteSubtitle, { color: colors.textMuted }, textCap]}>
-          {seriesTitle} is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.
+          {subtitle}
         </Text>
       </HeroGround>
     </View>
@@ -806,12 +808,14 @@ function JourneyCompleteCreateAction({ onCreateNew }: { onCreateNew: () => void 
 
 function JourneyCompleteState({
   seriesTitle,
+  subtitle,
   onCreateNew,
   gateCreation,
   storedPick,
   ambienceVisible,
 }: {
   seriesTitle: string;
+  subtitle: string;
   onCreateNew: () => void;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
@@ -821,6 +825,7 @@ function JourneyCompleteState({
     <View>
       <JourneyCompleteStateFallback
         seriesTitle={seriesTitle}
+        subtitle={subtitle}
         ambienceVisible={ambienceVisible}
       />
       {/* The recommendation carries the next step: Begin the Next Study, with
@@ -1256,6 +1261,7 @@ export function DevotionalCard({
       {cardState.type === 'journey-complete' && (
         <JourneyCompleteState
           seriesTitle={cardState.seriesTitle}
+          subtitle={cardState.subtitle}
           onCreateNew={cardState.onCreateNew}
           gateCreation={gateCreation}
           storedPick={storedPick}

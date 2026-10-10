@@ -372,9 +372,10 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
       .map((node: { props: { children: unknown } }) => node.props.children);
   }
 
-  async function mountFetched(body: Record<string, unknown>) {
+  /** Mounts with a fetched recommendation. Without a body, the test queues the response. */
+  async function mountFetched(body?: Record<string, unknown>) {
     mockIsQaToolsEnabled.mockReturnValue(false);
-    mockFetch.mockResolvedValue({ ok: true, json: async () => body });
+    if (body) mockFetch.mockResolvedValue({ ok: true, json: async () => body });
     const tree = await mount();
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -384,41 +385,55 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
 
   const fetchedPick = { theme: 'trust', themeName: 'Learning to Trust', type: 'personal', suggestedLength: 7 };
 
-  it('renders a stored pick line without its markdown heading', async () => {
+  it('shows the descriptor in place of a stored pick line', async () => {
     const tree = await mount({
       storedPick: { ...storedPick, line: '# Recommendation\n\nBecause this season is asking for patience.' },
     });
 
     const texts = renderedTexts(tree);
-    expect(texts).toContain('Because this season is asking for patience.');
-    expect(texts.join(' ')).not.toContain('#');
+    expect(texts).toContain('A 7-day series on A Quiet Strength — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('patience');
   });
 
-  it.each([
-    ['only markup', '# Recommendation'],
-    ['oversized', '['.repeat(64_000)],
-  ])('shows the plain fallback when a stored pick line is %s', async (_label, line) => {
-    const tree = await mount({ storedPick: { ...storedPick, line } });
-
-    expect(renderedTexts(tree)).toContain('A 7-day series on a quiet strength — right where you are right now.');
-  });
-
-  it('renders a fetched reason without its markdown heading', async () => {
+  it('shows the descriptor in place of a fetched reason', async () => {
     const tree = await mountFetched({
       ...fetchedPick,
       reason: '# Recommendation\n\nThis series meets you where doubt feels more honest.',
     });
 
-    expect(renderedTexts(tree)).toContain('This series meets you where doubt feels more honest.');
+    const texts = renderedTexts(tree);
+    expect(texts).toContain('A 7-day series on Learning to Trust — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('doubt');
   });
 
-  it.each([
-    ['null', { reason: null }],
-    ['missing', {}],
-  ])('shows the plain fallback when a fetched reason is %s', async (_label, reason) => {
-    const tree = await mountFetched({ ...fetchedPick, ...reason });
+  // Each mount fetches again, and the server writes a new reason each time: a
+  // first-person rationale on one fetch, the plain descriptor on the next. A
+  // relaunch remounts the card, so the body must not follow the reason.
+  it('shows the same descriptor after a relaunch, never the first-person rationale', async () => {
+    const descriptor = 'A 7-day series on Learning to Trust — right where you are right now.';
+    // Synthetic stand-in for a first-person rationale.
+    const rationale = 'Since I know nothing about where you are right now, I picked a study on trust that I think can meet you.';
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ...fetchedPick, reason: rationale }) });
+    const first = await mountFetched();
+    const before = renderedTexts(first);
+    act(() => first.unmount());
 
-    expect(renderedTexts(tree)).toContain('A 7-day series on learning to trust — right where you are right now.');
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ...fetchedPick, reason: descriptor }) });
+    const after = renderedTexts(await mountFetched());
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(before).toContain(descriptor);
+    expect(before).not.toContain(rationale);
+    expect(after).toEqual(before);
+  });
+
+  // The backend theme catalog holds names such as "Honest Before God".
+  it('keeps the case of a theme name with a proper noun', async () => {
+    const tree = await mountFetched({ ...fetchedPick, theme: 'conviction', themeName: 'Honest Before God', reason: null });
+
+    const texts = renderedTexts(tree);
+    expect(texts).toContain('A 7-day series on Honest Before God — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('god');
   });
 
   it.each([
@@ -431,7 +446,7 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
   });
 
   it.each([
-    ['markdown', '**Trust**\nGod', 'A 7-day series on trust god — right where you are right now.'],
+    ['markdown', '**Trust**\nGod', 'A 7-day series on Trust God — right where you are right now.'],
     ['html', '<b>Trust</b>', 'A new series — right where you are right now.'],
   ])('keeps the fallback plain when the theme name carries %s', async (_label, themeName, expected) => {
     const tree = await mountFetched({ ...fetchedPick, themeName, reason: null });
@@ -439,12 +454,26 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain(expected);
   });
 
-  it('renders the QA fixture reason unchanged', async () => {
+  const pickWithoutLength: Record<string, unknown> = { ...fetchedPick };
+  delete pickWithoutLength.suggestedLength;
+
+  it.each([
+    ['missing', pickWithoutLength],
+    ['null', { ...fetchedPick, suggestedLength: null }],
+    ['an unsupported number', { ...fetchedPick, suggestedLength: 21 }],
+    ['text', { ...fetchedPick, suggestedLength: '7' }],
+  ])('shows the plain descriptor when the fetched length is %s', async (_label, body) => {
+    const tree = await mountFetched({ ...body, reason: null });
+
+    const texts = renderedTexts(tree);
+    expect(texts).toContain('A new series — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('-day series');
+  });
+
+  it('shows the descriptor for the QA fixture', async () => {
     const tree = await mount();
 
-    expect(renderedTexts(tree)).toContain(
-      'Because this season is asking for patience without passivity — a study on waiting, courage, and hearing God clearly.',
-    );
+    expect(renderedTexts(tree)).toContain('A 7-day series on A Quiet Strength — right where you are right now.');
   });
 
   it('does not POST /api/jobs on render', async () => {

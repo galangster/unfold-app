@@ -1,10 +1,14 @@
 import type { Devotional } from './store';
 import { countReadDays } from './book-of-seasons';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { isOnboardingFirstReading } from './auto-trial-series';
+import { isFirstReadingRow, ONBOARDING_FIRST_READING_SERIES_NAME } from './auto-trial-series';
 
-export function firstReadingLabel(book: Pick<Devotional, 'seriesArc'>): string | undefined {
-  return isOnboardingFirstReading(book) ? 'Your first devotional' : undefined;
+/** The shelf label reads in sentence case: "Your first devotional". */
+const FIRST_READING_LABEL = ONBOARDING_FIRST_READING_SERIES_NAME.charAt(0)
+  + ONBOARDING_FIRST_READING_SERIES_NAME.slice(1).toLowerCase();
+
+export function firstReadingLabel(book: Pick<Devotional, 'id' | 'seriesArc'>): string | undefined {
+  return isFirstReadingRow(book) ? FIRST_READING_LABEL : undefined;
 }
 
 export type ShelfFilter = 'all' | 'progress' | 'completed';
