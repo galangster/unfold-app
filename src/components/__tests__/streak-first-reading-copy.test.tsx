@@ -203,6 +203,31 @@ describe('streak copy after the onboarding devotional', () => {
     expect(settingsAfter).toEqual(settingsBefore);
   });
 
+  // Streak Settings can stay mounted overnight. Yesterday's reading must not
+  // keep the starts-tomorrow line once the local date moves on.
+  it('drops the starts-tomorrow line in an open Streak Settings after local midnight', () => {
+    jest.useFakeTimers({ now: new Date(2026, 4, 10, 23, 59, 50) });
+    let tree!: ReturnType<typeof renderer.create>;
+    try {
+      readFirstDevotionalInOnboarding();
+      act(() => {
+        tree = renderer.create(<StreakSettingsScreen />);
+      });
+      expect(texts(tree)).toContain(STARTS_TOMORROW);
+
+      act(() => {
+        jest.advanceTimersByTime(20_000);
+      });
+
+      const afterMidnight = texts(tree);
+      expect(afterMidnight).not.toContain(STARTS_TOMORROW);
+      expect(afterMidnight).toContain('Start your streak by completing a devotional');
+    } finally {
+      act(() => tree?.unmount());
+      jest.useRealTimers();
+    }
+  });
+
   it('keeps the begin-today copy for a reader with nothing read today', () => {
     const today = renderTodayRhythm();
     expect(today.texts).toContain('Begin with today’s reading.');

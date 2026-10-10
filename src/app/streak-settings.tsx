@@ -21,6 +21,7 @@ import { Typography } from '@/constants/typography';
 import { alpha } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useUnfoldStore } from '@/lib/store';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { hasReadDevotionalToday } from '@/lib/home-devotional-state';
@@ -143,9 +144,12 @@ export default function StreakSettingsScreen() {
   const lastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  // The calendar clock moves at local midnight and on foreground, so a screen
+  // left open overnight stops counting yesterday's reading as today's.
+  const calendarNow = useCalendarNow();
   const hasReadToday = useMemo(
-    () => hasReadDevotionalToday({ devotionals, currentDevotionalId }),
-    [devotionals, currentDevotionalId],
+    () => hasReadDevotionalToday({ devotionals, currentDevotionalId, now: calendarNow }),
+    [devotionals, currentDevotionalId, calendarNow],
   );
   const toggleWeekendAmnesty = useUnfoldStore((s) => s.toggleWeekendAmnesty);
 

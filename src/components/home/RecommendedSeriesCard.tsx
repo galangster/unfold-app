@@ -69,9 +69,11 @@ const PLAIN_FALLBACK_DESCRIPTOR = 'A new series — right where you are right no
  * length and the theme instead. The theme name keeps its case, so a name
  * such as "Honest Before God" reads as written. The theme name is data, so
  * the sentence is cleaned too, and a constant covers a theme name the
- * cleaner refuses.
+ * cleaner refuses. The length is unchecked JSON as well, so a length other
+ * than 7 or 14 gets the constant.
  */
-function seriesDescriptor(suggestedLength: number, themeName: string) {
+function seriesDescriptor(suggestedLength: unknown, themeName: string) {
+  if (suggestedLength !== 7 && suggestedLength !== 14) return PLAIN_FALLBACK_DESCRIPTOR;
   const theme = themeName.trim() ? themeName : 'this theme';
   return cleanRecommendationReason(`A ${suggestedLength}-day series on ${theme} — right where you are right now.`)
     ?? PLAIN_FALLBACK_DESCRIPTOR;

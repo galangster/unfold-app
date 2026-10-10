@@ -454,6 +454,22 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(renderedTexts(tree)).toContain(expected);
   });
 
+  const pickWithoutLength: Record<string, unknown> = { ...fetchedPick };
+  delete pickWithoutLength.suggestedLength;
+
+  it.each([
+    ['missing', pickWithoutLength],
+    ['null', { ...fetchedPick, suggestedLength: null }],
+    ['an unsupported number', { ...fetchedPick, suggestedLength: 21 }],
+    ['text', { ...fetchedPick, suggestedLength: '7' }],
+  ])('shows the plain descriptor when the fetched length is %s', async (_label, body) => {
+    const tree = await mountFetched({ ...body, reason: null });
+
+    const texts = renderedTexts(tree);
+    expect(texts).toContain('A new series — right where you are right now.');
+    expect(texts.join(' ')).not.toContain('-day series');
+  });
+
   it('shows the descriptor for the QA fixture', async () => {
     const tree = await mount();
 
