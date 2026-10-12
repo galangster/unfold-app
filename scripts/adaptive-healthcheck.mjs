@@ -40,7 +40,7 @@ async function checkBackend(backendUrl) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-5-5',
       max_tokens: 220,
       temperature: 0.7,
       system: 'Return valid JSON only: {"question":"...","subtext":"..."}',

@@ -6,7 +6,8 @@
 #
 #   SENTRY_AUTH_TOKEN=<build token> scripts/verify-release-ipa.sh <ipa> <build number>
 #
-# Run it from the repository root. It ends on PASS, or on FAIL with a count.
+# Run it from the repository root. It checks the artifact, not its native
+# source provenance. Complete docs/RELEASE-SMOKE.md step 8 before submission.
 
 IPA=$1
 BUILD=$2
@@ -106,4 +107,4 @@ elif [[ -n $JS_ID && -n $NATIVE_ID ]]; then
     && pass "Sentry dSYM for $NATIVE_ID" || fail "Sentry has no dSYM for $NATIVE_ID"
 fi
 
-(( failures == 0 )) && echo PASS || { echo "FAIL $failures check(s)"; exit 1; }
+(( failures == 0 )) && echo "PASS IPA artifact checks; source provenance remains required" || { echo "FAIL $failures check(s)"; exit 1; }
