@@ -125,6 +125,25 @@ describe('mergeRecoveryOutbox (RS2-1)', () => {
 });
 
 describe('mergeRecoveryDeletedSeries', () => {
+  it.each([50, 300])('retains all 101 clocks when the recovery clock is %i', (recoveryClock) => {
+    const realClocks = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [`series-real-${index}`, 100 + index]),
+    );
+    const realKV = makeKV({ [DELETED_SERIES_KEY]: JSON.stringify(realClocks) });
+    const recoveryKV = makeKV({
+      [DELETED_SERIES_KEY]: JSON.stringify({ 'series-recovery': recoveryClock }),
+    });
+
+    mergeRecoveryDeletedSeries(realKV, recoveryKV);
+
+    const merged = JSON.parse(realKV.getString(DELETED_SERIES_KEY) ?? 'null');
+    expect(Object.keys(merged)).toHaveLength(101);
+    expect(merged['series-real-0']).toBe(100);
+    expect(merged['series-real-99']).toBe(199);
+    expect(merged['series-recovery']).toBe(recoveryClock);
+    expect(recoveryKV.store.has(DELETED_SERIES_KEY)).toBe(false);
+  });
+
   it('carries recovery delete clocks into the real store, newest clock per id', () => {
     const realKV = makeKV({
       [DELETED_SERIES_KEY]: JSON.stringify({ 'series-both': 200, 'series-real': 100 }),

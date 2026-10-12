@@ -291,6 +291,9 @@ describe('performFullLocalReset', () => {
     const oldAt = '2026-10-01T00:00:00.000Z';
     const newAt = '2026-10-09T00:00:00.000Z';
     rememberDeletedSeries('series-old', oldAt);
+    for (let index = 0; index < 100; index += 1) {
+      rememberDeletedSeries(`series-later-${index}`, newAt);
+    }
     expect(mockStore.has(DELETED_SERIES_KEY)).toBe(true);
 
     await performFullLocalReset();

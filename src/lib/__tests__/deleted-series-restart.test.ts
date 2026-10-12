@@ -120,15 +120,22 @@ describe('a series deleted here, after its delete synced and the app restarted',
     });
   });
 
-  it('keeps the newest deletes within a bounded record', () => {
-    for (let minute = 0; minute <= 100; minute += 1) {
+  it('rejects the oldest deleted series result after 100 later deletes and a restart', () => {
+    rememberDeletedSeries(series.id, '2026-10-09T08:00:00.000Z');
+    for (let minute = 1; minute <= 100; minute += 1) {
       rememberDeletedSeries(`series-${minute}`, new Date(Date.UTC(2026, 9, 9, 8, minute)).toISOString());
     }
 
-    afterRestart(({ deleted }) => {
+    afterRestart(({ arc, deleted, session, store }) => {
+      expect(() => arc.applyInitialArcResult(result, {
+        user,
+        devotionalLength: 3,
+        session: session.captureSyncSession(),
+      })).toThrow(arc.DeletedSeriesResultError);
+      expect(store.useUnfoldStore.getState().devotionals).toEqual([]);
       expect(deleted.wasSeriesDeleted('series-100')).toBe(true);
       expect(deleted.wasSeriesDeleted('series-1')).toBe(true);
-      expect(deleted.wasSeriesDeleted('series-0')).toBe(false);
+      expect(deleted.wasSeriesDeleted(series.id)).toBe(true);
     });
   });
 });
