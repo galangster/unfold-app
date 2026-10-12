@@ -148,6 +148,19 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
   enqueueRevision += 1;
 }
 
+function canSettleJournalChanges(changes: readonly SyncPushChange[]): boolean {
+  if (!changes.some((change) => change.table === 'journal_entries')) return true;
+  try {
+    // The store imports this module. Resolve it only when a journal is about to leave the queue.
+    // Failed hydration/checkpointing keeps its durable recovery copy queued until a healthy boot.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useUnfoldStore } = require('./store') as typeof import('./store');
+    return useUnfoldStore.persist.hasHydrated();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Settles a push sent outside the drain for changes that were queued first.
  * An accepted result clears its queued copy while the queue still holds the
@@ -157,7 +170,7 @@ export function enqueueSyncChanges(changes: SyncPushChange[]): void {
 export function settleDirectSyncPush(sent: readonly SyncPushChange[], rawResults: readonly unknown[]): void {
   const accepted = correlateSyncAcknowledgements(sent, rawResults)
     .filter((pair) => pair.result.status === 'accepted');
-  if (accepted.length === 0) return;
+  if (accepted.length === 0 || !canSettleJournalChanges(accepted.map((pair) => pair.change))) return;
   const current = readOutbox();
   const remaining = current.filter((entry) => !accepted.some((pair) => syncSnapshotsEqual(entry, pair.change)));
   if (remaining.length !== current.length) writeOutbox(remaining);
@@ -321,7 +334,7 @@ export function drainSyncOutbox(): Promise<void> {
       operation.assertCurrent();
       const initial = readOutbox();
       const capturedRevision = enqueueRevision;
-      if (initial.length === 0) return;
+      if (initial.length === 0 || !canSettleJournalChanges(initial)) return;
       const headers = await operation.wait(getAuthHeaders());
 
       const envelope = createSyncPushBodyEnvelope();
@@ -362,6 +375,8 @@ export function drainSyncOutbox(): Promise<void> {
         operation.assertCurrent();
 
         const resolving = resolvingAcknowledgementPairs(batch, payload?.results ?? []);
+        if (!canSettleJournalChanges(resolving.map((pair) => pair.change))) return;
+        operation.assertCurrent();
         const resolvingByKey = new Map(
           resolving.map((pair) => [`${pair.change.table}:${pair.change.id}`, pair] as const),
         );

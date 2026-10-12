@@ -1050,6 +1050,13 @@ const initialState = {
 // WR-23: session-scoped flags are reset on every launch (see
 // onRehydrateStorage) — no reason to serialize them on every write.
 type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJustReset'>;
+const UNFOLD_STORE_NAME = 'unfold-storage';
+const UNFOLD_STORE_VERSION = 44; // v44: ritual session start clocks for midnight-crossing completions
+
+function partializeUnfoldState(state: UnfoldState): PersistedUnfoldState {
+  const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
+  return persisted;
+}
 
 // WR-23: coalesces persist writes so a burst of store updates (autosave
 // while typing) serializes the full state once per window instead of on
@@ -1060,6 +1067,8 @@ type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJ
 const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
+// A failed recovery write stays pending even if rehydration sees repaired memory.
+let journalRecoveryNeedsCheckpoint = false;
 
 /**
  * Reconcile pulled content and its current-series selection. The updater
@@ -2649,14 +2658,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       reset: () => set(initialState),
     }),
     {
-      name: 'unfold-storage',
+      name: UNFOLD_STORE_NAME,
       storage: unfoldPersistStorage,
-      version: 44, // v44: ritual session start clocks for midnight-crossing completions
+      version: UNFOLD_STORE_VERSION,
       // WR-23: drop session-scoped flags from the persisted blob.
-      partialize: (state): PersistedUnfoldState => {
-        const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
-        return persisted;
-      },
+      partialize: partializeUnfoldState,
       // Validate and migrate persisted state. Migrations work on the loose
       // legacy shape (Record<string, any>); the repaired result is merged
       // into the typed state on rehydrate.
@@ -2681,7 +2687,9 @@ export const useUnfoldStore = create<UnfoldState>()(
 
           if (state) {
             const { repairedKeys } = repairRehydratedState(state, initialState);
-            state.journalEntries = restoreQueuedJournalEntries(state.journalEntries, state.devotionals);
+            const restoredJournalEntries = restoreQueuedJournalEntries(state.journalEntries, state.devotionals);
+            journalRecoveryNeedsCheckpoint ||= restoredJournalEntries !== state.journalEntries;
+            state.journalEntries = restoredJournalEntries;
             state.scripturePracticeReturn = resolvePracticeReturn(state.scripturePracticeReturn, state.devotionals, state.currentDevotionalId);
             if (repairedKeys.length > 0) {
               logger.warn('[store] Repaired invalid persisted slices:', repairedKeys.join(', '));
@@ -2739,6 +2747,16 @@ export const useUnfoldStore = create<UnfoldState>()(
                   return bt - at;
                 });
               }
+            }
+            if (journalRecoveryNeedsCheckpoint) {
+              // MMKV writes synchronously. Finish the repair before hydration succeeds.
+              unfoldPersistStorage.setItem(UNFOLD_STORE_NAME, {
+                state: partializeUnfoldState(state), version: UNFOLD_STORE_VERSION,
+              });
+              if (!unfoldPersistStorage.flushPendingWrites()) {
+                throw new Error('Journal recovery checkpoint did not write');
+              }
+              journalRecoveryNeedsCheckpoint = false;
             }
           }
         };
