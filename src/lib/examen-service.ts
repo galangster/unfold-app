@@ -343,6 +343,22 @@ function withoutTrailingSeparators(text: string): string {
   return text.slice(0, end);
 }
 
+/** True when `text` holds a letter or a digit, not only marks and punctuation. */
+function hasWords(text: string): boolean {
+  return /[\p{L}\p{N}]/u.test(text);
+}
+
+/**
+ * True when `text` ends in a mark that opens a quotation: a curly opening
+ * mark, or a straight one at the start or after a space or an opening
+ * bracket. 'say, “' and 'say "' open one. A closing 'he said "rest"' does not.
+ */
+function opensQuotation(text: string): boolean {
+  const mark = text.slice(-1);
+  if (mark === '“' || mark === '‘') return true;
+  return (mark === '"' || mark === "'") && (text.length === 1 || /[\s([]/.test(text[text.length - 2]));
+}
+
 /** The mark that closes a double quotation `text` opens and leaves open, or ''. */
 function openQuotationCloser(text: string): string {
   const count = (mark: string) => text.split(mark).length - 1;
@@ -357,9 +373,10 @@ function openQuotationCloser(text: string): string {
  * before it, until none is left. What remains gets a full stop when it does
  * not already end a sentence (endsSentence). Closing quotation marks after
  * the Amen go with it, unless the prayer opened a quotation that they close.
- * A movement that was only "Amen" comes back empty, which
- * parseExamenResponse rejects like any empty movement, so the request is
- * tried again.
+ * A quoted "Amen" is someone's words ('Let all the people say, “Amen!”'),
+ * so it stays whole. A movement that was only an Amen, quoted or not, or
+ * only marks once the Amen goes, comes back empty, which parseExamenResponse
+ * rejects like any empty movement, so the request is tried again.
  */
 function withoutTrailingAmen(prayer: string): string {
   let text = prayer.trim();
@@ -371,12 +388,14 @@ function withoutTrailingAmen(prayer: string): string {
       text.slice(start, end).toLowerCase() === 'amen' &&
       (start === 0 || !/[\p{L}\p{N}_]/u.test(text[start - 1]));
     if (!endsInAmen) return text;
+    const before = text.slice(0, start).trimEnd();
+    if (opensQuotation(before)) return hasWords(before.slice(0, -1)) ? text : '';
     const closedQuotation = /["”]/.test(text.slice(end));
     let head = withoutTrailingSeparators(text.slice(0, start));
     const core = trimTrailing(head, '.!');
     const clause = JESUS_NAME_CLAUSE.exec(core);
     if (clause) head = withoutTrailingSeparators(core.slice(0, clause.index));
-    if (!head) return '';
+    if (!hasWords(head)) return '';
     text = (endsSentence(head) ? head : `${head}.`) + (closedQuotation ? openQuotationCloser(head) : '');
   }
 }

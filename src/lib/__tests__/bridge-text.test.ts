@@ -1,10 +1,10 @@
 /**
  * The bridge safety net. Banned phrases used to be deleted as raw substrings,
  * so "journeyed" became "ed", "boyfriend," became "boy", and "a season of
- * rest" became "a of rest". A phrase now counts only as whole words outside
- * quotation marks, and a bridge that holds one is dropped whole, never cut.
- * One rule decides where a sentence ends, for the splitter and for the gate
- * that Today and the cache share.
+ * rest" became "a of rest". A phrase now counts only as whole words, and a
+ * bridge that holds one is dropped whole, never cut. Inside a quotation,
+ * only Scripture's own words pass. One rule decides where a sentence ends,
+ * for the splitter and for the gate that Today and the cache share.
  */
 
 import {
@@ -104,8 +104,9 @@ describe('sanitizeBridgeText where a sentence split goes wrong', () => {
 
   it('keeps a quoted question before its dialogue tag whole, and drops the bridge for a banned word in the tag', () => {
     const quoted =
-      '"Is this really all there is?" he asks under the broom tree. Elijah has run out of road and out of words. Today the reading lets him sleep, then hands him bread.';
+      '"Is the journey too much for me?" he asks under the broom tree. Elijah has run out of road and out of words. Today the reading lets him sleep, then hands him bread.';
     expect(sanitizeBridgeText(quoted)).toBe(quoted);
+    expect(sanitizeBridgeText(quoted.replace('Is the journey too much for me?', 'Is this really all there is?'))).toBeNull();
     expect(
       sanitizeBridgeText(
         '"Is this all there is?" he asks under the broom tree, truly worn out. Elijah has run out of road. Today the reading lets him sleep, then hands him bread.',
@@ -115,7 +116,7 @@ describe('sanitizeBridgeText where a sentence split goes wrong', () => {
 
   it('keeps a sentence inside a quotation of several sentences whole, and drops the bridge for a banned word after it', () => {
     const quoted =
-      'The angel says, "Sit with it. Eat the bread." Then Elijah gets up and walks for forty days. Today is about strength that arrives as a meal.';
+      'The angel says, "Get up and eat. The journey is too much for you." Then Elijah gets up and walks for forty days. Today is about strength that arrives as a meal.';
     expect(sanitizeBridgeText(quoted)).toBe(quoted);
     expect(
       sanitizeBridgeText(
@@ -126,7 +127,8 @@ describe('sanitizeBridgeText where a sentence split goes wrong', () => {
 });
 
 // Round 1, F3: quoted Scripture passes the gate, and "Friend," counts only
-// where it opens a sentence.
+// where it opens a sentence. Round 2: only Scripture's words pass inside a
+// quotation, and only when the quotation marks balance.
 describe('sanitizeBridgeText with quoted words and "Friend,"', () => {
   it('keeps 1 Kings 19:7 quoted with straight or curly quotation marks', () => {
     for (const text of [
@@ -152,6 +154,32 @@ describe('sanitizeBridgeText with quoted words and "Friend,"', () => {
     expect(
       sanitizeBridgeText('The angel says, "Get up and eat. The journey is too much for you. Elijah eats and sleeps again under the tree.'),
     ).toBeNull();
+  });
+
+  // The reviewers' replies (round 2, R2-S2 and STD-R2-1).
+  it.each([
+    ['a crude phrase inside straight marks', 'Elijah tells God, "I have had a hell of a week." The angel brings bread and lets him sleep. Rest comes before the road today.'],
+    ['a crude word inside curly marks', 'Elijah is done. He says, “Damn this road.” The angel brings bread and lets him sleep again under the tree.'],
+    ['unbalanced straight marks', 'Elijah says "enough. Then the long journey goes on, and the angel says "eat." The bread is warm and the water is cold.'],
+    ['unbalanced curly marks', 'The angel says, “Get up. Then the long journey goes on, and he says, “Eat.” The bread is warm and the water is cold.'],
+    ['a crude word in a quoted line', 'He looks up at the tree and says, "This is damn hard." Elijah sleeps, then eats the bread the angel brings. Today is about rest that comes first.'],
+    ['a whole reply wrapped in quotation marks', '"Have you ever felt this tired? Elijah truly ran out of road on his journey. Today the reading lets him sleep, then hands him bread."'],
+    ['a quoted weak opener', '"Have you ever been this tired?" Elijah could ask under the broom tree. The angel brings bread twice. Today is about rest that comes first.'],
+    ['a curly opening mark closed by a straight one', 'The angel says, “Get up," and the journey goes on for forty days. He says, "Eat." Today is about strength that arrives as bread.'],
+  ])('drops %s', (_shape, reply) => {
+    expect(sanitizeBridgeText(reply)).toBeNull();
+  });
+
+  it('keeps a scare-quoted word of Scripture inside balanced marks, the one exemption left', () => {
+    const scareQuoted = 'It is a "season" of rest, and Elijah takes it. He sleeps under a broom tree and wakes to bread, twice. Today is about rest that comes first.';
+    expect(sanitizeBridgeText(scareQuoted)).toBe(scareQuoted);
+  });
+
+  it('drops a bridge that copied the "[name]" token', () => {
+    expect(
+      sanitizeBridgeText('Rest comes first today, [name]. Elijah sleeps under a broom tree. The angel brings bread twice and lets him sleep.'),
+    ).toBeNull();
+    expect(sanitizeBridgeText('[Name], rest comes first today. Elijah sleeps under a broom tree and wakes to bread.')).toBeNull();
   });
 });
 
@@ -202,17 +230,20 @@ describe('findBannedPhrase', () => {
     expect(findBannedPhrase('Friend,x')).toBe('friend,');
   });
 
-  it('counts "Friend," only where it opens a sentence', () => {
+  it('counts "Friend," only where it opens a sentence, quoted or not', () => {
     expect(findBannedPhrase('Think of a friend, a sister, or a coworker.')).toBeNull();
     expect(findBannedPhrase('Rest first. Friend, listen.')).toBe('friend,');
-    expect(findBannedPhrase('Rest first? “Friend, listen.”')).toBeNull();
+    expect(findBannedPhrase('Rest first? “Friend, listen.”')).toBe('friend,');
   });
 
-  it('skips the words inside matched double quotation marks', () => {
+  it("skips only Scripture's words inside balanced quotation marks", () => {
     expect(findBannedPhrase('The angel says, “the journey is too much for you.”')).toBeNull();
     expect(findBannedPhrase('The angel says, "the journey is too much for you."')).toBeNull();
+    expect(findBannedPhrase('He says, “Damn this road.”')).toBe('damn');
+    expect(findBannedPhrase('He asks, "Is this really all?"')).toBe('really');
     expect(findBannedPhrase('He said, "Rest." The journey goes on.')).toBe('journey');
     expect(findBannedPhrase('He said, "Rest. The journey goes on.')).toBe('journey');
+    expect(findBannedPhrase('“The journey is too much for you.”')).toBe('journey');
   });
 });
 

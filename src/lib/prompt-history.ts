@@ -70,23 +70,28 @@ export function openingWords(text: string, count = 4): string {
 /**
  * `line` with the reader's name replaced by "[name]", so a line kept from a
  * morning that used the name cannot carry it into a request on a morning
- * that withholds it. The whole name and each of its words count, as whole
- * words in any case, unless the match starts with a lowercase letter: a
- * name is written with a capital, and "grace" in a sentence is not Grace.
- * A straight apostrophe in the name matches a curly one too.
+ * that withholds it.
+ *
+ * Both are NFKC-normalized first, as sanitizeForPrompt sends the name. The
+ * whole name counts at any length, and so does each word of it two letters
+ * or longer, split at spaces and hyphens ("Mary" of "Mary-Jane"). Each
+ * matches as whole words in any case. When the stored name starts with a
+ * capital, a match that starts with a lowercase letter stays: "grace" in a
+ * sentence is not Grace. A straight apostrophe matches a curly one too.
  */
 export function withoutName(line: string, name: string | null | undefined): string {
-  const full = (name ?? '').trim();
-  const forms = [...new Set([full, ...full.split(/\s+/)])]
-    .filter((form) => form.length > 1)
+  const full = (name ?? '').normalize('NFKC').trim();
+  if (!full) return line;
+  const forms = [...new Set([full, ...full.split(/[\s-]+/).filter((word) => word.length > 1)])]
     .sort((a, b) => b.length - a.length);
+  const capitalized = full[0] !== full[0].toLowerCase();
   return forms.reduce((text, form) => {
     const body = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/['’]/g, "['’]").replace(/\s+/g, '\\s+');
     const pattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${body})(?![\\p{L}\\p{N}])`, 'giu');
     return text.replace(pattern, (whole: string, before: string, found: string) =>
-      found[0] === found[0].toUpperCase() ? `${before}[name]` : whole,
+      capitalized && found[0] !== found[0].toUpperCase() ? whole : `${before}[name]`,
     );
-  }, line);
+  }, line.normalize('NFKC'));
 }
 
 /** The lines with repeats removed, in first-seen order. Case and punctuation do not make two lines different. */

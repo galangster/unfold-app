@@ -216,6 +216,7 @@ CRITICAL RULES:
 - Never open with a greeting or with the reader's name.
 - Use the reader's name only when the request says to. Then use it once, after the first sentence.
 - Never reuse the wording or the first words of a sentence listed under RECENT FIRST SENTENCES.
+- [name] stands for the reader's name. Never write it.
 - Use contractions (you're, it's, don't). A casual word now and then is fine. Do not pad with filler words.
 - Short sentences. Fragments ok.
 - NEVER use em dashes. Use commas or periods.
@@ -224,7 +225,6 @@ CRITICAL RULES:
 - NEVER use negative framing to emphasize a positive. No "not X, but Y" constructions.
 - NEVER use poetic/vague phrasing. No "what X holds", "those quiet moments", metaphors.
 - NEVER mention scripture references.
-- When you use the passage's own words, put them in double quotation marks.
 - NEVER use metacommentary about the text itself. No "this hits hard", "let that sink in", "this changes everything." If the content needs a hype line, the content is weak.
 - NEVER use empty intensifiers: deeply, profoundly, truly, really, incredibly.
 - NEVER use serial parallelism (Rule of Three) as default structure. Vary between 1, 2, 4+ items.

@@ -7,9 +7,10 @@
  * "ed", "boyfriend," became "boy", and "a season of rest" became "a of rest".
  * Removing the one sentence that held a phrase still broke bridges, because
  * a sentence split can be wrong: after an ellipsis, before a dialogue tag,
- * or inside a quotation. Now a phrase counts only as whole words outside
- * quotation marks, and a bridge that holds one is dropped whole, never cut.
- * Today then shows no bridge, the same state as a failed request.
+ * or inside a quotation. Now a phrase counts only as whole words, and a
+ * bridge that holds one is dropped whole, never cut. Only Scripture's own
+ * words pass inside a quotation (SCRIPTURE_WORDS). Today then shows no
+ * bridge, the same state as a failed request.
  */
 
 import { BANNED_PHRASES } from '@/constants/persona';
@@ -77,11 +78,20 @@ const WORD_END = '(?![\\p{L}\\p{N}])';
 
 /**
  * "Friend," is banned as the vocative that opens a sentence ("Friend, this
- * one is for you."), so it counts only where a sentence starts. "Think of a
- * friend, a sister" keeps its friend.
+ * one is for you."), so it counts only where a sentence starts, after any
+ * opening quotation mark or bracket. "Think of a friend, a sister" keeps its
+ * friend.
  */
 const SENTENCE_OPENER = 'friend,';
-const SENTENCE_OPENER_PATTERN = /(^|[.!?…]["'”’)\]]*\s+)friend,/giu;
+const SENTENCE_OPENER_PATTERN = /(?:^|[.!?…]["'”’)\]]*\s+)["'“‘([]*friend,/iu;
+
+/**
+ * Banned words that are also Scripture's own ("the journey is too much for
+ * you", "a season for everything", "Truly I tell you"). Inside a quotation
+ * they are the passage's words, so they pass there. Every other banned
+ * phrase and every crude phrase counts inside quotation marks too.
+ */
+const SCRIPTURE_WORDS: ReadonlySet<string> = new Set(['journey', 'season', 'season of', 'pour out', 'throne of grace', 'truly']);
 
 /** Every other banned phrase, lowercased and longest first, so "season of" is found before "season". */
 const BANNED: readonly string[] = [
@@ -119,30 +129,41 @@ function holdsBannedPhrase(text: string): boolean {
 }
 
 /**
- * The spans of `text` inside matched double quotation marks, the marks
- * included: straight marks in pairs, in order, and each “ with the next ”.
- * Quoted words belong to someone else, often the passage itself ("the
- * journey is too much for you"), so a banned word there does not count. A
- * mark with no partner opens no span.
+ * The spans of `text` inside double quotation marks, the marks included, or
+ * none when the marks do not balance. A straight mark opens a quotation only
+ * at the start of the text or after a space or an opening bracket, and
+ * closes one anywhere else. “ opens and ” closes. Each quotation must close
+ * before the next of its kind opens. A span around the whole reply is the
+ * model wrapping its own words, not a quotation, so it does not count.
  */
 function quotedSpans(text: string): [number, number][] {
   const spans: [number, number][] = [];
-  let open = -1;
-  for (let at = text.indexOf('"'); at >= 0; at = text.indexOf('"', at + 1)) {
-    if (open < 0) {
-      open = at;
-    } else {
-      spans.push([open, at + 1]);
-      open = -1;
+  let straight = -1;
+  let curly = -1;
+  for (let at = 0; at < text.length; at += 1) {
+    const mark = text[at];
+    if (mark === '"') {
+      if (at === 0 || /[\s([]/.test(text[at - 1])) {
+        if (straight >= 0) return [];
+        straight = at;
+      } else {
+        if (straight < 0) return [];
+        spans.push([straight, at + 1]);
+        straight = -1;
+      }
+    } else if (mark === '“') {
+      if (curly >= 0) return [];
+      curly = at;
+    } else if (mark === '”') {
+      if (curly < 0) return [];
+      spans.push([curly, at + 1]);
+      curly = -1;
     }
   }
-  for (let at = text.indexOf('“'); at >= 0; at = text.indexOf('“', at + 1)) {
-    const close = text.indexOf('”', at + 1);
-    if (close < 0) break;
-    spans.push([at, close + 1]);
-    at = close;
-  }
-  return spans;
+  if (straight >= 0 || curly >= 0) return [];
+  const first = text.search(/\S/);
+  const last = text.trimEnd().length;
+  return spans.filter(([start, end]) => start > first || end < last);
 }
 
 /**
@@ -153,16 +174,13 @@ function quotedSpans(text: string): [number, number][] {
 let phrasePatterns: { phrase: string; pattern: RegExp }[] | null = null;
 
 /**
- * The longest banned phrase `text` holds as whole words outside quotation
- * marks, or null. "Friend," counts only where a sentence starts.
+ * The longest banned phrase `text` holds as whole words, or null. A word of
+ * SCRIPTURE_WORDS inside a quotation does not count. "Friend," counts only
+ * where a sentence starts.
  */
 export function findBannedPhrase(text: string): string | null {
-  const spans = quotedSpans(text);
-  const unquoted = (match: RegExpMatchArray) => {
-    const at = (match.index ?? 0) + match[1].length;
-    return !spans.some(([start, end]) => at >= start && at < end);
-  };
   if (holdsBannedPhrase(text)) {
+    const spans = quotedSpans(text);
     if (!phrasePatterns) {
       phrasePatterns = BANNED.map((phrase) => ({
         phrase,
@@ -171,14 +189,12 @@ export function findBannedPhrase(text: string): string | null {
     }
     for (const { phrase, pattern } of phrasePatterns) {
       for (const match of text.matchAll(pattern)) {
-        if (unquoted(match)) return phrase;
+        const at = (match.index ?? 0) + match[1].length;
+        if (!SCRIPTURE_WORDS.has(phrase) || !spans.some(([start, end]) => at >= start && at < end)) return phrase;
       }
     }
   }
-  for (const match of text.matchAll(SENTENCE_OPENER_PATTERN)) {
-    if (unquoted(match)) return SENTENCE_OPENER;
-  }
-  return null;
+  return SENTENCE_OPENER_PATTERN.test(text) ? SENTENCE_OPENER : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,10 +255,11 @@ export function isDisplayableBridge(text: string): boolean {
  * names God.
  *
  * Returns null when the bridge cannot be shown: it holds a banned or crude
- * phrase outside quotation marks, or it was cut off mid-sentence. A bridge
- * is kept whole or dropped whole, never cut, so a sentence split that goes
- * wrong cannot leave half a sentence on Today. Running it twice gives the
- * same result as running it once.
+ * phrase (findBannedPhrase), it copied the "[name]" token from its avoid
+ * lines, or it was cut off mid-sentence. A bridge is kept whole or dropped
+ * whole, never cut, so a sentence split that goes wrong cannot leave half a
+ * sentence on Today. Running it twice gives the same result as running it
+ * once.
  */
 export function sanitizeBridgeText(text: string): string | null {
   const cleaned = capitalizeGodSlips(
@@ -253,6 +270,6 @@ export function sanitizeBridgeText(text: string): string | null {
       .replace(/^,\s*/, '')
       .trim(),
   );
-  if (findBannedPhrase(cleaned) !== null) return null;
+  if (/\[name\]/i.test(cleaned) || findBannedPhrase(cleaned) !== null) return null;
   return isDisplayableBridge(cleaned) ? cleaned : null;
 }

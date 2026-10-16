@@ -38,6 +38,27 @@ jest.mock('@/lib/mmkv-storage', () => ({
   getDeviceId: jest.fn(() => 'install-a'),
 }));
 
+// One store per MMKV id, shared by every instance, so a test can read and
+// seed the history a service keeps (react-native-mmkv's own mock gives each
+// instance its own store).
+jest.mock('react-native-mmkv', () => {
+  const stores = new Map<string, Map<string, string>>();
+  class MMKV {
+    private readonly store: Map<string, string>;
+    constructor({ id }: { id: string }) {
+      this.store = stores.get(id) ?? new Map<string, string>();
+      stores.set(id, this.store);
+    }
+    getString(key: string) { return this.store.get(key); }
+    set(key: string, value: string) { this.store.set(key, value); }
+    delete(key: string) { this.store.delete(key); }
+    contains(key: string) { return this.store.has(key); }
+    clearAll() { this.store.clear(); }
+  }
+  return { MMKV };
+});
+
+import { MMKV } from 'react-native-mmkv';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { authenticatedFetch } from '@/lib/device-credential';
 import { clearBridgeCache, generateBridge } from '../bridge-service';
@@ -95,6 +116,19 @@ function bridgeMorning(useName: boolean, fromDay = 1): Date {
   }
   throw new Error('no such morning in October 2026');
 }
+
+/** The first local night in October 2026 whose examen prints `line` under the prayer. */
+function examenNight(line: string | null): Date {
+  for (let day = 1; day <= 31; day += 1) {
+    const night = new Date(2026, 9, day, 21, 0);
+    if (examenShapeFor({ seed: SEED, dayIndex: dayIndexFor(night) }).closingLine === line) return night;
+  }
+  throw new Error('no such night in October 2026');
+}
+
+/** The bridge history as the bridge service stores it. */
+const bridgeStore = () => new MMKV({ id: 'unfold-bridge-cache' });
+const HISTORY_KEY = 'recent_bridge_first_sentences';
 
 function lastRequest(): { system: string; userMessage: string } {
   const calls = (authenticatedFetch as jest.Mock).mock.calls;
@@ -213,10 +247,7 @@ describe('examen request', () => {
   });
 
   it('keeps a night with no closing line when it reads the prayer back from the cache', async () => {
-    let night = new Date(2026, 9, 1, 21, 0);
-    while (examenShapeFor({ seed: SEED, dayIndex: dayIndexFor(night) }).closingLine !== null) {
-      night = new Date(night.getFullYear(), night.getMonth(), night.getDate() + 1, 21, 0);
-    }
+    const night = examenNight(null);
     respondWith(examenReply('hotel'));
     expect((await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, night))?.closingLine).toBeNull();
 
@@ -252,10 +283,27 @@ describe('examen request', () => {
     ]);
   });
 
-  it('asks again when a movement is only an Amen', async () => {
+  it('leaves a quoted Amen whole', async () => {
+    const quoted = [
+      'Let all the people say, “Amen!”',
+      'And my whole heart answers, “Amen.”',
+      'Tonight I say "amen."',
+      'Into your hands, Lord. “Amen.”',
+      'Keep me near you tonight.',
+    ];
+    respondWith({
+      content: [{ text: JSON.stringify({ movements: quoted.map((prayer, i) => ({ title: `Quoted ${i}`, prayer })) }) }],
+    });
+
+    const prayer = await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, new Date(2026, 9, 14, 21, 0));
+
+    expect(prayer?.movements.map((movement) => movement.prayer)).toEqual(quoted);
+  });
+
+  it.each(['Amen.', '“Amen.”', '"Amen."', '… Amen.'])('asks again when a movement is only an Amen or marks: %s', async (only) => {
     const onlyAmen = examenReply('india');
     const movements = JSON.parse(onlyAmen.content[0].text).movements as { title: string; prayer: string }[];
-    movements[2].prayer = 'Amen.';
+    movements[2].prayer = only;
     respondWith({ content: [{ text: JSON.stringify({ movements }) }] });
     respondWith(examenReply('juliet'));
 
@@ -328,19 +376,37 @@ describe('bridge request', () => {
     expect(authenticatedFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('sends a first sentence that held the name as "[name]" on a morning without the name', async () => {
+  it('records a first sentence that held the name with "[name]" in its place', async () => {
     const namedMorning = bridgeMorning(true);
     const plainMorning = bridgeMorning(false, namedMorning.getDate() + 1);
     respondWith(bridgeReply('Rest gets a whole chapter today, Alex. Elijah sleeps under a tree and wakes to bread. What would you do with that kind of morning?'));
     await generateBridge(BRIDGE_INPUT, 'dev-1', 10, namedMorning);
 
+    expect(JSON.parse(bridgeStore().getString(HISTORY_KEY) ?? '[]')).toEqual(['Rest gets a whole chapter today, [name].']);
+
     respondWith(bridgeReply(BRIDGE_B));
     await generateBridge(BRIDGE_INPUT, 'dev-1', 11, plainMorning);
-
     const { userMessage } = lastRequest();
     expect(userMessage).toContain('- Name: Do not use their name today.');
+    expect(userMessage).not.toContain('Alex');
+  });
+
+  it('sends "[name]" for the name in a history line that still holds it', async () => {
+    bridgeStore().set(HISTORY_KEY, JSON.stringify(['Rest gets a whole chapter today, Alex.']));
+    respondWith(bridgeReply(BRIDGE_B));
+    await generateBridge(BRIDGE_INPUT, 'dev-1', 11, bridgeMorning(false));
+
+    const { system, userMessage } = lastRequest();
     expect(userMessage).toContain('RECENT FIRST SENTENCES (do not reuse their wording or their first words):\n- Rest gets a whole chapter today, [name].');
     expect(userMessage).not.toContain('Alex');
+    expect(system).toContain("- [name] stands for the reader's name. Never write it.");
+  });
+
+  it('shows no bridge, and caches and records none, when the reply copies "[name]"', async () => {
+    const morning = new Date(2026, 9, 16, 7, 0);
+    respondWith(bridgeReply('Rest comes first today, [name]. Elijah sleeps under a broom tree. The angel brings bread twice and lets him sleep.'));
+    expect(await generateBridge(BRIDGE_INPUT, 'dev-1', 12, morning)).toBeNull();
+    expect(bridgeStore().getString(HISTORY_KEY)).toBeUndefined();
   });
 
   it('caches and shows a bridge that ends in a curly closing quote', async () => {
@@ -453,6 +519,21 @@ describe('withoutName', () => {
     expect(withoutName('Alexander rests.', 'Alex')).toBe('Alexander rests.');
     expect(withoutName('Nothing to hide.', '')).toBe('Nothing to hide.');
   });
+
+  it('replaces a name stored in lowercase in any case', () => {
+    expect(withoutName('Rest gets a whole chapter today, alex.', 'alex')).toBe('Rest gets a whole chapter today, [name].');
+  });
+
+  it('matches a name stored decomposed against the composed form, and the other way round', () => {
+    expect(withoutName('Rest well tonight, José.', 'Jose\u0301')).toBe('Rest well tonight, [name].');
+    expect(withoutName('Rest well tonight, Jose\u0301.', 'José')).toBe('Rest well tonight, [name].');
+  });
+
+  it('replaces each part of a hyphenated name, and a one-letter name', () => {
+    expect(withoutName('Rest gets a chapter today, Mary.', 'Mary-Jane')).toBe('Rest gets a chapter today, [name].');
+    expect(withoutName('Mary-Jane, rest. Jane, eat.', 'Mary-Jane')).toBe('[name], rest. [name], eat.');
+    expect(withoutName('J, rest is the whole chapter today.', 'J')).toBe('[name], rest is the whole chapter today.');
+  });
 });
 
 describe('the shared persona in the bridge and examen requests', () => {
@@ -471,7 +552,9 @@ describe('the shared persona in the bridge and examen requests', () => {
       'A woman once',
       'There was a farmer who',
       "You've been stressed about money",
+      'stress about money',
       'That takes courage',
+      'first person plural',
     ]) {
       expect(examenSystem).not.toContain(line);
       expect(bridgeSystem).not.toContain(line);

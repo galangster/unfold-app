@@ -49,7 +49,7 @@ export const BRIDGE_CLOSINGS: readonly PromptMove[] = [
   { id: 'open-question', instruction: 'End with a question the reading raises, and leave it open.' },
   { id: 'plain-statement', instruction: 'End with a plain statement. No question in the last sentence.' },
   { id: 'image', instruction: 'End on one concrete image or detail from the reading.' },
-  { id: 'scripture-echo', instruction: "End with a few of the passage's own words, in double quotation marks, without the reference." },
+  { id: 'scripture-echo', instruction: "End with a few words that echo today's Scripture, without the reference." },
   { id: 'hand-off', instruction: 'End with one short, low-key line that hands them the reading.' },
   { id: 'tension', instruction: 'End on the tension in the reading, without resolving it.' },
 ];
