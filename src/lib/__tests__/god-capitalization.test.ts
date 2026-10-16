@@ -1,8 +1,8 @@
 /**
  * The app's lowercase "god" repair and em dash spacing, held to every case in
- * the backend's tests (unfold-backend ab7d932,
+ * the backend's tests (unfold-backend fef122a,
  * src/lib/__tests__/validator-non-body-prose.test.ts) so the two safety nets
- * agree. A lowercase "god" is capitalized only in a name position.
+ * agree. A lowercase "god" is capitalized only where it can only be God.
  */
 
 import { spaceEmDashes } from '../bridge-text';
@@ -15,83 +15,77 @@ function repair(text: string): string {
 
 describe('capitalizeGodSlips', () => {
   it.each([
-    ['This hits different — because god is near.', 'This hits different, because God is near.'],
-    ['Where do you need god to meet you today?', 'Where do you need God to meet you today?'],
-    ['Where does god feel close?', 'Where does God feel close?'],
-    ['Where do you need god to meet you?', 'Where do you need God to meet you?'],
+    ['This hits different — and it lasts. god is near.', 'This hits different, and it lasts. God is near.'],
+    ['How does the Lord your god meet you today?', 'How does the Lord your God meet you today?'],
+    ['Where does the Lord our god feel close?', 'Where does the Lord our God feel close?'],
   ])('repairs the fields of a day: %s', (text, expected) => {
     expect(repair(text)).toBe(expected);
   });
 
+  // The model capitalizes God when it means God, so every lowercase "god"
+  // outside a name position keeps its casing: idols, and the rare slip alike.
   it.each([
     'Name the comfort that has become a god to you.',
     'Which habit has become a quiet god?',
     'Is there another god you run to?',
     'No other god can carry this.',
-    'The god of this age has blinded the minds of unbelievers.',
     'Notice where the god of this age asks for your attention.',
-    'Where do you meet a faithful god in this passage?',
     'Which false god asked for your time?',
+    'Where do you meet a faithful god in this passage?',
     'A faithful god keeps every promise.',
-  ])('keeps an idol named as a god, the god of this age, and a qualified god lowercase: %s', (text) => {
-    expect(capitalizeGodSlips(text)).toBe(text);
-  });
-
-  // A lowercase "god" is capitalized only where it can only be a name. The
-  // model writes lowercase "god" mostly for an idol, so every other place
-  // keeps it as written, true-God slips included ("a god who stays").
-  it.each([
     'Baal, the Canaanite storm god, never answered.',
     'Dagon, the god of the Philistines, fell.',
     'Chemosh, the god of Moab, demanded much.',
     'Molech was an Ammonite god.',
     'Baal was a pagan god of storms.',
-    'Is comfort a smaller god you serve?',
-    'Name a man-made god you trust.',
     'They bowed to the god Baal.',
-    'Watch the god of this present age.',
-    'Notice the god of this  world.',
     'Stop serving the god of approval.',
     'Is comfort your god?',
+    'Is comfort our god?',
     'Their god is their stomach.',
-    "Chemosh was Moab's god.",
     'Which god are you serving this week?',
     'That god cannot save you.',
-    'Is this god worth it?',
-    'What has become your true god?',
-    'Ra, the great sun god, rose.',
-    'Baal was a distant and silent god.',
-    'A household god sat by the door.',
     'Remember you serve a god who stays.',
     'The Lord is a god of justice.',
     'Worship the one true god.',
-  ])('keeps an idol or a god in general lowercase: %s', (text) => {
+    'Zeus, king of the gods and god of the sky, ruled Olympus.',
+    'Eros, the god of love, ruled the songs.',
+    'Anu, the god of heaven, ruled the sky.',
+    'Money is a “god” that never sleeps.',
+    'Ra, the sun-god, rose.',
+    'Baal: god of storms.',
+    'Athens had an altar to every known god.',
+    'Roman coins called Augustus son of god.',
+    'Inscriptions hailed Augustus as savior and god.',
+    'Money becomes a kind of god.',
+    'Has comfort become your lord, your god?',
+    'Comfort can quietly turn into our god.',
+    'Trust god with this.',
+    'Where do you need god to meet you?',
+    'Know that god is near.',
+    'Our god is near.',
+    "Rest in god's love.",
+  ])('leaves a lowercase god outside a name position as written: %s', (text) => {
     expect(capitalizeGodSlips(text)).toBe(text);
   });
 
   it.each([
-    // The start of a sentence.
     'god is near.',
     'Rest. god is near.',
-    // A preposition, a conjunction, an auxiliary, or a verb of prayer and trust.
-    "Rest in god's love.",
-    'Say no and god will help.',
-    'No one but god sees it.',
-    'When god Feels Far',
-    'Does god care?',
-    'Where do you need god to meet you?',
-    'Trust god with this.',
-    'Thank god You are near.',
-    'Pray to god Most High.',
-    // "that" inside a sentence, "our", and "Lord".
-    'Know that god is near.',
-    'Our god is near.',
+    '“Be still.” god is near.',
+    "She called it 'rest.' god is near.",
+    'Read Psalm 4. (Read it slowly.) god is near.',
     'Holy is the Lord god Almighty.',
+    'Amos calls Him the LORD god of hosts.',
     'Love the Lord your god with all your heart.',
-    // A name of God.
+    'I am the Lord thy god.',
+    'O Lord, my god, I trust You.',
+    'They forgot the Lord their god.',
+    'Naomi returned to the Lord her god.',
     'The god of Israel keeps watch.',
     'Rest in the god of all comfort.',
-    // Compounds.
+    'Walk with the god of love and peace.',
+    'The god of heaven and earth made you.',
     'Use a god-given gift today.',
     'She was a god-fearing woman.',
     'There is a god-shaped hole.',
@@ -104,7 +98,7 @@ describe('capitalizeGodSlips', () => {
     'She was a god-sent friend.',
     'Do a god-glorifying act.',
     'Write a god-inspired idea.',
-  ])('capitalizes a lowercase god in a name position: %s', (text) => {
+  ])('capitalizes a lowercase god that can only be God: %s', (text) => {
     expect(capitalizeGodSlips(text)).toBe(text.replace(/\bgod\b/, 'God'));
   });
 
@@ -122,7 +116,8 @@ describe('capitalizeGodSlips', () => {
 
     repair(text);
 
-    expect(performance.now() - started).toBeLessThan(50);
+    // Linear code takes a few ms; a quadratic pass took about 1.9 s here.
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 

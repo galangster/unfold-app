@@ -55,13 +55,13 @@ describe('sanitizeBridgeText', () => {
     }
   });
 
-  it('replaces em dashes and capitalizes god in a name position, but not an idol', () => {
+  it('replaces em dashes and capitalizes god where it can only be God, but not an idol', () => {
     expect(
       sanitizeBridgeText(
-        "Today's reading is about rest — the kind you only get with god. It turns away from a false god of hustle. What would you put down first?",
+        "Today's reading is about rest — the kind the Lord your god gives. It turns away from a false god of hustle. What would you put down first?",
       ),
     ).toBe(
-      "Today's reading is about rest, the kind you only get with God. It turns away from a false god of hustle. What would you put down first?",
+      "Today's reading is about rest, the kind the Lord your God gives. It turns away from a false god of hustle. What would you put down first?",
     );
   });
 
