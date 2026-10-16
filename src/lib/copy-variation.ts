@@ -10,6 +10,7 @@
  * draw rather than two independent ones.
  */
 
+import { countReadsBefore, type DevotionalReadingProgress } from '@/lib/devotional-day-access';
 import { getDeviceId, mmkvStorage } from '@/lib/mmkv-storage';
 import { copyVariationAt, type CopyVariation } from '@/lib/variation-bag';
 
@@ -52,13 +53,15 @@ export function copyVariationFor(date: Date): CopyVariation {
 }
 
 // ─── Copy memory ────────────────────────────────────────────────────────────
-// What this device last showed, so the next draw can step past it. It lives
+// What this device last showed, so the next draw can step past it, and the
+// order each day finished here took, so its act note keeps it. It lives
 // here, on this device only, beside the seed: nothing is synced and no
 // stored day changes. Every key starts with COPY_MEMORY_KEY_PREFIX, which the
 // full reset sweeps (full-reset.ts).
 
 export const COPY_MEMORY_KEY_PREFIX = 'copy-memory-';
 const COMPLETION_ORDINAL_KEY = `${COPY_MEMORY_KEY_PREFIX}completion-ordinal`;
+const DAY_ORDINAL_KEY_PREFIX = `${COPY_MEMORY_KEY_PREFIX}day-ordinal-`;
 const CARRIED_CUES_KEY_PREFIX = `${COPY_MEMORY_KEY_PREFIX}check-in-cues-`;
 /** How many local days before a batch's first fire date its cues are kept. */
 const CARRIED_CUE_DAYS = 14;
@@ -80,18 +83,49 @@ function writeMemory(key: string, value: string): void {
   }
 }
 
+/** A day of a series, by the ids the reader opens it with. */
+export interface SeriesDay {
+  devotionalId: string;
+  dayNumber: number;
+}
+
+function dayOrdinalKey({ devotionalId, dayNumber }: SeriesDay): string {
+  return `${DAY_ORDINAL_KEY_PREFIX}${devotionalId}:${dayNumber}`;
+}
+
 /**
  * The completion order for an overlay about to open: the readings finished
  * before it (countReadsBefore), and never less than one past the last overlay
  * this device opened. Deleting a series takes its reads out of the history,
  * and without this floor the next overlay could land on the place the last
- * one used and repeat its words. The order used is kept for the next one.
+ * one used and repeat its words. The order used is kept for the next one,
+ * and for the finished day when one is given, so its act note draws at the
+ * same place (actNoteOrdinal).
  */
-export function takeCompletionOrdinal(readsBefore: number): number {
+export function takeCompletionOrdinal(readsBefore: number, finished?: SeriesDay): number {
   const last = Number(readMemory(COMPLETION_ORDINAL_KEY) ?? Number.NaN);
   const ordinal = Math.max(readsBefore, Number.isInteger(last) ? last + 1 : 0);
   writeMemory(COMPLETION_ORDINAL_KEY, String(ordinal));
+  if (finished) writeMemory(dayOrdinalKey(finished), String(ordinal));
   return ordinal;
+}
+
+/**
+ * The completion order a day's act note draws at. A day finished on this
+ * device keeps the order its overlay took, so the note steps with the
+ * overlay and a series deleted since cannot move it. Any other day, such as
+ * one finished on another device, goes by the readings finished before its
+ * read time, which a delete or a sync can still move.
+ */
+export function actNoteOrdinal(
+  devotionals: readonly Pick<DevotionalReadingProgress, 'days'>[],
+  { devotionalId, dayNumber, readAt }: Partial<SeriesDay> & { readAt?: string },
+): number {
+  if (devotionalId && dayNumber !== undefined) {
+    const kept = Number(readMemory(dayOrdinalKey({ devotionalId, dayNumber })) ?? Number.NaN);
+    if (Number.isInteger(kept) && kept >= 0) return kept;
+  }
+  return readAt ? countReadsBefore(devotionals, new Date(readAt)) : 0;
 }
 
 /**

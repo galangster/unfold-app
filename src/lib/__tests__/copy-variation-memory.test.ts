@@ -1,11 +1,13 @@
 /**
  * The copy memory kept beside the seed, on this device only: the completion
- * order the last overlay used, and the tap cue each check-in fire date carried.
+ * order the last overlay used, the order each day finished here took, and
+ * the tap cue each check-in fire date carried.
  */
-import { actOutcomeNote, completionCopy, completionVariation } from '@/constants/daily-copy';
+import { ACT_OUTCOME_NOTES, actOutcomeNote, completionCopy, completionVariation } from '@/constants/daily-copy';
 import type { CopyVariation } from '@/lib/variation-bag';
 import { getCompletionNextStep } from '../completion-next-step';
 import {
+  actNoteOrdinal,
   COPY_MEMORY_KEY_PREFIX,
   cueCarriedBefore,
   readCarriedCues,
@@ -32,17 +34,40 @@ beforeEach(() => mockValues.clear());
 
 const NOON = new Date(2026, 9, 16, 12);
 
-/** Every field a completion draws, for one completion. */
-const COMPLETION_FIELDS: Record<string, (variation: CopyVariation) => string> = {
+/** Every field the overlay draws, for one completion. */
+const OVERLAY_FIELDS: Record<string, (variation: CopyVariation) => string> = {
   dayTitle: (v) => completionCopy('day', v).title,
   dayLine: (v) => completionCopy('day', v).message,
   seriesTitle: (v) => completionCopy('series', v).title,
   seriesLine: (v) => completionCopy('series', v).message,
   nextStepAhead: (v) => getCompletionNextStep(null, 2, 'day', NOON, v.seed, v.dayIndex).detail,
   nextStepSeries: (v) => getCompletionNextStep(null, 2, 'series', NOON, v.seed, v.dayIndex).detail,
-  actDone: (v) => actOutcomeNote('done', v),
-  actSkipped: (v) => actOutcomeNote('skipped', v),
 };
+const ACT_OUTCOMES = Object.keys(ACT_OUTCOME_NOTES) as (keyof typeof ACT_OUTCOME_NOTES)[];
+
+const read = (dayNumber: number, at: Date) => ({ dayNumber, isRead: true, readAt: at.toISOString() });
+
+/**
+ * Day 1 is finished with a one-reading series before it in the history. That
+ * series is deleted, and the next day Day 2 is finished. Each completion
+ * takes its order as the reader takes it (reading.tsx handleComplete).
+ */
+function finishTwoDaysAroundADelete() {
+  const firstReading = { days: [read(1, new Date(2026, 9, 14, 9))] };
+  const firstAt = new Date(2026, 9, 15, 9);
+  const first = takeCompletionOrdinal(
+    countReadsBefore([firstReading, { days: [] }], firstAt),
+    { devotionalId: 'series', dayNumber: 1 },
+  );
+  const secondAt = new Date(2026, 9, 16, 9);
+  const beforeSecond = [{ days: [read(1, firstAt)] }];
+  const second = takeCompletionOrdinal(
+    countReadsBefore(beforeSecond, secondAt),
+    { devotionalId: 'series', dayNumber: 2 },
+  );
+  const history = [{ days: [read(1, firstAt), read(2, secondAt)] }];
+  return { first, second, history, firstAt, secondAt };
+}
 
 describe('completion order on this device', () => {
   it('follows the history, and never goes back past the last overlay', () => {
@@ -52,29 +77,54 @@ describe('completion order on this device', () => {
     // A deleted series took reads out of the history.
     expect(takeCompletionOrdinal(2)).toBe(6);
     // Reads synced in from another device move it on.
-    expect(takeCompletionOrdinal(9)).toBe(9);
+    expect(takeCompletionOrdinal(9, { devotionalId: 'series', dayNumber: 3 })).toBe(9);
+    // The finished day keeps that order, and every key is one the full reset sweeps.
+    expect(actNoteOrdinal([], { devotionalId: 'series', dayNumber: 3 })).toBe(9);
     expect([...mockValues.keys()].every((key) => key.startsWith(COPY_MEMORY_KEY_PREFIX))).toBe(true);
   });
 
-  it.each(Object.entries(COMPLETION_FIELDS))(
+  it.each(Object.entries(OVERLAY_FIELDS))(
     '%s differs between two completions with a one-reading series deleted between them',
     (_name, draw) => {
-      const read = (dayNumber: number, at: Date) => ({ dayNumber, isRead: true, readAt: at.toISOString() });
-      const firstReading = { days: [read(1, new Date(2026, 9, 14, 9))] };
-      // Day 1 is finished with the first reading before it in the history.
-      const firstAt = new Date(2026, 9, 15, 9);
-      const first = takeCompletionOrdinal(countReadsBefore([firstReading, { days: [] }], firstAt));
-      // The first reading is deleted. The next day, Day 2 is finished.
-      const series = { days: [read(1, firstAt)] };
-      const secondAt = new Date(2026, 9, 16, 9);
-      const second = takeCompletionOrdinal(countReadsBefore([series], secondAt));
+      const { first, second, history, secondAt } = finishTwoDaysAroundADelete();
 
       // By the history alone the second would take the first one's place.
-      expect(countReadsBefore([series], secondAt)).toBe(first);
+      expect(countReadsBefore(history, secondAt)).toBe(first);
       expect(second).toBe(first + 1);
       expect(draw(completionVariation('install-a', second))).not.toBe(draw(completionVariation('install-a', first)));
     },
   );
+
+  it.each(ACT_OUTCOMES)(
+    'the %s act note differs between those two days, drawn as DevotionalContent draws it',
+    (outcome) => {
+      const { first, history, firstAt, secondAt } = finishTwoDaysAroundADelete();
+      const note = (dayNumber: number, at: Date) => actOutcomeNote(
+        outcome,
+        completionVariation('install-a', actNoteOrdinal(history, { devotionalId: 'series', dayNumber, readAt: at.toISOString() })),
+      );
+      const atOrdinal = (ordinal: number) => actOutcomeNote(outcome, completionVariation('install-a', ordinal));
+
+      // Day 1 keeps the note it showed when it was finished, after the delete too.
+      expect(note(1, firstAt)).toBe(atOrdinal(first));
+      // By the history alone, Day 2 would show that same note.
+      expect(atOrdinal(countReadsBefore(history, secondAt))).toBe(note(1, firstAt));
+      expect(note(2, secondAt)).not.toBe(note(1, firstAt));
+    },
+  );
+
+  it('draws the act note of a day not finished here by the history', () => {
+    const readAt = new Date(2026, 9, 15, 9).toISOString();
+    const history = [{ days: [read(1, new Date(2026, 9, 14, 9)), read(2, new Date(readAt))] }];
+    // Finished on another device: the readings before its read time.
+    expect(actNoteOrdinal(history, { devotionalId: 'series', dayNumber: 2, readAt })).toBe(1);
+    // A damaged record reads as none.
+    mockValues.set(`${COPY_MEMORY_KEY_PREFIX}day-ordinal-series:2`, 'not a number');
+    expect(actNoteOrdinal(history, { devotionalId: 'series', dayNumber: 2, readAt })).toBe(1);
+    // Without a series it goes by the history. Without a read time either, it draws at 0.
+    expect(actNoteOrdinal(history, { readAt })).toBe(1);
+    expect(actNoteOrdinal(history, {})).toBe(0);
+  });
 });
 
 describe('the tap cue each fire date carried', () => {

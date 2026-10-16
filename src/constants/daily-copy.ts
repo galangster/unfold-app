@@ -112,11 +112,13 @@ export const SERIES_COMPLETE_TITLES = [
  * The draw for a finished reading. The completion overlay, its "Up next"
  * paragraph and the act note step once per completion, not once per day:
  * `ordinal` is the number of readings finished before this one, across every
- * series (countReadsBefore). For the overlay it is also never below one past
- * the last overlay this device opened (takeCompletionOrdinal), so a deleted
- * series cannot move it back. Two completions in a row are next to each
- * other in the bag, so they never share an entry, whether they fall on one
- * day or on either side of midnight.
+ * series (countReadsBefore), and never below one past the last overlay this
+ * device opened (takeCompletionOrdinal), so a deleted series cannot move it
+ * back. A day finished on this device keeps that order for its act note
+ * (actNoteOrdinal). Two completions in a row are next to each other in the
+ * bag, so they never share an entry, whether they fall on one day or on
+ * either side of midnight. A day finished on another device goes by the
+ * history alone, which a delete or a sync can still move.
  */
 export function completionVariation(seed: string, ordinal: number): CopyVariation {
   return { seed, dayIndex: ordinal };
@@ -465,7 +467,7 @@ export const ACT_OUTCOME_NOTES = {
   ],
 } as const;
 
-/** The note under a day's act, for that day's completion (completionVariation). */
+/** The note under a day's act, for that day's completion (completionVariation, actNoteOrdinal). */
 export function actOutcomeNote(outcome: keyof typeof ACT_OUTCOME_NOTES, variation: CopyVariation): string {
   return drawCopy(ACT_OUTCOME_NOTES[outcome], variation, `act-${outcome}`);
 }

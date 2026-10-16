@@ -23,8 +23,7 @@ import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark, useUnfoldStore } from '@/lib/store';
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { actOutcomeNote, completionVariation } from '@/constants/daily-copy';
-import { copySeed } from '@/lib/copy-variation';
-import { countReadsBefore } from '@/lib/devotional-day-access';
+import { actNoteOrdinal, copySeed } from '@/lib/copy-variation';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ScriptureVerseBlock } from './ScriptureVerseBlock';
@@ -180,22 +179,19 @@ export function DevotionalContent({
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
 
-  // The act note is drawn for this day's completion: its place among every
-  // reading finished, from the read timestamps. Two days read one after the
-  // other get different notes, on one day or across midnight. The note is
-  // worked out from the history each time, so deleting a series read before
-  // this day, or a sync that adds earlier reads, moves it to another note.
-  // The count reruns only when the history or this day's read time changes.
+  // The act note is drawn for this day's completion, at the order its overlay
+  // took on this device (actNoteOrdinal). Two days finished one after the
+  // other get different notes, on one day, across midnight, or with a series
+  // deleted between them. A day finished on another device goes by its place
+  // in the history, which a delete or a sync can still move. Worked out only
+  // once the act is marked, and again only when the day or the history changes.
   const { readAt } = day;
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const actNoteOrdinal = useMemo(
-    () => (readAt ? countReadsBefore(devotionals, new Date(readAt)) : 0),
-    [devotionals, readAt],
-  );
-  const actNote = useMemo(
-    () => (day.actOutcome ? actOutcomeNote(day.actOutcome, completionVariation(copySeed(), actNoteOrdinal)) : null),
-    [day.actOutcome, actNoteOrdinal],
-  );
+  const actNote = useMemo(() => {
+    if (!day.actOutcome) return null;
+    const ordinal = actNoteOrdinal(devotionals, { devotionalId, dayNumber, readAt });
+    return actOutcomeNote(day.actOutcome, completionVariation(copySeed(), ordinal));
+  }, [day.actOutcome, devotionals, devotionalId, dayNumber, readAt]);
 
   // Fetch scripture with verse numbers from local DB, fallback to remote API.
   // The local result carries a per-verse `passage`, which makes the block

@@ -267,7 +267,9 @@ jest.mock('react-native-purchases', () => ({
 }));
 
 import type { Devotional, UserProfile } from '@/lib/store';
-import { completionCopy, completionVariation } from '@/constants/daily-copy';
+import { DarkColors } from '@/constants/colors';
+import { ACT_OUTCOME_NOTES, actOutcomeNote, completionCopy, completionVariation } from '@/constants/daily-copy';
+import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
 import { copySeed } from '@/lib/copy-variation';
 const { ReadingScreen } = require('@/app/(tabs)/(today)/reading');
 const { useUnfoldStore } = require('@/lib/store') as typeof import('@/lib/store');
@@ -734,9 +736,9 @@ describe('reader next step after a finished day', () => {
     act(() => tree.unmount());
   });
 
-  it('keeps two completions apart when a one-reading series is deleted between them', async () => {
-    // A one-reading series read yesterday, then Day 1 and Day 2 of this one.
-    seedReader();
+  /** Day 1 and Day 2 of the series, and a one-reading series read yesterday. */
+  function seedWithFirstReading(dayOverrides: Record<string, unknown> = {}) {
+    seedReader(dayOverrides);
     const yesterday = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
     const series = useUnfoldStore.getState().devotionals[0];
     useUnfoldStore.setState({
@@ -752,17 +754,48 @@ describe('reader next step after a finished day', () => {
         } as unknown as Devotional,
       ],
     });
-    const first = await finishDay(1);
-    act(() => first.tree.unmount());
+  }
 
-    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
-    // The next day: Day 1 reads as finished yesterday, and Day 2 is open.
+  /** The next day: Day 1 reads as finished yesterday. */
+  function moveDayOneToYesterday() {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
     useUnfoldStore.setState((state) => ({
       devotionals: state.devotionals.map((row) => ({
         ...row,
         days: row.days.map((day) => (day.dayNumber === 1 ? { ...day, readAt: yesterday } : day)),
       })),
     }));
+  }
+
+  function stringsIn(node: Node): string[] {
+    return node.children.flatMap((child) => (typeof child === 'string' ? [child] : stringsIn(child)));
+  }
+
+  /** The note under the open day's act, once the act is marked done. */
+  function actNoteIn(root: Node): string | undefined {
+    const notes: readonly string[] = ACT_OUTCOME_NOTES.done;
+    return root.findAllByProps({ testID: 'reading-act-section' })
+      .flatMap(stringsIn)
+      .find((text) => notes.includes(text));
+  }
+
+  /** Taps "I did it" under the open day's act, and returns the note shown. */
+  async function markActDone(tree: ReaderTree) {
+    const [done] = tree.root.findAllByProps({ accessibilityLabel: 'I did it' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    await act(async () => {
+      (done.props.onPress as () => void)();
+    });
+    return actNoteIn(tree.root);
+  }
+
+  it('keeps two completions apart when a one-reading series is deleted between them', async () => {
+    seedWithFirstReading();
+    const first = await finishDay(1);
+    act(() => first.tree.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
     const second = await finishDay(2);
 
     // The history alone now holds one reading before Day 2, the place Day 1's
@@ -777,6 +810,60 @@ describe('reader next step after a finished day', () => {
     await resizeTo(second.tree, PHONE);
     expect(mockCelebrationProps?.ordinal).toBe(2);
     act(() => second.tree.unmount());
+  });
+
+  it('keeps two act notes apart when a one-reading series is deleted between them', async () => {
+    seedWithFirstReading({ act: 'Send one honest line to a friend.' });
+    const noteAt = (ordinal = 0) => actOutcomeNote('done', completionVariation(copySeed(), ordinal));
+    const first = await finishDay(1);
+    const firstNote = await markActDone(first.tree);
+    // The note draws at the place its overlay took.
+    expect(firstNote).toBe(noteAt(first.shown.ordinal));
+    act(() => first.tree.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
+    // Day 1, opened again after the delete, keeps the note it showed.
+    mockReaderParams.dayNumber = '1';
+    const dayOne = await renderAt(PHONE);
+    expect(actNoteIn(dayOne.root)).toBe(firstNote);
+    act(() => dayOne.unmount());
+
+    // By the history alone, Day 2's note would take Day 1's place and words.
+    const second = await finishDay(2);
+    const secondNote = await markActDone(second.tree);
+    expect(secondNote).toBe(noteAt(second.shown.ordinal));
+    expect(secondNote).not.toBe(firstNote);
+    act(() => second.tree.unmount());
+  });
+
+  it('keeps the first reader overlay apart from the onboarding one when the first reading is deleted between them', async () => {
+    seedWithFirstReading();
+    const onboardingOverlay = () => (
+      <OnboardingCelebration colors={DarkColors} onContinue={jest.fn()} firstReadingId="first-reading" />
+    );
+    let onboarding: ReaderTree;
+    await act(async () => {
+      onboarding = renderer.create(onboardingOverlay());
+    });
+    const onboardingShown = { ...mockCelebrationProps };
+    // A later render of the onboarding overlay keeps its place.
+    await act(async () => {
+      onboarding.update(onboardingOverlay());
+    });
+    expect(mockCelebrationProps?.ordinal).toBe(onboardingShown.ordinal);
+    act(() => onboarding.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    const first = await finishDay(1);
+
+    // With the first reading gone the history holds no reading before Day 1,
+    // the place the onboarding overlay took. The device's mark moves it on.
+    expect(onboardingShown.ordinal).toBe(0);
+    expect(first.shown.ordinal).toBe(1);
+    const titleAt = (ordinal = 0) => completionCopy('day', completionVariation(copySeed(), ordinal)).title;
+    expect(titleAt(first.shown.ordinal)).not.toBe(titleAt(onboardingShown.ordinal));
+    act(() => first.tree.unmount());
   });
 
   it('shows no return before the day is finished', async () => {

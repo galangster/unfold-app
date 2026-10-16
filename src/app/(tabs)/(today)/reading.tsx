@@ -1507,11 +1507,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         },
         completedTimeZone: getDeviceTimezone(),
       });
-      // Counted at the read time this day is about to get, as the day's act
-      // note counts it (DevotionalContent), and never below one past the last
-      // overlay this device opened, so a series deleted since cannot move the
-      // count back onto that overlay.
-      setCelebrationOrdinal(takeCompletionOrdinal(countReadsBefore(store.devotionals, clock.at)));
+      // Counted at the read time this day is about to get, and never below one
+      // past the last overlay this device opened, so a series deleted since
+      // cannot move the count back onto that overlay. The order is kept for
+      // this day too, before it is marked read, so its act note
+      // (DevotionalContent) draws at the same place.
+      setCelebrationOrdinal(takeCompletionOrdinal(
+        countReadsBefore(store.devotionals, clock.at),
+        { devotionalId: effectiveDevotionalId, dayNumber: viewingDay },
+      ));
       markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
