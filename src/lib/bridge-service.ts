@@ -19,10 +19,10 @@ import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
-import { firstSentence, isDisplayableBridge, sanitizeBridgeText } from '@/lib/bridge-text';
+import { firstSentence, sanitizeBridgeText } from '@/lib/bridge-text';
 import { copyVariationFor } from '@/lib/copy-variation';
 import { localDayKey } from '@/lib/home-devotional-state';
-import { avoidBlock, newestCacheKeys, uniqueLines } from '@/lib/prompt-history';
+import { avoidList, isString, promptHistory } from '@/lib/prompt-history';
 import { bridgeShapeFor, type BridgeShape } from '@/lib/prompt-variety';
 
 // ---------------------------------------------------------------------------
@@ -63,10 +63,6 @@ interface BridgeResponse {
 // Cache helpers
 // ---------------------------------------------------------------------------
 
-const BRIDGE_KEY_PREFIX = 'bridge_';
-/** How many earlier bridges a request sends back as lines not to reuse. */
-const RECENT_BRIDGE_LIMIT = 7;
-
 /**
  * `day` is the reader's local day (`localDayKey`). Keys carried the UTC date
  * before 2026-10-16, so a reader in the Americas could get a second bridge
@@ -77,7 +73,7 @@ function buildCacheKey(
   dayNumber: number,
   day: string
 ): string {
-  return `${BRIDGE_KEY_PREFIX}${devotionalId}_${dayNumber}_${day}`;
+  return `bridge_${devotionalId}_${dayNumber}_${day}`;
 }
 
 function getCachedBridge(cacheKey: string): string | null {
@@ -90,29 +86,14 @@ function getCachedBridge(cacheKey: string): string | null {
   return null;
 }
 
+/** The first sentence of each of the reader's newest bridges, newest first. */
+const recentFirstSentences = promptHistory(bridgeCache, 'recent_bridge_first_sentences', 7, isString);
+
+/** Stores a bridge sanitizeBridgeText already passed, and records its first sentence. */
 function setCachedBridge(cacheKey: string, text: string): void {
-  // Don't cache incomplete bridges (truncated responses, partial text)
-  if (!isDisplayableBridge(text)) {
-    logger.warn(`${LOG_PREFIX} skipping cache, bridge looks incomplete (len=${text.trim().length})`);
-    return;
-  }
   bridgeCache.set(cacheKey, text);
   logger.log(`${LOG_PREFIX} cache SET, key=${cacheKey}, len=${text.length}`);
-}
-
-/**
- * The first sentence of each of the reader's newest cached bridges, newest
- * first. A storage failure costs only the avoid list, never the bridge.
- */
-function recentBridgeFirstSentences(): string[] {
-  try {
-    return newestCacheKeys(bridgeCache.getAllKeys(), BRIDGE_KEY_PREFIX, RECENT_BRIDGE_LIMIT)
-      .map((key) => firstSentence(bridgeCache.getString(key) ?? ''))
-      .filter(Boolean);
-  } catch (error) {
-    logger.warn(`${LOG_PREFIX} could not read recent bridges`, error instanceof Error ? error.message : error);
-    return [];
-  }
+  recentFirstSentences.record(firstSentence(text));
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +231,7 @@ OUTPUT: Return ONLY the message. No labels, no JSON.`;
 function buildBridgeUserMessage(
   input: BridgeInput,
   shape: BridgeShape,
-  recentFirstSentences: readonly string[]
+  recentSentences: readonly string[]
 ): string {
   const parts: string[] = [];
 
@@ -286,12 +267,10 @@ function buildBridgeUserMessage(
       : '- Name: Do not use their name today.'
   );
 
-  const recent = avoidBlock(
+  const recent = avoidList(
     'RECENT FIRST SENTENCES (do not reuse their wording or their first words):',
-    uniqueLines(
-      recentFirstSentences.map((sentence) => `"${sanitizeForPrompt(sentence, 300)}"`),
-      RECENT_BRIDGE_LIMIT
-    )
+    recentSentences,
+    300
   );
   if (recent) parts.push(`\n${recent}`);
 
@@ -315,22 +294,22 @@ function buildBridgeUserMessage(
  * @param input      - User context, check-in data, and today's theme/scripture.
  * @param devotionalId - The devotional series ID (for cache key).
  * @param dayNumber    - The day number within the series (for cache key).
+ * @param now          - The moment the caller asks for. Its local day keys the
+ *                       cache and picks the day's opening, closing, and name use.
  * @returns The bridge text, or null when generation fails or the sanitizer
  *          leaves too little to show (Today then shows no bridge).
  */
 export async function generateBridge(
   input: BridgeInput,
   devotionalId: string,
-  dayNumber: number
+  dayNumber: number,
+  now: Date
 ): Promise<string | null> {
-  const now = new Date();
   const cacheKey = buildCacheKey(devotionalId, dayNumber, localDayKey(now));
 
-  // 1. Return cached bridge if available (sanitize in case old cache has bad text)
+  // 1. Return the cached bridge. It passed the sanitizer when it was written.
   const cached = getCachedBridge(cacheKey);
-  if (cached) {
-    return sanitizeBridgeText(cached);
-  }
+  if (cached) return cached;
 
   // 2. Rate limit check before network call
   try {
@@ -349,7 +328,7 @@ export async function generateBridge(
   const userMessage = buildBridgeUserMessage(
     input,
     bridgeShapeFor(copyVariationFor(now)),
-    recentBridgeFirstSentences()
+    recentFirstSentences.read()
   );
 
   try {
@@ -363,12 +342,9 @@ export async function generateBridge(
 
     const cleanText = sanitizeBridgeText(result.bridgeText);
     if (cleanText) setCachedBridge(cacheKey, cleanText);
+    else logger.warn(`${LOG_PREFIX} bridge dropped: cut off, or too little left after removing banned phrases`);
     // The generation counts whether or not its text survives the sanitizer.
     await incrementRateLimit('bridge');
-    if (!cleanText) {
-      logger.warn(`${LOG_PREFIX} bridge dropped: too little was left after removing banned phrases`);
-      return null;
-    }
     return cleanText;
   } catch (error) {
     logger.warn(
@@ -385,18 +361,4 @@ export async function generateBridge(
 export function clearBridgeCache(): void {
   bridgeCache.clearAll();
   logger.log(`${LOG_PREFIX} cache cleared`);
-}
-
-/**
- * Check if a bridge is already cached for a given devotional day and local
- * day (`localDayKey`). The day defaults to today.
- */
-export function hasCachedBridge(
-  devotionalId: string,
-  dayNumber: number,
-  date?: string
-): boolean {
-  const d = date ?? localDayKey(new Date());
-  const cacheKey = buildCacheKey(devotionalId, dayNumber, d);
-  return bridgeCache.contains(cacheKey);
 }

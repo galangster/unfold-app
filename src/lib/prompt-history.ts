@@ -1,55 +1,74 @@
 /**
- * What the app already wrote for this reader, read back so the next request
- * can tell the model not to repeat it.
+ * What the app already wrote for this reader, kept so the next request can
+ * tell the model not to repeat it.
  *
- * The bridge and the examen keep one cache entry per local day. Their keys
- * end in the day the entry was written for, so the newest entries are found
- * by sorting keys, without storing a separate history.
+ * Each feature records its new lines when it caches an entry: one capped
+ * JSON array, newest first, under a fixed key in that feature's own MMKV
+ * instance. A full reset clears the instance and its history together.
  */
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+import { sanitizeForPrompt } from '@/lib/api-config';
+import { trimTrailing } from '@/lib/bridge-text';
+import { logger } from '@/lib/logger';
 
-/** "2026-10-16": the UTC day keys carried before 2026-10-16. */
-const ISO_DAY_SUFFIX = /(\d{4})-(\d{2})-(\d{2})$/;
-/** "Fri Oct 16 2026": the local day key, `localDayKey` (Date#toDateString). */
-const LOCAL_DAY_SUFFIX = /[A-Z][a-z]{2} ([A-Z][a-z]{2}) (\d{2}) (\d{4})$/;
-
-/** The day a cache key was written for, as days since the epoch, or null. */
-export function cacheKeyDay(key: string): number | null {
-  const iso = ISO_DAY_SUFFIX.exec(key);
-  if (iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])) / 86_400_000;
-  const local = LOCAL_DAY_SUFFIX.exec(key);
-  const month = local ? MONTHS.indexOf(local[1]) : -1;
-  if (local && month >= 0) return Date.UTC(Number(local[3]), month, Number(local[2])) / 86_400_000;
-  return null;
+/** The part of an MMKV instance a history needs, so this module stays free of MMKV. */
+export interface HistoryStore {
+  getString(key: string): string | undefined;
+  set(key: string, value: string): void;
 }
 
-/** The newest `limit` keys that start with `prefix`, newest first. */
-export function newestCacheKeys(keys: readonly string[], prefix: string, limit: number): string[] {
-  return keys
-    .filter((key) => key.startsWith(prefix))
-    .map((key) => ({ key, day: cacheKeyDay(key) }))
-    .filter((entry): entry is { key: string; day: number } => entry.day !== null)
-    .sort((a, b) => b.day - a.day)
-    .slice(0, limit)
-    .map((entry) => entry.key);
-}
-
-/** The first `count` words of `text`, without the punctuation that ends them. */
-export function openingWords(text: string, count = 4): string {
-  return text
-    .trim()
-    .split(/\s+/)
-    .slice(0, count)
-    .join(' ')
-    .replace(/[\s.,;:!?…"'”’)\]]+$/u, '');
+export interface PromptHistory<T> {
+  /** The recorded entries, newest first. A missing or unreadable history reads as empty. */
+  read(): T[];
+  /** Puts `entry` first and keeps the newest entries up to the limit. */
+  record(entry: T): void;
 }
 
 /**
- * The lines with repeats removed, in first-seen order, at most `limit`.
- * Case and punctuation do not make two lines different.
+ * The history kept under `key`. A storage failure costs only the avoid list,
+ * never the entry the feature is writing.
  */
-export function uniqueLines(lines: readonly string[], limit: number): string[] {
+export function promptHistory<T>(
+  store: HistoryStore,
+  key: string,
+  limit: number,
+  isEntry: (value: unknown) => value is T,
+): PromptHistory<T> {
+  const read = (): T[] => {
+    try {
+      const raw = store.getString(key);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
+    } catch (error) {
+      logger.warn(`[PromptHistory] could not read ${key}`, error instanceof Error ? error.message : error);
+      return [];
+    }
+  };
+  return {
+    read,
+    record(entry) {
+      try {
+        store.set(key, JSON.stringify([entry, ...read()].slice(0, limit)));
+      } catch (error) {
+        logger.warn(`[PromptHistory] could not record ${key}`, error instanceof Error ? error.message : error);
+      }
+    },
+  };
+}
+
+export function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+const OPENING_END = '.,;:!?…"\'”’)]';
+
+/** The first `count` words of `text`, without the punctuation that ends them. */
+export function openingWords(text: string, count = 4): string {
+  return trimTrailing(text.trim().split(/\s+/).slice(0, count).join(' '), OPENING_END);
+}
+
+/** The lines with repeats removed, in first-seen order. Case and punctuation do not make two lines different. */
+function uniqueLines(lines: readonly string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];
   for (const line of lines) {
@@ -58,13 +77,15 @@ export function uniqueLines(lines: readonly string[], limit: number): string[] {
     if (!identity || seen.has(identity)) continue;
     seen.add(identity);
     unique.push(trimmed);
-    if (unique.length >= limit) break;
   }
   return unique;
 }
 
-/** A heading and its lines as one prompt block, or '' when there are no lines. */
-export function avoidBlock(heading: string, lines: readonly string[]): string {
-  if (lines.length === 0) return '';
-  return `${heading}\n${lines.map((line) => `- ${line}`).join('\n')}`;
+/**
+ * The lines as one prompt block under `heading`: each sanitized and cut to
+ * `maxChars`, with repeats removed. '' when there are no lines.
+ */
+export function avoidList(heading: string, lines: readonly string[], maxChars: number): string {
+  const unique = uniqueLines(lines.map((line) => sanitizeForPrompt(line, maxChars)));
+  return unique.length > 0 ? `${heading}\n${unique.map((line) => `- ${line}`).join('\n')}` : '';
 }

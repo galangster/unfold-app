@@ -4,23 +4,22 @@
  *
  * It used to ask for the same three angles every time (feeling, life,
  * imagination), each steered by a quoted opener, and it never sent the
- * prompts the reader already had. Now the day's three angles come from the
- * bag, each described by what it does, and the reader's recent prompts go
+ * prompts the reader already had. Now each request's three angles come from
+ * the bag, each described by what it does, and the reader's recent prompts go
  * with the request so the model does not write them again.
  */
 
-import { PERSONA_BRIEF } from '@/constants/persona';
+import { buildPromptWithPersona } from '@/constants/persona';
 import { sanitizeForPrompt } from '@/lib/api-config';
-import { avoidBlock, uniqueLines } from '@/lib/prompt-history';
-import { goDeeperAnglesFor, type PromptDraw } from '@/lib/prompt-variety';
+import { lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
+import { avoidList } from '@/lib/prompt-history';
+import { goDeeperAnglesFor } from '@/lib/prompt-variety';
 import type { JournalEntry } from '@/lib/store';
 
 /** About three requests' worth of earlier prompts. */
-export const GO_DEEPER_RECENT_LIMIT = 9;
+const GO_DEEPER_RECENT_LIMIT = 9;
 
-const GO_DEEPER_SYSTEM_PROMPT = `${PERSONA_BRIEF}
-
-WHAT YOU'RE DOING: Generate exactly 3 follow-up reflection prompts based on someone's journal entry about their devotional.
+const GO_DEEPER_INSTRUCTIONS = `WHAT YOU'RE DOING: Generate exactly 3 follow-up reflection prompts based on someone's journal entry about their devotional.
 
 QUALITY:
 - Each prompt MUST reference something specific from their entry, never generic.
@@ -39,25 +38,32 @@ RULES:
 
 RESPOND WITH ONLY A JSON ARRAY OF EXACTLY 3 STRINGS. No other text, no markdown wrapping.`;
 
-function entryTime(entry: JournalEntry): number {
-  const time = Date.parse(entry.updatedAt || entry.createdAt);
-  return Number.isNaN(time) ? 0 : time;
-}
+const GO_DEEPER_SYSTEM_PROMPT = buildPromptWithPersona('brief', GO_DEEPER_INSTRUCTIONS);
 
 /**
- * The reader's most recent Go Deeper prompts, newest entry first. An entry's
+ * The entries that hold Go Deeper prompts, newest first. An entry's
  * `updatedAt` moves when its prompts are saved, so an old entry that just got
- * prompts counts as recent.
+ * prompts counts as recent. Each timestamp is parsed once.
  */
-export function recentGoDeeperPrompts(
-  entries: readonly JournalEntry[],
-  limit = GO_DEEPER_RECENT_LIMIT,
-): string[] {
+function promptedNewestFirst(entries: readonly JournalEntry[]): { prompts: string[]; time: number }[] {
   return entries
-    .filter((entry) => (entry.deeperQuestions?.length ?? 0) > 0)
-    .sort((a, b) => entryTime(b) - entryTime(a))
-    .flatMap((entry) => entry.deeperQuestions ?? [])
-    .slice(0, limit);
+    .flatMap((entry) =>
+      entry.deeperQuestions?.length
+        ? [{ prompts: entry.deeperQuestions, time: lifecycleTimestampMs(entry.updatedAt || entry.createdAt) }]
+        : [],
+    )
+    .sort((a, b) => b.time - a.time);
+}
+
+function newestPrompts(prompted: readonly { prompts: string[] }[]): string[] {
+  const recent: string[] = [];
+  for (const { prompts } of prompted) {
+    for (const prompt of prompts) {
+      if (recent.length >= GO_DEEPER_RECENT_LIMIT) return recent;
+      recent.push(prompt);
+    }
+  }
+  return recent;
 }
 
 export interface GoDeeperRequestInput {
@@ -65,19 +71,19 @@ export interface GoDeeperRequestInput {
   dayTitle: string;
   scriptureReference: string;
   entryText: string;
-  /** The reader's earlier prompts, newest first (recentGoDeeperPrompts). */
-  recentPrompts: readonly string[];
-  draw: PromptDraw;
+  /** Every journal entry: their saved prompts are the avoid list, and their number is the draw. */
+  journalEntries: readonly JournalEntry[];
+  /** The install's seed (copySeed). */
+  seed: string;
 }
 
 export function buildGoDeeperRequest(input: GoDeeperRequestInput): { system: string; userMessage: string } {
-  const angles = goDeeperAnglesFor(input.draw)
+  const prompted = promptedNewestFirst(input.journalEntries);
+  // The draw counts requests, not days: each saved set of prompts moves the
+  // next request on, so two requests in one sitting never share an angle.
+  const angles = goDeeperAnglesFor({ seed: input.seed, dayIndex: prompted.length })
     .map((angle, index) => `${index + 1}. ${angle.instruction}`)
     .join('\n');
-  const recent = uniqueLines(
-    input.recentPrompts.map((prompt) => sanitizeForPrompt(prompt, 300)),
-    GO_DEEPER_RECENT_LIMIT,
-  );
 
   const parts = [
     `Devotional: "${sanitizeForPrompt(input.devotionalTitle, 200)}"
@@ -87,7 +93,7 @@ Scripture: ${sanitizeForPrompt(input.scriptureReference, 200)}
 Their journal entry:
 "${sanitizeForPrompt(input.entryText, 2000)}"`,
     `ANGLES FOR THESE THREE PROMPTS:\n${angles}`,
-    avoidBlock('RECENT PROMPTS (do not reuse their wording or their first words):', recent),
+    avoidList('RECENT PROMPTS (do not reuse their wording or their first words):', newestPrompts(prompted), 300),
   ].filter(Boolean);
 
   return { system: GO_DEEPER_SYSTEM_PROMPT, userMessage: parts.join('\n\n') };

@@ -53,8 +53,8 @@ import { JournalSourcePage } from '@/components/journal/JournalSourcePage';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
-import { buildGoDeeperRequest, recentGoDeeperPrompts } from '@/lib/go-deeper-prompt';
-import { copyVariationFor } from '@/lib/copy-variation';
+import { buildGoDeeperRequest } from '@/lib/go-deeper-prompt';
+import { copySeed } from '@/lib/copy-variation';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
@@ -796,15 +796,15 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      // The day's three angles come from the bag, and the reader's recent
+      // The request's three angles come from the bag, and the reader's recent
       // prompts go along so the model does not write them again.
       const { system: systemPrompt, userMessage } = buildGoDeeperRequest({
         devotionalTitle: currentDevotional?.title ?? 'Devotional',
         dayTitle: currentDay?.title ?? `Day ${dayNumber}`,
         scriptureReference: currentDay?.scriptureReference ?? 'N/A',
         entryText: content,
-        recentPrompts: recentGoDeeperPrompts(journalEntries),
-        draw: copyVariationFor(new Date()),
+        journalEntries,
+        seed: copySeed(),
       });
 
       const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {

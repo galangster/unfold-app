@@ -2,10 +2,19 @@
  * The bridge safety net. Banned phrases used to be deleted as raw substrings,
  * so "journeyed" became "ed", "boyfriend," became "boy", and "a season of
  * rest" became "a of rest". A phrase now counts only as whole words, and the
- * sentence that holds one goes whole, or the bridge is dropped.
+ * sentence that holds one goes whole, or the bridge is dropped. One rule
+ * decides where a sentence ends, for the splitter, the cut-off check, and the
+ * gate that Today and the cache share.
  */
 
-import { findBannedPhrase, sanitizeBridgeText, splitSentences } from '../bridge-text';
+import {
+  countWords,
+  endsSentence,
+  findBannedPhrase,
+  isDisplayableBridge,
+  sanitizeBridgeText,
+  splitSentences,
+} from '../bridge-text';
 
 describe('sanitizeBridgeText', () => {
   it('keeps a word that only contains a banned phrase', () => {
@@ -46,14 +55,23 @@ describe('sanitizeBridgeText', () => {
     }
   });
 
-  it('replaces em dashes and fixes a lowercase god that names God, but not an idol', () => {
+  it('replaces em dashes and capitalizes god in a name position, but not an idol', () => {
     expect(
       sanitizeBridgeText(
-        "Today's reading is about rest — the kind god gives before the next road. It turns away from a false god of hustle. What would you put down first?",
+        "Today's reading is about rest — the kind you only get with god. It turns away from a false god of hustle. What would you put down first?",
       ),
     ).toBe(
-      "Today's reading is about rest, the kind God gives before the next road. It turns away from a false god of hustle. What would you put down first?",
+      "Today's reading is about rest, the kind you only get with God. It turns away from a false god of hustle. What would you put down first?",
     );
+  });
+
+  it('shows a bridge that ends in a curly closing quote or a bracket', () => {
+    for (const text of [
+      'Elijah is done, and he says so. Today the reading lets him sleep. The angel said, “Get up and eat.”',
+      'Elijah is done, and he says so. Today the reading lets him sleep. (The angel brings bread twice.)',
+    ]) {
+      expect(sanitizeBridgeText(text)).toBe(text);
+    }
   });
 
   it('keeps only the complete sentences of a reply cut off mid-sentence', () => {
@@ -65,13 +83,38 @@ describe('sanitizeBridgeText', () => {
   it('gives the same result run twice', () => {
     const samples = [
       "Today's reading is about rest. Elijah slept under a tree and an angel brought him bread. It's a season of rest God hands him. What would you do with a day like that?",
-      "Today's reading is about rest — the kind god gives. It is plain and it is short and it still lands well. What would you put down?",
+      "Today's reading is about rest — the kind you get with god. It is plain and it is short and it still lands well. What would you put down?",
     ];
     for (const sample of samples) {
       const once = sanitizeBridgeText(sample);
       expect(once).not.toBeNull();
       expect(sanitizeBridgeText(once!)).toBe(once);
     }
+  });
+});
+
+describe('the sentence end rule', () => {
+  it.each([
+    ['Rest.', true],
+    ['He said, “Eat.”', true],
+    ["She asked, 'Why?'", true],
+    ['Keep me (and them.)', true],
+    ['Wait…', true],
+    ['I call it "home"', false],
+    ['and an angel woke him with', false],
+  ])('%j ends a sentence: %s', (text, expected) => {
+    expect(endsSentence(text)).toBe(expected);
+  });
+
+  it('holds a bridge to more than twenty characters that end a sentence', () => {
+    expect(isDisplayableBridge('The angel said, “Get up and eat.”')).toBe(true);
+    expect(isDisplayableBridge('Rest gets a chapter "')).toBe(false);
+    expect(isDisplayableBridge('Short and done.')).toBe(false);
+  });
+
+  it('counts words across any whitespace', () => {
+    expect(countWords('  one two\nthree\tfour  ')).toBe(4);
+    expect(countWords('')).toBe(0);
   });
 });
 
@@ -89,6 +132,12 @@ describe('findBannedPhrase', () => {
   it('matches whole words only', () => {
     expect(findBannedPhrase('She journeyed home with her boyfriend, tired.')).toBeNull();
     expect(findBannedPhrase('The journey home was long.')).toBe('journey');
+  });
+
+  it('matches the phrases that end in punctuation without a word-end check', () => {
+    expect(findBannedPhrase('Can I be honest? This one is hard.')).toBe('can i be honest?');
+    expect(findBannedPhrase('Friend, this one is for you.')).toBe('friend,');
+    expect(findBannedPhrase('Friend,x')).toBe('friend,');
   });
 });
 

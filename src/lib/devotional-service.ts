@@ -45,7 +45,6 @@ import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-servi
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
-import { copySeed } from '@/lib/copy-variation';
 import { legacyDevotionalDayShape } from '@/lib/prompt-variety';
 
 // Re-export for use in components
@@ -489,10 +488,11 @@ function selectFreshPersonaCombo(
 
 // Build per-day variety instructions for the user prompt.
 // Each day's closing style and name use come from the repeat-free bag on the
-// install's seed (lib/prompt-variety.ts). The closing used to step through a
-// fixed modulo order, and the shared persona then overrode it with one
-// closing and one early name for every piece.
-function buildVarietySchedule(
+// series' template seed (lib/prompt-variety.ts), so one batch prompt reads the
+// same on every install. The closing used to step through a fixed modulo
+// order, and the shared persona then overrode it with one closing and one
+// early name for every piece. Exported for its tests.
+export function buildVarietySchedule(
   startDay: number,
   endDay: number,
   totalDays: number,
@@ -508,7 +508,6 @@ function buildVarietySchedule(
   const templates = STRUCTURAL_TEMPLATES;
   const hooks = Object.keys(HOOK_LIBRARY) as HookStyle[];
   const transitions: TransitionStyle[] = ['gradual', 'pivot', 'mysterious', 'logical', 'narrative'];
-  const shapeSeed = `${copySeed()}|${templateSeed}`;
 
   // Map reading duration for story system
   const durationKey = readingDuration === 5 ? '5min' : readingDuration === 30 ? '30min' : '15min';
@@ -524,7 +523,7 @@ function buildVarietySchedule(
     const template = templates[templateIdx];
     const hook = hooks[hookIdx];
     const transition = transitions[transitionIdx];
-    const { closing, useName } = legacyDevotionalDayShape(shapeSeed, day);
+    const { closing, useName } = legacyDevotionalDayShape(String(templateSeed), day);
 
     // Voice intensity varies by day position in series
     const voiceNote = idx === 0
@@ -593,7 +592,6 @@ DEVOTIONAL-SPECIFIC CRAFT:
 - Write as if composing something worth reading twice. Each sentence should carry weight.
 - Vary openings dramatically — never start consecutive days the same way. Some days begin mid-thought, others with a question, others with an image, others with Scripture itself.
 - Trust silence. Not every sentence needs to explain. Let truth sit without commentary.
-- The reader's name should appear sparingly — roughly once every 5 days, never at the beginning of a day. Bury it mid-sentence at a moment of encouragement.
 
 THE SHOW-DON'T-TELL PRINCIPLE:
 The reader has shared context about their life. Use this to INFORM your writing, not to NARRATE it.

@@ -88,7 +88,7 @@ describe('lib callers use authenticatedFetch', () => {
       todayTheme: 'rest',
       todayScripture: 'Psalm 23:1',
       currentSituation: 'tired',
-    }, 'dev-1', 1);
+    }, 'dev-1', 1, new Date());
 
     expectRoutedThrough('https://backend.test/api/generate-bridge', 'POST');
   });
@@ -117,11 +117,10 @@ describe('lib callers use authenticatedFetch', () => {
 
   it('posts examen through authenticatedFetch with an abort signal', async () => {
     await generateExamen({
-      userName: 'Alex',
       todayTheme: 'rest',
       todayScripture: 'Psalm 23:1',
       currentSituation: 'tired',
-    }, { devotionalId: 'dev-1', dayNumber: 1 });
+    }, { devotionalId: 'dev-1', dayNumber: 1 }, new Date());
 
     expectRoutedThrough('https://backend.test/api/generate/go-deeper', 'POST');
   });

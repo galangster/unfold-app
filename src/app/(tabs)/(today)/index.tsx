@@ -34,6 +34,7 @@ import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { getLockScreenProps, getNextMidnight, getTodayReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { isDisplayableBridge } from '@/lib/bridge-text';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { useMiddayNotificationOpen } from '@/hooks/useMiddayNotificationOpen';
@@ -1006,13 +1007,13 @@ export default function HomeScreen() {
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     // Keyed to match generateBridge's own MMKV cache identity (devotional +
-    // day + the reader's local day). Embedding the whole input object here
-    // forked a new cache entry on every free-text profile edit for the same
-    // day's bridge. The UTC date it used to carry rolled over in the evening
-    // for a reader in the Americas.
+    // day + the local day of calendarNow, which the query hands it).
+    // Embedding the whole input object here forked a new cache entry on every
+    // free-text profile edit for the same day's bridge. The UTC date it used
+    // to carry rolled over in the evening for a reader in the Americas.
     // eslint-disable-next-line @tanstack/query/exhaustive-deps -- input is deliberately not part of the bridge's cache identity
     queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, calendarDayKey],
-    queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
+    queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber, calendarNow),
     enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
     retry: 1,
@@ -1473,7 +1474,7 @@ export default function HomeScreen() {
   }, [currentDevotional, currentDayData, router]);
 
   const effectiveBridgeText = qaContextSlot === 'bridge' ? QA_BRIDGE_TEXT : bridgeText;
-  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
+  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && isDisplayableBridge(effectiveBridgeText)
     ? effectiveBridgeText
     : undefined;
   const isEveningWindow = (currentHour >= 17 && currentHour < 23) || (currentHour === 23 && currentMinute < 30);

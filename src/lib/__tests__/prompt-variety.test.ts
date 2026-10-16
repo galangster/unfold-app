@@ -16,20 +16,19 @@ import {
   examenShapeFor,
   goDeeperAnglesFor,
   legacyDevotionalDayShape,
-  type PromptDraw,
 } from '../prompt-variety';
-import { dayIndexFor } from '../variation-bag';
+import { dayIndexFor, type CopyVariation } from '../variation-bag';
 
 const SEEDS = ['install-a', 'install-b', '9f3c2a7e-0d41-4b8e-a1f2-6c0e5d7b9a13', 'ephemeral-1', 'unfold'];
 const START_DAY = dayIndexFor(new Date(2026, 9, 16));
 const DAYS = 730;
 
-function days(seed: string, count = DAYS): PromptDraw[] {
+function days(seed: string, count = DAYS): CopyVariation[] {
   return Array.from({ length: count }, (_, offset) => ({ seed, dayIndex: START_DAY + offset }));
 }
 
 /** Each field as the value a reader sees for a day. */
-const FIELDS: Record<string, (draw: PromptDraw) => string | null> = {
+const FIELDS: Record<string, (draw: CopyVariation) => string | null> = {
   'bridge opening': (draw) => bridgeShapeFor(draw).opening.id,
   'bridge closing': (draw) => bridgeShapeFor(draw).closing.id,
   'examen closing': (draw) => examenShapeFor(draw).closing.id,
@@ -71,18 +70,35 @@ describe('prompt variety', () => {
     }
   });
 
-  it('gives Go Deeper three different angles, none of them drawn the day before', () => {
+  it('gives Go Deeper three different angles, none of them drawn in the request before', () => {
     for (const seed of SEEDS) {
-      let yesterday: Set<string> | null = null;
-      for (const draw of days(seed)) {
-        const today = goDeeperAnglesFor(draw).map((angle) => angle.id);
-        expect(today).toHaveLength(GO_DEEPER_ANGLES_PER_REQUEST);
-        expect(new Set(today).size).toBe(GO_DEEPER_ANGLES_PER_REQUEST);
-        if (yesterday) {
-          for (const id of today) expect(yesterday.has(id)).toBe(false);
+      let previous: Set<string> | null = null;
+      // The draw counts requests: dayIndex carries the request's number.
+      for (let request = 0; request < DAYS; request += 1) {
+        const angles = goDeeperAnglesFor({ seed, dayIndex: request }).map((angle) => angle.id);
+        expect(angles).toHaveLength(GO_DEEPER_ANGLES_PER_REQUEST);
+        expect(new Set(angles).size).toBe(GO_DEEPER_ANGLES_PER_REQUEST);
+        if (previous) {
+          for (const id of angles) expect(previous.has(id)).toBe(false);
         }
-        yesterday = new Set(today);
+        previous = new Set(angles);
       }
+    }
+  });
+
+  it('keeps a night with no closing line, once a lap', () => {
+    // A lap of the seven-line pool starts on every multiple of seven.
+    const lapStart = Math.floor(START_DAY / 7) * 7;
+    for (const seed of SEEDS) {
+      const lines = Array.from({ length: 7 }, (_, i) => examenShapeFor({ seed, dayIndex: lapStart + i }).closingLine);
+      expect(lines.filter((line) => line === null)).toHaveLength(1);
+      expect(new Set(lines).size).toBe(EXAMEN_CLOSING_LINES.length);
+    }
+  });
+
+  it('opens every bridge in a way that works with or without a check-in', () => {
+    for (const opening of BRIDGE_OPENINGS) {
+      expect(opening.instruction).not.toMatch(/check-in|yesterday/i);
     }
   });
 

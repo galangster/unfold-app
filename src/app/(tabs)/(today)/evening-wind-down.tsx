@@ -49,6 +49,7 @@ import {
   resolveEveningWindDownDayNumber,
   resolveEveningWindDownReadiness,
 } from '@/lib/evening-wind-down-state';
+import { localDayKey } from '@/lib/home-devotional-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
 
@@ -211,6 +212,9 @@ export default function EveningWindDownScreen() {
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
+  // The prayer belongs to the day this screen opened on. Holding that date
+  // keeps the query on one prayer when midnight passes while someone reads.
+  const [openedAt] = useState(() => new Date());
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
@@ -261,7 +265,8 @@ export default function EveningWindDownScreen() {
       currentDevotional?.id,
       currentDay?.dayNumber,
       currentDay?.title,
-      user?.name,
+      user?.currentSituation,
+      localDayKey(openedAt),
       middayCheckInInput,
       middayCheckInInput?.mood,
       middayCheckInInput?.moodLabel,
@@ -271,7 +276,6 @@ export default function EveningWindDownScreen() {
     queryFn: async () => {
       const result = await generateExamen(
         {
-          userName: user!.name,
           todayTheme: currentDay!.title,
           todayScripture: currentDay!.scriptureReference,
           middayCheckIn: middayCheckInInput,
@@ -280,7 +284,8 @@ export default function EveningWindDownScreen() {
         {
           devotionalId: currentDevotional!.id,
           dayNumber: currentDay!.dayNumber,
-        }
+        },
+        openedAt
       );
       if (!result) throw new Error('Failed to generate examen');
       return result;
@@ -289,8 +294,6 @@ export default function EveningWindDownScreen() {
     staleTime: Infinity,
     retry: 1,
   });
-
-  const examenClosingLine = examen?.closingLine === undefined ? 'Amen.' : examen.closingLine;
 
   const {
     data: scripture,
@@ -665,9 +668,8 @@ export default function EveningWindDownScreen() {
                     mutedColor={colors.textMuted}
                   />
                 ))}
-                {/* Closing ornament: the night's line from the bag, or none.
-                    An examen cached before the line varied keeps "Amen." */}
-                {examenClosingLine ? (
+                {/* Closing ornament: the night's line from the bag, or none. */}
+                {examen.closingLine ? (
                   <Animated.View
                     entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
                     style={{
@@ -684,7 +686,7 @@ export default function EveningWindDownScreen() {
                         color: colors.textSubtle,
                       }}
                     >
-                      {examenClosingLine}
+                      {examen.closingLine}
                     </Text>
                   </Animated.View>
                 ) : null}

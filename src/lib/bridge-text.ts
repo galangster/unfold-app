@@ -1,5 +1,6 @@
 /**
- * The safety net that runs on every bridge after the model writes it.
+ * The safety net that runs on every bridge after the model writes it, and the
+ * sentence and word rules the other app-written prompts share.
  *
  * Banned phrases used to be deleted as raw substrings, case-insensitively,
  * from the middle of the text. That cut words apart: "journeyed" became
@@ -23,39 +24,111 @@ const CRUDE_PHRASES = ['as hell', 'hell of a', 'damn', 'freaking'];
 const MIN_KEPT_SENTENCES = 2;
 const MIN_KEPT_WORDS = 15;
 
-const LETTER_OR_DIGIT_START = /^[\p{L}\p{N}]/u;
-const LETTER_OR_DIGIT_END = /[\p{L}\p{N}]$/u;
+// ---------------------------------------------------------------------------
+// Shared text rules
+// ---------------------------------------------------------------------------
+
+/** End punctuation, then any closing quotes or brackets: the one rule for where a sentence ends. */
+const ENDS_SENTENCE = /[.!?…]["'”’)\]]*$/;
+
+/** True when `text` ends a sentence: "Rest.", "He said, “Eat.”", "(and them.)". */
+export function endsSentence(text: string): boolean {
+  return ENDS_SENTENCE.test(text.trimEnd());
+}
+
+/** The number of words in `text`. */
+export function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/** `text` without any of `characters` at its end. A loop, so a long run costs one pass. */
+export function trimTrailing(text: string, characters: string): string {
+  let end = text.length;
+  while (end > 0 && characters.includes(text[end - 1])) end--;
+  return text.slice(0, end);
+}
 
 /**
- * One phrase as a pattern that matches whole words only. Spaces match any
- * run of whitespace, and a straight apostrophe matches a curly one too, so
- * "Here’s the thing" is caught as well as "Here's the thing".
+ * Each em dash, with the whitespace around it, becomes ", ", as in the
+ * backend. A loop, not /\s*—\s*\/g, which rescans a long whitespace run from
+ * each of its positions when no dash follows it.
  */
-function wholePhrasePattern(phrase: string): RegExp {
-  const body = phrase
+export function spaceEmDashes(text: string): string {
+  let out = '';
+  let from = 0;
+  for (let dash = text.indexOf('—'); dash >= 0; dash = text.indexOf('—', from)) {
+    let start = dash;
+    while (start > from && /\s/.test(text[start - 1])) start--;
+    let end = dash + 1;
+    while (end < text.length && /\s/.test(text[end])) end++;
+    out += `${text.slice(from, start)}, `;
+    from = end;
+  }
+  return out + text.slice(from);
+}
+
+// ---------------------------------------------------------------------------
+// Banned phrases
+// ---------------------------------------------------------------------------
+
+const LETTER_OR_DIGIT_END = /[\p{L}\p{N}]$/u;
+/** Before a phrase: the start of the text or a character that is not part of a word. */
+const WORD_START = '(?:^|[^\\p{L}\\p{N}])';
+/** After a phrase that ends in a letter or digit: no letter or digit. */
+const WORD_END = '(?![\\p{L}\\p{N}])';
+
+/** Every banned phrase, lowercased and longest first, so "season of" is found before "season". */
+const BANNED: readonly string[] = [
+  ...new Set([...BANNED_PHRASES, ...CRUDE_PHRASES].map((phrase) => phrase.toLowerCase())),
+].sort((a, b) => b.length - a.length);
+
+/**
+ * One phrase as a pattern body. Spaces match any run of whitespace, and a
+ * straight apostrophe matches a curly one too, so "Here’s the thing" is
+ * caught as well as "Here's the thing". Every phrase starts with a letter.
+ */
+function phraseBody(phrase: string): string {
+  return phrase
     .trim()
     .split(/\s+/)
     .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, "['’]"))
     .join('\\s+');
-  const head = LETTER_OR_DIGIT_START.test(phrase) ? '(?:^|[^\\p{L}\\p{N}])' : '';
-  const tail = LETTER_OR_DIGIT_END.test(phrase) ? '(?![\\p{L}\\p{N}])' : '';
-  return new RegExp(`${head}${body}${tail}`, 'iu');
 }
 
-/** Every banned phrase, longest first, so "season of" is found before "season". */
-const BANNED_PATTERNS: readonly { phrase: string; pattern: RegExp }[] = [
-  ...new Set([...BANNED_PHRASES, ...CRUDE_PHRASES].map((phrase) => phrase.toLowerCase())),
-]
-  .sort((a, b) => b.length - a.length)
-  .map((phrase) => ({ phrase, pattern: wholePhrasePattern(phrase) }));
+/**
+ * Two patterns test a sentence for every banned phrase at once. The phrases
+ * that end in a letter or digit need the word-end check. The few that end in
+ * punctuation ("Friend,", "Can I be honest?") do not.
+ */
+const BANNED_GATES: readonly RegExp[] = [true, false].flatMap((needsWordEnd) => {
+  const bodies = BANNED.filter((phrase) => LETTER_OR_DIGIT_END.test(phrase) === needsWordEnd).map(phraseBody);
+  return bodies.length > 0 ? [new RegExp(`${WORD_START}(?:${bodies.join('|')})${needsWordEnd ? WORD_END : ''}`, 'iu')] : [];
+});
+
+function holdsBannedPhrase(text: string): boolean {
+  return BANNED_GATES.some((gate) => gate.test(text));
+}
+
+/** Built on the first call: only tests and logs need to know which phrase matched. */
+let phrasePatterns: { phrase: string; pattern: RegExp }[] | null = null;
 
 /** The longest banned phrase `text` holds as whole words, or null. */
 export function findBannedPhrase(text: string): string | null {
-  return BANNED_PATTERNS.find(({ pattern }) => pattern.test(text))?.phrase ?? null;
+  if (!holdsBannedPhrase(text)) return null;
+  if (!phrasePatterns) {
+    phrasePatterns = BANNED.map((phrase) => ({
+      phrase,
+      pattern: new RegExp(`${WORD_START}${phraseBody(phrase)}${LETTER_OR_DIGIT_END.test(phrase) ? WORD_END : ''}`, 'iu'),
+    }));
+  }
+  return phrasePatterns.find(({ pattern }) => pattern.test(text))?.phrase ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Sentences
+// ---------------------------------------------------------------------------
+
 const SENTENCE_PIECE = /[^.!?…]+(?:[.!?…]+["'”’)\]]*)?/g;
-const ENDS_SENTENCE = /[.!?…]["'”’)\]]*$/;
 /** A period after one of these does not end the sentence: "St. Paul". */
 const ABBREVIATION_END = /\b(?:St|Mt|Mr|Mrs|Ms|Dr|Jr|Sr|vs)\.$/;
 
@@ -72,14 +145,14 @@ export function splitSentences(text: string): string[] {
   while ((match = piece.exec(text)) !== null) {
     const from = openFrom >= 0 ? openFrom : match.index;
     const end = match.index + match[0].length;
-    const sentence = text.slice(from, end);
     const closesHere = end >= text.length || /\s/.test(text[end]);
-    if (!closesHere || ABBREVIATION_END.test(sentence.trimEnd())) {
+    // Only this piece can end in an abbreviation, so only this piece is tested.
+    if (!closesHere || ABBREVIATION_END.test(match[0].trimEnd())) {
       openFrom = from;
       continue;
     }
     openFrom = -1;
-    const trimmed = sentence.trim();
+    const trimmed = text.slice(from, end).trim();
     if (trimmed) sentences.push(trimmed);
   }
   if (openFrom >= 0) {
@@ -94,17 +167,14 @@ export function firstSentence(text: string): string {
   return splitSentences(text)[0] ?? '';
 }
 
-function wordCount(text: string): number {
-  return text.split(/\s+/).filter(Boolean).length;
-}
+// ---------------------------------------------------------------------------
+// Bridge
+// ---------------------------------------------------------------------------
 
-/**
- * The bar Today holds a bridge to before it shows one, and the bar the cache
- * holds it to before it stores one.
- */
+/** The bar a bridge must clear before it is cached or shown. Today holds its card to the same bar. */
 export function isDisplayableBridge(text: string): boolean {
   const trimmed = text.trim();
-  return trimmed.length > 20 && /[.!?…"']$/.test(trimmed);
+  return trimmed.length > 20 && endsSentence(trimmed);
 }
 
 /**
@@ -113,14 +183,11 @@ export function isDisplayableBridge(text: string): boolean {
  *
  * Returns null when the bridge cannot be shown: it was cut off, or removing
  * the sentences with banned phrases left too little to read as a bridge.
- * Running it twice gives the same result as running it once, so a cached
- * bridge can pass through it again on the way out.
+ * Running it twice gives the same result as running it once.
  */
 export function sanitizeBridgeText(text: string): string | null {
   const cleaned = capitalizeGodSlips(
-    text
-      // Em dashes read as awkward pauses in text-to-speech.
-      .replace(/\s*—\s*/g, ', ')
+    spaceEmDashes(text)
       .replace(/\s+/g, ' ')
       .replace(/,\s*,/g, ',')
       .replace(/,\s*([.!?…])/g, '$1')
@@ -130,16 +197,13 @@ export function sanitizeBridgeText(text: string): string | null {
 
   const sentences = splitSentences(cleaned);
   // A reply cut off mid-sentence keeps only its complete sentences.
-  if (sentences.length > 1 && !ENDS_SENTENCE.test(sentences[sentences.length - 1])) {
+  if (sentences.length > 1 && !endsSentence(sentences[sentences.length - 1])) {
     sentences.pop();
   }
 
-  const kept = sentences.filter((sentence) => findBannedPhrase(sentence) === null);
-  if (kept.length < sentences.length) {
-    const rest = kept.join(' ');
-    if (kept.length < MIN_KEPT_SENTENCES || wordCount(rest) < MIN_KEPT_WORDS) return null;
-  }
-
+  const kept = sentences.filter((sentence) => !holdsBannedPhrase(sentence));
   const result = kept.join(' ');
+  const removedSome = kept.length < sentences.length;
+  if (removedSome && (kept.length < MIN_KEPT_SENTENCES || countWords(result) < MIN_KEPT_WORDS)) return null;
   return isDisplayableBridge(result) ? result : null;
 }

@@ -23,9 +23,11 @@ import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { countWords, trimTrailing } from '@/lib/bridge-text';
 import { copyVariationFor } from '@/lib/copy-variation';
+import { titleWithPeriod } from '@/lib/display-title';
 import { localDayKey } from '@/lib/home-devotional-state';
-import { avoidBlock, newestCacheKeys, openingWords, uniqueLines } from '@/lib/prompt-history';
+import { avoidList, isString, openingWords, promptHistory } from '@/lib/prompt-history';
 import { examenShapeFor, type ExamenShape } from '@/lib/prompt-variety';
 
 // ---------------------------------------------------------------------------
@@ -40,8 +42,11 @@ const examenCache = examenEncKey
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * No name: the examen is the reader's own prayer, and a name in the request
+ * is a name the model can slip into it.
+ */
 export interface ExamenInput {
-  userName: string;
   todayTheme: string;
   todayScripture: string;
   middayCheckIn?: {
@@ -61,23 +66,13 @@ export interface ExamenMovement {
 export interface ExamenPrayer {
   movements: ExamenMovement[];
   totalWordCount: number;
-  /**
-   * The line the evening screen prints under the prayer, drawn for the day
-   * the prayer was written. Null is a night with no line. An examen cached
-   * before 2026-10-16 has no field and keeps the "Amen." it always had.
-   */
-  closingLine?: string | null;
+  /** The line the evening screen prints under the prayer, drawn for its day. Null is a night with no line. */
+  closingLine: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Cache helpers
 // ---------------------------------------------------------------------------
-
-const EXAMEN_KEY_PREFIX = 'examen_';
-/** How many earlier examens a request reads back as openings not to reuse. */
-const RECENT_EXAMEN_LIMIT = 7;
-/** Five movements each, from seven examens. */
-const RECENT_EXAMEN_LINE_LIMIT = 35;
 
 /**
  * `day` is the reader's local day (`localDayKey`). Keys carried the UTC date
@@ -89,31 +84,63 @@ function buildCacheKey(
   dayNumber: number,
   day: string
 ): string {
-  return `${EXAMEN_KEY_PREFIX}${devotionalId}_${dayNumber}_${day}`;
+  return `examen_${devotionalId}_${dayNumber}_${day}`;
+}
+
+/**
+ * A cached examen, or null when the entry is unreadable or does not hold five
+ * movements. An entry written before closingLine existed keeps the "Amen." the
+ * screen always printed.
+ */
+export function parseCachedExamen(raw: string): ExamenPrayer | null {
+  try {
+    const parsed = JSON.parse(raw) as Omit<ExamenPrayer, 'closingLine'> & { closingLine?: string | null };
+    if (!Array.isArray(parsed.movements) || parsed.movements.length !== 5) return null;
+    return { ...parsed, closingLine: parsed.closingLine === undefined ? 'Amen.' : parsed.closingLine };
+  } catch {
+    return null;
+  }
 }
 
 function getCachedExamen(cacheKey: string): ExamenPrayer | null {
   try {
     const raw = examenCache.getString(cacheKey);
     if (!raw) return null;
-
-    const parsed: ExamenPrayer = JSON.parse(raw);
-    if (
-      !parsed.movements ||
-      !Array.isArray(parsed.movements) ||
-      parsed.movements.length !== 5
-    ) {
-      examenCache.delete(cacheKey);
-      return null;
+    const parsed = parseCachedExamen(raw);
+    if (parsed) {
+      logger.log(`[Examen] Cache hit for ${cacheKey}`);
+      return parsed;
     }
-
-    logger.log(`[Examen] Cache hit for ${cacheKey}`);
-    return parsed;
   } catch {
-    examenCache.delete(cacheKey);
-    return null;
+    // An unreadable entry is treated like a bad one.
   }
+  examenCache.delete(cacheKey);
+  return null;
 }
+
+/** What one examen leaves in the history: the first few words and the title of each movement. */
+interface ExamenLines {
+  openings: string[];
+  titles: string[];
+}
+
+function isExamenLines(value: unknown): value is ExamenLines {
+  const lines = value as Partial<ExamenLines> | null;
+  return (
+    !!lines &&
+    Array.isArray(lines.openings) &&
+    lines.openings.every(isString) &&
+    Array.isArray(lines.titles) &&
+    lines.titles.every(isString)
+  );
+}
+
+/**
+ * The openings and titles of the reader's newest examens, newest first. No
+ * earlier examen was ever sent before 2026-10-16, so nothing stopped the
+ * model from opening the same way every night.
+ */
+const recentExamens = promptHistory(examenCache, 'recent_examen_lines', 7, isExamenLines);
 
 function setCachedExamen(cacheKey: string, prayer: ExamenPrayer): void {
   try {
@@ -121,47 +148,12 @@ function setCachedExamen(cacheKey: string, prayer: ExamenPrayer): void {
     logger.log(`[Examen] Cached result for ${cacheKey}`);
   } catch (error) {
     logger.warn('[Examen] Failed to write cache', error);
+    return;
   }
-}
-
-interface RecentExamenLines {
-  /** The first few words of each movement, newest examen first. */
-  openings: string[];
-  titles: string[];
-}
-
-function cachedMovements(raw: string | undefined): ExamenMovement[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as Partial<ExamenPrayer>;
-    if (!Array.isArray(parsed.movements)) return [];
-    return parsed.movements.filter(
-      (movement): movement is ExamenMovement =>
-        !!movement && typeof movement.title === 'string' && typeof movement.prayer === 'string'
-    );
-  } catch {
-    return [];
-  }
-}
-
-/**
- * The openings and titles of the reader's newest cached examens. No earlier
- * examen was ever sent before 2026-10-16, so nothing stopped the model from
- * opening the same way every night. A storage failure costs only the avoid
- * list, never the prayer.
- */
-function recentExamenLines(): RecentExamenLines {
-  try {
-    const movements = newestCacheKeys(examenCache.getAllKeys(), EXAMEN_KEY_PREFIX, RECENT_EXAMEN_LIMIT)
-      .flatMap((key) => cachedMovements(examenCache.getString(key)));
-    return {
-      openings: movements.map((movement) => openingWords(movement.prayer)).filter(Boolean),
-      titles: movements.map((movement) => movement.title.trim()).filter(Boolean),
-    };
-  } catch (error) {
-    logger.warn('[Examen] Could not read recent examens', error instanceof Error ? error.message : error);
-    return { openings: [], titles: [] };
-  }
+  recentExamens.record({
+    openings: prayer.movements.map((movement) => openingWords(movement.prayer)),
+    titles: prayer.movements.map((movement) => movement.title),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -218,12 +210,10 @@ RULES:
 RESPOND WITH ONLY valid JSON, no markdown, no code blocks:
 {"movements": [{"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}]}`;
 
-// The reader's name is not sent: the examen is their own prayer, and a name
-// in the request is a name the model can slip into it.
 function buildExamenUserMessage(
   input: ExamenInput,
   shape: ExamenShape,
-  recent: RecentExamenLines
+  recent: readonly ExamenLines[]
 ): string {
   let msg = `Today's theme: "${sanitizeForPrompt(input.todayTheme, 200)}"\nScripture: ${sanitizeForPrompt(input.todayScripture, 200)}`;
   if (input.middayCheckIn) {
@@ -236,14 +226,12 @@ function buildExamenUserMessage(
   }
   msg += `\n\nTONIGHT'S CLOSE: ${shape.closing.instruction}`;
 
-  const openings = avoidBlock(
+  const openings = avoidList(
     'RECENT OPENINGS (do not begin a movement with these words):',
-    uniqueLines(recent.openings.map((line) => sanitizeForPrompt(line, 80)), RECENT_EXAMEN_LINE_LIMIT)
+    recent.flatMap((lines) => lines.openings),
+    80
   );
-  const titles = avoidBlock(
-    'RECENT TITLES (do not reuse):',
-    uniqueLines(recent.titles.map((line) => sanitizeForPrompt(line, 80)), RECENT_EXAMEN_LINE_LIMIT)
-  );
+  const titles = avoidList('RECENT TITLES (do not reuse):', recent.flatMap((lines) => lines.titles), 80);
   if (openings) msg += `\n\n${openings}`;
   if (titles) msg += `\n\n${titles}`;
   return msg;
@@ -324,10 +312,6 @@ async function postToBackend(
 // Response parsing & validation
 // ---------------------------------------------------------------------------
 
-function countWords(text: string): number {
-  return text.trim().split(/\s+/).filter((w) => w.length > 0).length;
-}
-
 /** The movement names, kept as the title when the model's own title is unusable. */
 const FALLBACK_TITLES = ['Gratitude', 'Presence', 'Honesty', 'Turning', 'Hope'];
 
@@ -338,13 +322,8 @@ const MAX_TITLE_LENGTH = 40;
 /** The model's title for a movement, or the movement's name when it is unusable. */
 function movementTitle(raw: unknown, fallback: string): string {
   if (typeof raw !== 'string') return fallback;
-  const title = raw
-    .trim()
-    .replace(/^\d+\s*[.):-]\s*/, '')
-    .replace(/[.,;:!]+$/, '')
-    .trim();
-  const words = title.split(/\s+/).filter(Boolean).length;
-  if (!title || words > MAX_TITLE_WORDS || title.length > MAX_TITLE_LENGTH || title.includes('—')) {
+  const title = trimTrailing(raw.trim().replace(/^\d+\s*[.):-]\s*/, ''), '.,;:!').trim();
+  if (!title || countWords(title) > MAX_TITLE_WORDS || title.length > MAX_TITLE_LENGTH || title.includes('—')) {
     return fallback;
   }
   return title;
@@ -356,9 +335,19 @@ function movementTitle(raw: unknown, fallback: string): string {
  * stutter.
  */
 function withoutTrailingAmen(prayer: string): string {
-  const stripped = prayer.replace(/[\s,;:]*\bamen\b[.!]*\s*$/i, '').trim();
-  if (!stripped || stripped === prayer.trim()) return prayer.trim();
-  return /[.!?…"'”’]$/.test(stripped) ? stripped : `${stripped}.`;
+  const trimmed = prayer.trim();
+  // Index loops from the end, so a long run of separators costs one pass.
+  const end = trimTrailing(trimmed, '.!').length;
+  const start = end - 4;
+  const endsInAmen =
+    start >= 0 &&
+    trimmed.slice(start, end).toLowerCase() === 'amen' &&
+    (start === 0 || !/[\p{L}\p{N}_]/u.test(trimmed[start - 1]));
+  if (!endsInAmen) return trimmed;
+  let cut = start;
+  while (cut > 0 && /[\s,;:]/.test(trimmed[cut - 1])) cut--;
+  const stripped = trimmed.slice(0, cut);
+  return stripped ? titleWithPeriod(stripped) : trimmed;
 }
 
 /**
@@ -502,7 +491,7 @@ function parseJsonFromText(text: string): unknown {
   throw new Error('Could not extract valid JSON from response text');
 }
 
-function parseExamenResponse(data: unknown): ExamenPrayer {
+function parseExamenResponse(data: unknown): Omit<ExamenPrayer, 'closingLine'> {
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid examen response: not an object');
   }
@@ -567,7 +556,9 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
 /**
  * Generate a personalized 5-movement Ignatian Examen prayer.
  *
- * Checks MMKV cache first (keyed by devotionalId + dayNumber + local day).
+ * Checks MMKV cache first (keyed by devotionalId + dayNumber + the local day
+ * of `now`). `now` also picks the night's close and closing line, so a caller
+ * that holds one date for a screen gets one prayer for it.
  * Falls back to the backend with a 30-second timeout and URL fallback chain.
  * Backend uses Grok for cost-effective generation.
  *
@@ -578,9 +569,9 @@ export async function generateExamen(
   context: {
     devotionalId: string;
     dayNumber: number;
-  }
+  },
+  now: Date
 ): Promise<ExamenPrayer | null> {
-  const now = new Date();
   const cacheKey = buildCacheKey(context.devotionalId, context.dayNumber, localDayKey(now));
 
   // 1. Check cache
@@ -601,12 +592,12 @@ export async function generateExamen(
 
   // 3. Call backend with retry on parse failure (backend routes to Grok)
   const shape = examenShapeFor(copyVariationFor(now));
-  const userMessage = buildExamenUserMessage(input, shape, recentExamenLines());
+  const userMessage = buildExamenUserMessage(input, shape, recentExamens.read());
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       logger.log(
-        `[Examen] Generating for "${input.userName}" — theme="${input.todayTheme}", ` +
+        `[Examen] Generating — theme="${input.todayTheme}", ` +
           `day=${context.dayNumber}, mood=${input.middayCheckIn?.moodLabel ?? 'none'}` +
           (attempt > 1 ? ` (retry ${attempt}/${MAX_ATTEMPTS})` : '')
       );
@@ -689,23 +680,5 @@ export function clearExamenCache(): void {
     logger.log('[Examen] Cache cleared');
   } catch (error) {
     logger.warn('[Examen] Failed to clear cache', error);
-  }
-}
-
-/**
- * Delete a specific cached examen by its context. `date` is the local day
- * (`localDayKey`) the examen was written for.
- */
-export function deleteCachedExamen(
-  devotionalId: string,
-  dayNumber: number,
-  date: string
-): void {
-  const cacheKey = buildCacheKey(devotionalId, dayNumber, date);
-  try {
-    examenCache.delete(cacheKey);
-    logger.log(`[Examen] Deleted cached entry: ${cacheKey}`);
-  } catch (error) {
-    logger.warn('[Examen] Failed to delete cache entry', error);
   }
 }

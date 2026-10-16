@@ -17,15 +17,7 @@
  */
 
 import type { ClosingStyle } from '@/constants/devotional-personas-v2';
-import { pickFromBag } from '@/lib/variation-bag';
-
-/** Which draw a request belongs to. */
-export interface PromptDraw {
-  /** The install's seed (copySeed in lib/copy-variation.ts). */
-  seed: string;
-  /** The local calendar day (dayIndexFor in lib/variation-bag.ts). */
-  dayIndex: number;
-}
+import { pickFromBag, type CopyVariation } from '@/lib/variation-bag';
 
 /** One move a prompt can make, as the instruction the model reads. */
 export interface PromptMove {
@@ -33,7 +25,7 @@ export interface PromptMove {
   instruction: string;
 }
 
-function drawFrom<T>(pool: readonly T[], draw: PromptDraw, field: string, index = draw.dayIndex): T {
+function drawFrom<T>(pool: readonly T[], draw: CopyVariation, field: string, index = draw.dayIndex): T {
   // Every pool below is a non-empty constant, so the bag always returns an entry.
   return pickFromBag(pool, `${draw.seed}|${field}`, index) as T;
 }
@@ -44,7 +36,8 @@ function drawFrom<T>(pool: readonly T[], draw: PromptDraw, field: string, index 
 
 /**
  * How the bridge opens. None starts with the reader's name or a greeting:
- * every bridge used to open "Hey {name}, today's reading is about...".
+ * every bridge used to open "Hey {name}, today's reading is about...". Each
+ * one works whether or not the reader checked in yesterday.
  */
 export const BRIDGE_OPENINGS: readonly PromptMove[] = [
   { id: 'topic-first', instruction: "Name today's topic plainly in the first few words." },
@@ -52,10 +45,6 @@ export const BRIDGE_OPENINGS: readonly PromptMove[] = [
   { id: 'detail', instruction: 'Open with one concrete detail from the passage: a place, an object, or a moment.' },
   { id: 'short-claim', instruction: 'Open with a short, bold statement about the reading, five words or fewer.' },
   { id: 'surprise', instruction: "Open with what is unexpected about the angle today's reading takes." },
-  {
-    id: 'yesterday',
-    instruction: "Open with one plain line that connects to what they shared at yesterday's check-in. With no check-in, open on today's theme.",
-  },
   { id: 'mid-thought', instruction: 'Open mid-thought, as if the conversation was already going, with the central tension of the reading.' },
   { id: 'person', instruction: "Open with a person in today's passage and what they did or said, in plain words." },
 ];
@@ -79,7 +68,7 @@ export interface BridgeShape {
   useName: boolean;
 }
 
-export function bridgeShapeFor(draw: PromptDraw): BridgeShape {
+export function bridgeShapeFor(draw: CopyVariation): BridgeShape {
   return {
     opening: drawFrom(BRIDGE_OPENINGS, draw, 'bridge-opening'),
     closing: drawFrom(BRIDGE_CLOSINGS, draw, 'bridge-closing'),
@@ -121,7 +110,7 @@ export interface ExamenShape {
   closingLine: string | null;
 }
 
-export function examenShapeFor(draw: PromptDraw): ExamenShape {
+export function examenShapeFor(draw: CopyVariation): ExamenShape {
   return {
     closing: drawFrom(EXAMEN_CLOSINGS, draw, 'examen-closing'),
     closingLine: drawFrom(EXAMEN_CLOSING_LINES, draw, 'examen-closing-line'),
@@ -137,10 +126,11 @@ export function examenShapeFor(draw: PromptDraw): ExamenShape {
  * It used to be the same three every time (feeling, life, imagination), each
  * with a quoted opener the model copied.
  *
- * Twelve angles at three a day make one lap of the bag four days long. The
- * bag holds the last quarter of one lap (three entries, one day's worth) apart
- * from the first quarter of the next, so no angle is drawn on two days
- * running. Keep the length a multiple of three and at least twelve.
+ * The draw counts requests, not days (lib/go-deeper-prompt.ts). Twelve angles
+ * at three a request make one lap of the bag four requests long. The bag holds
+ * the last quarter of one lap (three entries, one request's worth) apart from
+ * the first quarter of the next, so no angle comes back in the very next
+ * request. Keep the length a multiple of three and at least twelve.
  */
 export const GO_DEEPER_ANGLES: readonly PromptMove[] = [
   { id: 'feeling', instruction: 'The feeling under their words: ask about the emotion they came close to naming.' },
@@ -162,8 +152,11 @@ export const GO_DEEPER_ANGLES: readonly PromptMove[] = [
 
 export const GO_DEEPER_ANGLES_PER_REQUEST = 3;
 
-/** The day's three angles: three consecutive draws, so they never repeat within a request. */
-export function goDeeperAnglesFor(draw: PromptDraw): PromptMove[] {
+/**
+ * A request's three angles: three consecutive draws, so they never repeat
+ * within it. `draw.dayIndex` carries the request's number, not a day.
+ */
+export function goDeeperAnglesFor(draw: CopyVariation): PromptMove[] {
   const first = draw.dayIndex * GO_DEEPER_ANGLES_PER_REQUEST;
   return Array.from({ length: GO_DEEPER_ANGLES_PER_REQUEST }, (_, offset) =>
     drawFrom(GO_DEEPER_ANGLES, draw, 'go-deeper-angle', first + offset),
@@ -198,7 +191,7 @@ export interface LegacyDevotionalDayShape {
  * carries the name, as the batch prompt has always required.
  */
 export function legacyDevotionalDayShape(seed: string, dayNumber: number): LegacyDevotionalDayShape {
-  const draw: PromptDraw = { seed, dayIndex: dayNumber };
+  const draw: CopyVariation = { seed, dayIndex: dayNumber };
   return {
     closing: drawFrom(LEGACY_DEVOTIONAL_CLOSINGS, draw, 'devotional-closing'),
     useName: dayNumber > 1 && drawFrom(LEGACY_DEVOTIONAL_NAME_DAYS, draw, 'devotional-name'),
