@@ -30,21 +30,56 @@ describe('readSuggestionList', () => {
       'Pray with me',
     ]);
   });
+
+  it('reads the server’s fixed trio as no list, in any order', () => {
+    expect(readSuggestionList(OLD_TRIO)).toBeUndefined();
+    expect(readSuggestionList([...OLD_TRIO].reverse())).toBeUndefined();
+    expect(readSuggestionList([' Tell me more ', ...OLD_TRIO.slice(1)])).toBeUndefined();
+  });
+
+  it('keeps a list that only shares chips with the trio', () => {
+    expect(readSuggestionList(OLD_TRIO.slice(0, 2))).toEqual(OLD_TRIO.slice(0, 2));
+    expect(readSuggestionList([...OLD_TRIO, 'Keep going'])).toEqual([...OLD_TRIO, 'Keep going']);
+  });
 });
 
 describe('sharesCrisisLine', () => {
   it.each([
+    // The server's own wording.
     'If you are not safe tonight, please call or text 988 to reach someone, any time.',
     'Reach out to the 988 Suicide and Crisis Lifeline right now.',
     'You can dial 988 from any phone.',
     'Text HOME to 741741 to reach the Crisis Text Line.',
     'Call the National Domestic Violence Hotline at 1-800-799-7233.',
+    // A model's rewordings: inflected verbs and both word orders around 988.
+    'You can reach the Lifeline any time by calling or texting 988.',
+    'Please reach out by calling or texting 988 right now.',
+    'Please consider calling 988 tonight.',
+    'Texting 988 connects you with someone right now.',
+    'Please contact 988 tonight.',
+    'You can reach 988 by call or text, day or night.',
+    'Reach out to 988 (call or text) whenever you need to.',
+    // Lines by name.
+    'Please reach out to the Lifeline.',
+    'Reach the Lifeline at 988 any time.',
+    'The Crisis Text Line is there tonight.',
+    'The National DV Hotline can help you plan a safe way out.',
+    // Numbers on their own.
+    'You can text HOME to 741741 right now.',
+    'Call the National Domestic Violence Hotline at 1-800-799-SAFE.',
+    'If you are not safe at home, 1-800-799-SAFE (7233) answers all day.',
+    'You can also text START to 88788.',
+    'You can still call 1-800-273-8255 any time.',
+    '1-800-273-TALK still connects you with someone tonight.',
+    'If you are in danger right now, call 911.',
   ])('finds a crisis line in: %s', (reply) => {
     expect(sharesCrisisLine(reply)).toBe(true);
   });
 
   it.each([
     'Vladimir of Kyiv was baptized in 988, and his people followed.',
+    'In 988 AD the faith reached Kyiv.',
+    'The year 988 marks the baptism of the Rus.',
     'Psalm 98:8 asks the rivers to clap their hands.',
     'Start with one honest sentence to God about today.',
   ])('finds none in: %s', (reply) => {
@@ -75,6 +110,14 @@ describe('replySuggestions', () => {
     const chips = replySuggestions(undefined, 'An answer.', fallback);
     expect(chips).toHaveLength(FALLBACK_SUGGESTIONS_PER_REPLY);
     for (const chip of chips) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+  });
+
+  it('draws its own chips in place of the server’s fixed trio, and none under a crisis line', () => {
+    const chips = replySuggestions(readSuggestionList(OLD_TRIO), 'An answer.', fallback);
+    expect(chips).toHaveLength(FALLBACK_SUGGESTIONS_PER_REPLY);
+    expect(chips).not.toEqual(OLD_TRIO);
+    for (const chip of chips) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+    expect(replySuggestions(readSuggestionList(OLD_TRIO), 'Please consider calling 988 tonight.', fallback)).toEqual([]);
   });
 });
 

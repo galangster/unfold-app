@@ -85,18 +85,20 @@ function timelineEntries(now: Date): { date: Date; entry: WidgetTimelineEntry }[
 }
 
 /**
- * What the midnight entry says for a day that is not on the device yet. The
- * day arrives when the reader opens the app, so the entry names it as the
- * day ahead instead of saying it is missing. One line a day from a seeded
- * bag, so consecutive mornings never repeat a line.
+ * What the midnight entry says for a day that is not on the device yet: the
+ * day the reader is on, named as the day ahead instead of as missing. No line
+ * promises that the day is ready or comes when the app opens, because for
+ * some readers it does not (a lapsed subscription, a paused series). Each
+ * line also reads cleanly inside the widget labels: UnfoldToday reads
+ * "Today's reading: <line>." and UnfoldDashboard reads "Unfold dashboard.
+ * <line>. Day N of M." Each midnight draws one line from a seeded bag.
  */
 export const WIDGET_DAY_READY_LINES: readonly ((dayNumber: number) => string)[] = [
-  (day) => `Day ${day} is ready to open`,
-  (day) => `Open Unfold for Day ${day}`,
   (day) => `Today is Day ${day}`,
-  (day) => `Day ${day} is today’s reading`,
   (day) => `Time for Day ${day}`,
-  (day) => `Day ${day} starts when you open Unfold`,
+  (day) => `Day ${day} is up next`,
+  (day) => `On to Day ${day}`,
+  (day) => `You’re on Day ${day}`,
 ];
 
 function dayReadyLine(devotional: Devotional, dayNumber: number, forDate: Date): string {
@@ -199,10 +201,15 @@ export function getTodayReadingProps(
 /**
  * The series fields the widgets show, built as the timeline builds them: the
  * reading of both entries (the day Today shows, its verse and quote, the next
- * day, and the midnight line for a day not on the device), the day total,
- * the weekly checks and the Lock Screen fields. The sync fingerprint and
- * Today's sync key both compare these, so a change the widget shows always
- * triggers a push. Writing on a day does not change them.
+ * day, and whether the midnight line for a day not on the device shows), the
+ * day total, the weekly checks and the Lock Screen fields. The sync
+ * fingerprint and Today's sync key both compare these, so a change the
+ * widget shows triggers a push. Writing on a day does not change them.
+ *
+ * The midnight line turns over each day, so the fields keep only whether it
+ * shows, not its text (dayTitle carries the text too). A reader whose day
+ * stays off the device gets no extra push each day, and the widget keeps the
+ * line of its last push.
  */
 export function getWidgetSeriesFields(
   devotional: Devotional | null | undefined,
@@ -210,7 +217,11 @@ export function getWidgetSeriesFields(
   now: Date
 ) {
   return {
-    reading: timelineEntries(now).map(({ date, entry }) => getTodayReadingProps(devotional, date, entry)),
+    reading: timelineEntries(now).map(({ date, entry }) => {
+      const props = getTodayReadingProps(devotional, date, entry);
+      const readyLineShows = props.dayReadyLine !== '';
+      return { ...props, dayTitle: readyLineShows ? '' : props.dayTitle, dayReadyLine: readyLineShows };
+    }),
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(devotionals, now),
     lock: getLockScreenProps(devotional, now),

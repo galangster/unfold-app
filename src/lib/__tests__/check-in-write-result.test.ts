@@ -54,8 +54,11 @@ jest.mock('../store', () => ({
 const mockState = {
   policy: 'granted',
   store: {
-    devotionals: [],
-    currentDevotionalId: null,
+    devotionals: [] as unknown[],
+    currentDevotionalId: null as string | null,
+    user: { hasCompletedOnboarding: true },
+    middayCheckInEnabled: true,
+    eveningWindDownEnabled: true,
     middayCheckInTime: '12:30',
     middayCheckInByDay: null as Record<string, string | null> | null,
     eveningWindDownTime: '20:30',
@@ -216,5 +219,77 @@ describe.each(SLOTS)('$name check-in: tap cues across fire dates', ({ id, schedu
     expect(cues[0]).toBe(cueFor(firstDay + 1));
     expect(cues.every((cue) => cue !== undefined)).toBe(true);
     for (let i = 1; i < cues.length; i += 1) expect(cues[i]).not.toBe(cues[i - 1]);
+  });
+});
+
+describe('a read on a day with no carry line rewrites today’s midday banner (V-03)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { runCheckInNotificationSync, resetCheckInNotificationSyncForTests } = require('../check-in-notification-sync');
+  const NUDGE = 'Before Thursday’s interview, remember whose name you carry.';
+  const opened = new Date(2026, 9, 16, 7, 0);
+  const finished = new Date(2026, 9, 16, 7, 10);
+  /** One series on Day 1, which has a nudge and no carry line. Finishing it moves currentDay on. */
+  const series = (readAt?: Date) => ({
+    id: 'dev-1',
+    title: 'Series',
+    totalDays: 7,
+    currentDay: readAt ? 2 : 1,
+    days: [{
+      id: 'day-1',
+      devotionalId: 'dev-1',
+      dayNumber: 1,
+      title: 'The Unfinished House',
+      scriptureReference: 'Psalm 132:1-5',
+      scriptureText: 'Lord, remember David.',
+      bodyText: '',
+      isRead: readAt !== undefined,
+      readAt: readAt?.toISOString(),
+      companionNudge: NUDGE,
+    }],
+  });
+  /** The body written for today's midday occurrence. */
+  const todaysBanner = () => mockScheduleNotificationAsync.mock.calls
+    .map((call) => call[0] as ScheduledRequest & { content: { data?: { type?: string } } })
+    .find(({ content, trigger }) => content.data?.type === 'midday-checkin' && dayIndexFor(trigger.date) === dayIndexFor(opened))
+    ?.content.body;
+
+  beforeEach(() => {
+    // Only Date is faked: the writes resolve as they do in the app.
+    jest.useFakeTimers({
+      now: opened,
+      doNotFake: [
+        'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame',
+        'requestIdleCallback', 'cancelIdleCallback', 'setImmediate', 'clearImmediate', 'setInterval',
+        'clearInterval', 'setTimeout', 'clearTimeout',
+      ],
+    });
+    resetCheckInNotificationSyncForTests();
+    mockScheduleNotificationAsync.mockClear();
+    mockScheduleNotificationAsync.mockImplementation(async ({ identifier }: { identifier: string }) => identifier);
+    mockState.policy = 'granted';
+    mockState.store.middayCheckInByDay = null;
+    mockState.store.eveningWindDownEnabled = false;
+    mockState.store.devotionals = [series()];
+    mockState.store.currentDevotionalId = 'dev-1';
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    mockState.store.eveningWindDownEnabled = true;
+    mockState.store.devotionals = [];
+    mockState.store.currentDevotionalId = null;
+  });
+
+  it('writes today’s banner without the nudge at the open, then rewrites it with the nudge after the read', async () => {
+    await expect(runCheckInNotificationSync('hydration')).resolves.toMatchObject({ kind: 'synced' });
+    expect(todaysBanner()).toBeDefined();
+    expect(todaysBanner()).not.toContain('whose name you carry');
+
+    mockScheduleNotificationAsync.mockClear();
+    jest.setSystemTime(finished);
+    mockState.store.devotionals = [series(finished)];
+    // The day has no carry line, so the nudge alone tells the sync the banner changed.
+    await expect(runCheckInNotificationSync('fingerprint')).resolves.toMatchObject({ kind: 'synced' });
+    expect(todaysBanner()).toContain('whose name you carry');
   });
 });

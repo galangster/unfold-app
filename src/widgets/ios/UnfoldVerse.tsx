@@ -75,7 +75,7 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
   const deepLink = 'unfold://(tabs)/(today)';
 
   // A series whose day has no text yet is not the same as no series. The
-  // midnight entry names that day, which reaches the device when the app opens.
+  // midnight entry names that day while its text is not on the device.
   const emptyText =
     readyLine !== ''
       ? readyLine

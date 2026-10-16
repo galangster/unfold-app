@@ -1841,9 +1841,73 @@ describe('a finished reply', () => {
       expect(hook().suggestions).toHaveLength(FALLBACK_SUGGESTIONS_PER_REPLY);
       for (const chip of hook().suggestions) expect(FALLBACK_SUGGESTIONS).toContain(chip);
     });
+
+    describe('in place of the server’s fixed trio', () => {
+      const TRIO = ['Tell me more', 'How do I apply this?', 'Help me with a prayer'];
+      const expectOwnChips = (chips: string[]) => {
+        expect(chips).toHaveLength(FALLBACK_SUGGESTIONS_PER_REPLY);
+        expect(chips).not.toEqual(TRIO);
+        for (const chip of chips) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+      };
+
+      it('draws the app’s own chips when the stream sends the trio', async () => {
+        mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+          'data: {"t":"An answer that came without its own chips."}\n\n',
+          doneFrame({ s: TRIO }),
+        ]));
+        const hook = await renderHook();
+
+        await act(async () => { await hook().sendMessage('A question'); });
+
+        expectOwnChips(hook().suggestions);
+        expect(companionReplies()[0]?.suggestions).toEqual(hook().suggestions);
+      });
+
+      it('draws the app’s own chips when the non-streaming reply sends the trio', async () => {
+        mockFetch
+          .mockResolvedValueOnce(streamingRejectedResponse())
+          .mockResolvedValueOnce(jsonResponse({ content: 'A full answer.', suggestions: TRIO }));
+        const hook = await renderHook();
+
+        await act(async () => { await hook().sendMessage('Answer without streaming'); });
+
+        expectOwnChips(hook().suggestions);
+      });
+
+      it('shows no chips when the trio comes under a crisis answer', async () => {
+        mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+          'data: {"t":"You can reach the Lifeline any time by calling or texting 988."}\n\n',
+          doneFrame({ s: TRIO }),
+        ]));
+        const hook = await renderHook();
+
+        await act(async () => { await hook().sendMessage('Everything feels too heavy'); });
+
+        expect(hook().suggestions).toEqual([]);
+      });
+    });
   });
 
   describe('the devotional day the companion request names (APP-24)', () => {
+    // The clock is pinned to a midday instant and the reads sit on whole
+    // local dates, so a run near midnight or on a DST day cannot move them.
+    // Only Date is faked: the stream still runs on real timers.
+    const MIDDAY = new Date(2026, 9, 14, 12, 0);
+    const READ_TODAY = new Date(2026, 9, 14, 8, 0).toISOString();
+    const READ_YESTERDAY = new Date(2026, 9, 13, 8, 0).toISOString();
+
+    beforeEach(() => {
+      jest.useFakeTimers({
+        now: MIDDAY,
+        doNotFake: [
+          'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame',
+          'requestIdleCallback', 'cancelIdleCallback', 'setImmediate', 'clearImmediate', 'setInterval',
+          'clearInterval', 'setTimeout', 'clearTimeout',
+        ],
+      });
+    });
+    afterEach(() => jest.useRealTimers());
+
     const seriesDay = (dayNumber: number, readAt?: string) => ({
       dayNumber,
       title: `Title ${dayNumber}`,
@@ -1864,20 +1928,17 @@ describe('a finished reply', () => {
     }
 
     it('names the day read today, not the next day currentDay moved to', async () => {
-      const readToday = new Date().toISOString();
-      const readYesterday = new Date(Date.now() - 86_400_000).toISOString();
       const day = await sentDevotionalDay({
         currentDay: 6,
-        days: [seriesDay(4, readYesterday), seriesDay(5, readToday), seriesDay(6)],
+        days: [seriesDay(4, READ_YESTERDAY), seriesDay(5, READ_TODAY), seriesDay(6)],
       });
       expect(day).toBe(5);
     });
 
     it('names currentDay when nothing was read today and its day is not on the device', async () => {
-      const readYesterday = new Date(Date.now() - 86_400_000).toISOString();
       const day = await sentDevotionalDay({
         currentDay: 6,
-        days: [seriesDay(5, readYesterday)],
+        days: [seriesDay(5, READ_YESTERDAY)],
       });
       expect(day).toBe(6);
     });

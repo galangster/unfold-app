@@ -6,9 +6,11 @@
  * none. The app used to swap every empty list for the same three chips, so a
  * reader in crisis saw "How do I apply this?" under the 988 reply.
  *
- * Now only a reply that carries no list at all (an older server, a malformed
- * frame) borrows chips, and those come from a seeded bag, so the same three
- * do not follow every such reply.
+ * When the model gives no list, today's server sends that same fixed trio
+ * itself. The app reads the trio as no list, so the trio never shows with
+ * either server. A reply with no list (the trio, or a frame without the
+ * field) borrows chips from a seeded bag, so the same three do not follow
+ * every such reply.
  */
 import { drawConsecutive } from '@/lib/variation-bag';
 
@@ -36,26 +38,48 @@ export const FALLBACK_SUGGESTIONS = [
 
 export const FALLBACK_SUGGESTIONS_PER_REPLY = 3;
 
+/** A list as a key that ignores order and edge spaces. */
+const chipsKey = (chips: readonly string[]) => JSON.stringify(chips.map((chip) => chip.trim()).sort());
+
+/** The chips today's server sends in place of a list the model did not give. */
+const SERVER_FALLBACK_TRIO = chipsKey(['Tell me more', 'How do I apply this?', 'Help me with a prayer']);
+
 /**
  * The list a reply carried: undefined when the field is absent or not a
- * list, otherwise its non-blank strings. An empty result stays empty.
+ * list, or when it is exactly the server's fixed trio, in any order.
+ * Otherwise its non-blank strings. An empty result stays empty.
  */
 export function readSuggestionList(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+  const list = value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+  return chipsKey(list) === SERVER_FALLBACK_TRIO ? undefined : list;
 }
 
+/** A word for reaching a line, in any form: "call", "calling", "texted", "contact". */
+const REACH = String.raw`\b(?:call|text|dial|phone|chat|contact)\w*`;
+
 /**
- * Crisis lines as the companion gives them: 988 with a call or text, the
- * Lifeline by name, the Crisis Text Line, and the domestic violence hotline.
- * A bare "988" is not enough, so a year such as 988 AD does not count.
+ * Crisis lines as a reply can give them, matched loosely on purpose: hiding
+ * chips under a reply that did not need it costs little, and a chip under a
+ * crisis answer is the harm this module exists to stop.
+ *
+ * - 988 or 911 with a way to reach it on either side: "call or text 988",
+ *   "calling or texting 988", "contact 988", "988 by call or text",
+ *   "988 (call or text)". A bare 988, such as the year 988 AD, does not count.
+ * - A lifeline, hotline, helpline or crisis line by name: the 988 Lifeline,
+ *   the Crisis Text Line, the domestic violence hotline. The metaphor counts
+ *   too.
+ * - The numbers: 741741 for the Crisis Text Line; 799-7233, 799-SAFE and
+ *   88788 for the domestic violence hotline; 273-8255 and 273-TALK, the old
+ *   Lifeline number.
  */
 const CRISIS_LINES: readonly RegExp[] = [
-  /\b(?:call|text|dial)\b[^.\n]{0,12}\b988\b/i,
-  /\b988\b[\s(]{0,3}(?:suicide|crisis|lifeline)/i,
-  /\b741741\b/,
-  /\b799-?7233\b/,
-  /\bcrisis (?:text )?line\b|\bcrisis lifeline\b/i,
+  new RegExp(String.raw`${REACH}\b[^.\n]{0,40}\b(?:988|911)\b`, 'i'),
+  new RegExp(String.raw`\b(?:988|911)\b[^.\n]{0,40}${REACH}`, 'i'),
+  /\b(?:life|hot|help)line\b|\bcrisis (?:text )?line\b/i,
+  /\b741741\b|\b88788\b/,
+  /\b799[-. ]?(?:7233|safe)\b/i,
+  /\b273[-. ]?(?:8255|talk)\b/i,
 ];
 
 /**
@@ -96,7 +120,8 @@ export function fallbackSuggestions({ seed, conversationId, replyIndex }: Fallba
  *
  * - A reply that gives a crisis line shows none, whatever the server sent.
  * - A list the server sent is final, an empty one included.
- * - Only a reply with no list at all draws from the fallback pool.
+ * - Only a reply with no list draws from the fallback pool. `sent` comes
+ *   from readSuggestionList, which reads the server's fixed trio as no list.
  */
 export function replySuggestions(
   sent: readonly string[] | undefined,

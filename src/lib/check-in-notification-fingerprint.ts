@@ -19,6 +19,7 @@ export interface CheckInFingerprintInputs {
   eveningByDay: CheckInByDay;
   hasCompletedOnboarding: boolean;
   todayCarryLine: string;
+  todayCompanionNudge: string;
   notificationPermissionEpoch: number;
   trialNoticeEpoch: number;
   deviceTimezone: string;
@@ -42,6 +43,7 @@ export function buildCheckInFingerprint(inputs: CheckInFingerprintInputs): strin
     inputs.eveningByDay,
     inputs.hasCompletedOnboarding ? '1' : '0',
     inputs.todayCarryLine,
+    inputs.todayCompanionNudge,
     inputs.notificationPermissionEpoch,
     inputs.trialNoticeEpoch,
     inputs.deviceTimezone,

@@ -9,7 +9,7 @@ import {
 } from '../home-devotional-state';
 import type { Devotional, DevotionalDay } from '../store';
 import { dayIndexFor } from '../variation-bag';
-import { getEveningWindDownCopy, getMiddayCheckInBody, getMiddayCheckInCopy } from '@/constants/check-in-messages';
+import { getMiddayCheckInBody, getMiddayCheckInCopy } from '@/constants/check-in-messages';
 
 const today = new Date(2026, 3, 25, 12, 0, 0);
 
@@ -310,11 +310,11 @@ describe('getTodayDayContext', () => {
       expect(context?.companionNudge).toBeUndefined();
     });
 
-    it('keeps the nudge off the midday card and both banners until the read', () => {
+    it('keeps the nudge off the midday card and banner until the read', () => {
+      // check-in-write-result.test.ts covers the banner being rewritten after the read.
       const context = getTodayDayContext(unread(), today);
       expect(getMiddayCheckInBody(context, null, variation)).not.toContain('whose name you carry');
       expect(getMiddayCheckInCopy(context, null, variation).body).not.toContain('whose name you carry');
-      expect(getEveningWindDownCopy(context, variation).body).not.toContain('whose name you carry');
     });
 
     it('brings the nudge back once the day is read today', () => {

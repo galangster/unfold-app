@@ -205,3 +205,18 @@ export function getTodayDayContext(
     companionNudge: getDaysReadToday(devotional, now).length > 0 ? day.companionNudge : undefined,
   };
 }
+
+/**
+ * Today's companion nudge as the midday check-in copy carries it: the nudge
+ * of the day finished today, or null before a read (getTodayDayContext). The
+ * check-in fingerprint holds it next to the carry line, so a read that
+ * brings the nudge rewrites today's banner even on a day with no carry line.
+ */
+export function getTodayCompanionNudge(
+  devotionals: readonly Devotional[],
+  currentDevotionalId: string | null | undefined,
+  now = new Date(),
+): string | null {
+  const devotional = getCurrentDevotional(devotionals, currentDevotionalId);
+  return getTodayDayContext(devotional, now)?.companionNudge?.trim() || null;
+}

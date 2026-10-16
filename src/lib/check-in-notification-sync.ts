@@ -13,7 +13,7 @@
  */
 
 import { useUnfoldStore } from '@/lib/store';
-import { getTodayCarryLine } from '@/lib/home-devotional-state';
+import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import {
   scheduleMiddayCheckIn,
@@ -57,6 +57,7 @@ export function readCheckInFingerprintInputs(): CheckInFingerprintInputs {
     eveningByDay: state.eveningWindDownByDay,
     hasCompletedOnboarding: !!state.user?.hasCompletedOnboarding,
     todayCarryLine: getTodayCarryLine(state.devotionals, state.currentDevotionalId) ?? '',
+    todayCompanionNudge: getTodayCompanionNudge(state.devotionals, state.currentDevotionalId) ?? '',
     notificationPermissionEpoch: ui.notificationPermissionEpoch,
     trialNoticeEpoch: ui.trialNoticeEpoch,
     deviceTimezone: getDeviceTimezone() ?? '',

@@ -322,6 +322,32 @@ describe('syncWidgets follows the day Today shows', () => {
   beforeEach(() => jest.useFakeTimers({ now: new Date(2026, 9, 7, 14, 0) }));
   afterEach(() => jest.useRealTimers());
 
+  it('pushes no extra timeline each day while the next day stays off the device', () => {
+    const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
+      buildWidgetTimelineEntries: jest.Mock;
+    };
+    buildWidgetTimelineEntries.mockImplementation(
+      jest.requireActual('@/lib/widget-timeline').buildWidgetTimelineEntries
+    );
+    try {
+      const todayWidget = (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline;
+      showSeries(series());
+      syncWidgets();
+      // Thursday: the read moved to yesterday, so what the widget shows changes once.
+      jest.setSystemTime(new Date(2026, 9, 8, 14, 0));
+      syncWidgets();
+      expect(todayWidget).toHaveBeenCalledTimes(2);
+      // Friday and Saturday of the same week: only the midnight line would turn over.
+      for (const date of [9, 10]) {
+        jest.setSystemTime(new Date(2026, 9, date, 14, 0));
+        syncWidgets();
+      }
+      expect(todayWidget).toHaveBeenCalledTimes(2);
+    } finally {
+      buildWidgetTimelineEntries.mockImplementation(() => [{ date: new Date(), props: {} }]);
+    }
+  });
+
   it('pushes the day read today, then pushes once more when the next day lands', () => {
     const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
       buildWidgetTimelineEntries: jest.Mock;
