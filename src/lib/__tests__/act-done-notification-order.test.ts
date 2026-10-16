@@ -8,11 +8,16 @@ import { actNoteOrdinal, takeCompletionOrdinal } from '../copy-variation';
 import { countReadsBefore } from '../devotional-day-access';
 import { setupNotificationListeners } from '../push-notifications';
 
-type ShelfDay = { dayNumber: number; isRead: boolean; readAt: string };
+type ShelfDay = { dayNumber: number; isRead: boolean; readAt: string; actOutcome?: string };
 const mockListeners: ((response: unknown) => void)[] = [];
 const mockMemory = new Map<string, string>();
 const mockShelf: { devotionals: { id: string; days: ShelfDay[] }[] } = { devotionals: [] };
-const mockSetActOutcome = jest.fn();
+// Like the store, marking the act writes it on the day, so a hold that ran
+// after the mark would find the act marked and keep no order.
+const mockSetActOutcome = jest.fn((devotionalId: string, dayNumber: number, outcome: string) => {
+  const day = mockShelf.devotionals.find((item) => item.id === devotionalId)?.days.find((item) => item.dayNumber === dayNumber);
+  if (day) day.actOutcome = outcome;
+});
 
 jest.mock('expo-notifications', () => ({
   __esModule: true,
@@ -57,6 +62,7 @@ jest.mock('../api-config', () => ({
 jest.mock('../store', () => ({
   useUnfoldStore: {
     getState: () => ({ devotionals: mockShelf.devotionals, setActOutcome: mockSetActOutcome }),
+    setState: jest.fn(),
   },
 }));
 jest.mock('../logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
@@ -105,5 +111,20 @@ describe('the act reminder’s “I did it” button', () => {
     expect(second).toBe(first + 1);
     expect(actOutcomeNote('done', completionVariation('install-a', second)))
       .not.toBe(actOutcomeNote('done', completionVariation('install-a', first)));
+  });
+
+  it('keeps the history place for a day read elsewhere whose place no other day holds', () => {
+    // Days 1 to 3 and Day 5 are finished here; Day 4 is finished on another device.
+    const at = (day: number) => new Date(2026, 9, 10 + day, 9);
+    mockShelf.devotionals = [{ id: 'series', days: [1, 2, 3, 4, 5].map((day) => read(day, at(day))) }];
+    for (const day of [1, 2, 3, 5]) takeCompletionOrdinal(day - 1, { devotionalId: 'series', dayNumber: day });
+
+    tapActDone('series', 4);
+
+    const ordinalOf = (dayNumber: number) =>
+      actNoteOrdinal(mockShelf.devotionals, { devotionalId: 'series', dayNumber, readAt: at(dayNumber).toISOString() });
+    expect([3, 4, 5].map(ordinalOf)).toEqual([2, 3, 4]);
+    // The next overlay still steps past the last one this device opened.
+    expect(takeCompletionOrdinal(0)).toBe(5);
   });
 });

@@ -168,6 +168,31 @@ describe('an act first marked on this device', () => {
     // Neither call took an order.
     expect(takeCompletionOrdinal(0)).toBe(6);
   });
+
+  it('keeps the history place when no other day holds it, even with no order kept on this device', () => {
+    // Days finished before this build hold no order, and Day 2's act was marked then.
+    const at = (day: number) => new Date(2026, 9, 10 + day, 9);
+    const shelf = [{ id: 'series', days: [read(1, at(1)), { ...read(2, at(2)), actOutcome: 'done' }, read(3, at(3))] }];
+
+    holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 3 });
+
+    expect(actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 3, readAt: at(3).toISOString() })).toBe(2);
+    // Keeping a place takes no overlay order.
+    expect(takeCompletionOrdinal(0)).toBe(0);
+  });
+
+  it('looks the day up in its own series', () => {
+    const at = new Date(2026, 9, 16, 9);
+    // Another series has a Day 1 whose act is marked, listed first.
+    const shelf = [
+      { id: 'other', days: [{ ...read(1, new Date(2026, 9, 15, 9)), actOutcome: 'done' }] },
+      { id: 'series', days: [read(1, at)] },
+    ];
+
+    holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 1 });
+
+    expect(mockValues.get(`${COPY_MEMORY_KEY_PREFIX}day-ordinal-series:1`)).toBe('1');
+  });
 });
 
 describe('the tap cue each fire date carried', () => {

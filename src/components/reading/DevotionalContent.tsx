@@ -181,11 +181,12 @@ export function DevotionalContent({
 
   // The act note is drawn for this day's completion, at the order this device
   // holds for the day (actNoteOrdinal): the order its overlay took, or, for a
-  // day finished on another device, the one it took when its act was first
-  // marked here. Two days one after the other get different notes, on one
-  // day, across midnight, or with a series deleted between them. Worked out
-  // only once the act is marked, and again only when the day or the history
-  // changes.
+  // day finished on another device, before this build, or in onboarding, the
+  // one it kept when its act was first marked here (its place in the history,
+  // or the next order when another day holds that place). Two days one after
+  // the other get different notes, on one day, across midnight, or with a
+  // series deleted between them. Worked out only once the act is marked, and
+  // again only when the day or the history changes.
   const { readAt } = day;
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const actNote = useMemo(() => {

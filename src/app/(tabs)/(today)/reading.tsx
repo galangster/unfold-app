@@ -95,7 +95,8 @@ import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
 import { getCompletionNextStep } from '@/lib/completion-next-step';
-import { copySeed, holdActNoteOrdinal, takeCompletionOrdinal } from '@/lib/copy-variation';
+import { markActOutcome } from '@/lib/act-outcome';
+import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -332,7 +333,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
-  const setActOutcome = useUnfoldStore((s) => s.setActOutcome);
   const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -2923,10 +2923,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onActLocated={handleTargetHighlightLocated}
                 onActOutcome={(outcome) => {
                   if (!effectiveDevotionalId) return;
-                  // A day finished on another device takes an order before
-                  // its note draws, so the note steps past this device's last.
-                  holdActNoteOrdinal(useUnfoldStore.getState().devotionals, { devotionalId: effectiveDevotionalId, dayNumber: viewingDay });
-                  setActOutcome(effectiveDevotionalId, viewingDay, outcome);
+                  markActOutcome(effectiveDevotionalId, viewingDay, outcome);
                   logEvent('act_outcome', { outcome, source: 'reading' });
                 }}
                 onScriptureTap={(ref, savedPassage) => {
