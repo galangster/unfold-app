@@ -218,6 +218,19 @@ describe('an act first marked on this device', () => {
     expect(actNoteOrdinal(shelf, { devotionalId: 'series-b', dayNumber: 1, readAt: at(5).toISOString() })).toBe(5);
   });
 
+  it('keeps the onboarding reading at its own overlay place when its act is marked', () => {
+    // The onboarding overlay takes order 0 and keeps no day.
+    takeCompletionOrdinal(0);
+    const at = new Date(2026, 9, 16, 9);
+    const shelf = [{ id: 'first-reading', days: [read(1, at)] }];
+
+    holdActNoteOrdinal(shelf, { devotionalId: 'first-reading', dayNumber: 1 });
+
+    // A place equal to the floor that no day holds is kept, and the floor stays.
+    expect(actNoteOrdinal(shelf, { devotionalId: 'first-reading', dayNumber: 1, readAt: at.toISOString() })).toBe(0);
+    expect(takeCompletionOrdinal(1, { devotionalId: 'series', dayNumber: 1 })).toBe(1);
+  });
+
   it('looks the day up in its own series', () => {
     const at = new Date(2026, 9, 16, 9);
     // Another series has a Day 1 whose act is marked, listed first.
