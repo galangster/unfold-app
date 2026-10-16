@@ -837,6 +837,37 @@ describe('reader next step after a finished day', () => {
     act(() => second.tree.unmount());
   });
 
+  it('keeps two act notes apart when the next day is finished on another device after a delete', async () => {
+    seedWithFirstReading({ act: 'Send one honest line to a friend.' });
+    const noteAt = (ordinal = 0) => actOutcomeNote('done', completionVariation(copySeed(), ordinal));
+    // 1. Day 1 is finished here, and its act marked.
+    const first = await finishDay(1);
+    const firstNote = await markActDone(first.tree);
+    expect(firstNote).toBe(noteAt(first.shown.ordinal));
+    act(() => first.tree.unmount());
+
+    // 2. The one-reading series before it is deleted.
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
+    // 3. Day 2 is finished on another device, and its read syncs here.
+    const readElsewhere = new Date(Date.now() - 60_000).toISOString();
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((row) => ({
+        ...row,
+        days: row.days.map((day) => (day.dayNumber === 2 ? { ...day, isRead: true, readAt: readElsewhere } : day)),
+      })),
+    }));
+
+    // 4. Its act is marked here. By the history alone its note would take
+    // Day 1's order and words.
+    mockReaderParams.dayNumber = '2';
+    const dayTwo = await renderAt(PHONE);
+    const secondNote = await markActDone(dayTwo);
+    expect(secondNote).toBe(noteAt((first.shown.ordinal ?? 0) + 1));
+    expect(secondNote).not.toBe(firstNote);
+    act(() => dayTwo.unmount());
+  });
+
   it('keeps the first reader overlay apart from the onboarding one when the first reading is deleted between them', async () => {
     seedWithFirstReading();
     const onboardingOverlay = () => (

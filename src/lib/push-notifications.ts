@@ -30,6 +30,7 @@ import {
   scheduleRemindLater,
 } from '@/lib/notifications';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { holdActNoteOrdinal } from '@/lib/copy-variation';
 import {
   buildNotificationPreferenceRequestBody,
   buildPushRegistrationRequestBody,
@@ -393,7 +394,11 @@ function handleNotificationAction(response: Notifications.NotificationResponse):
       const devotionalId = typeof data?.devotionalId === 'string' ? data.devotionalId : null;
       const dayNumber = Number(data?.dayNumber);
       if (devotionalId && Number.isInteger(dayNumber)) {
-        useUnfoldStore.getState().setActOutcome(devotionalId, dayNumber, 'done');
+        const store = useUnfoldStore.getState();
+        // As in the reader: a day finished on another device takes an order
+        // before its act is marked, so its note steps past this device's last.
+        holdActNoteOrdinal(store.devotionals, { devotionalId, dayNumber });
+        store.setActOutcome(devotionalId, dayNumber, 'done');
       }
       logEvent('act_outcome', { outcome: 'done', source: 'notification_action' });
       return true;

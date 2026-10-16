@@ -10,6 +10,7 @@ import {
   actNoteOrdinal,
   COPY_MEMORY_KEY_PREFIX,
   cueCarriedBefore,
+  holdActNoteOrdinal,
   readCarriedCues,
   rememberCarriedCues,
   takeCompletionOrdinal,
@@ -124,6 +125,48 @@ describe('completion order on this device', () => {
     // Without a series it goes by the history. Without a read time either, it draws at 0.
     expect(actNoteOrdinal(history, { readAt })).toBe(1);
     expect(actNoteOrdinal(history, {})).toBe(0);
+  });
+});
+
+describe('an act first marked on this device', () => {
+  it('takes the next order for a day finished on another device, so its note steps past the last one', () => {
+    // 1. Day 1 is finished here, with a one-reading series before it.
+    const firstReading = { id: 'first-reading', days: [read(1, new Date(2026, 9, 14, 9))] };
+    const firstAt = new Date(2026, 9, 15, 9);
+    const first = takeCompletionOrdinal(
+      countReadsBefore([firstReading, { days: [] }], firstAt),
+      { devotionalId: 'series', dayNumber: 1 },
+    );
+    // 2. That series is deleted. 3. Day 2 is finished on another device, and its read syncs here.
+    const secondAt = new Date(2026, 9, 16, 9);
+    const shelf = [{ id: 'series', days: [read(1, firstAt), read(2, secondAt)] }];
+    // By the history alone, Day 2 would take Day 1's order.
+    expect(countReadsBefore(shelf, secondAt)).toBe(first);
+
+    // 4. Its act is marked here.
+    holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 2 });
+
+    const second = actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 2, readAt: secondAt.toISOString() });
+    expect(second).toBe(first + 1);
+    for (const outcome of ACT_OUTCOMES) {
+      expect(actOutcomeNote(outcome, completionVariation('install-a', second)))
+        .not.toBe(actOutcomeNote(outcome, completionVariation('install-a', first)));
+    }
+  });
+
+  it('leaves a day that holds an order already, or whose act was marked before', () => {
+    const readAt = new Date(2026, 9, 16, 9).toISOString();
+    const shelf = [{ id: 'series', days: [read(1, new Date(2026, 9, 15, 9)), { ...read(2, new Date(readAt)), actOutcome: 'done' }] }];
+    takeCompletionOrdinal(5, { devotionalId: 'series', dayNumber: 1 });
+
+    holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 1 });
+    holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 2 });
+
+    expect(actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 1 })).toBe(5);
+    // Day 2 was marked before orders were kept, so it keeps its place in the history.
+    expect(actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 2, readAt })).toBe(1);
+    // Neither call took an order.
+    expect(takeCompletionOrdinal(0)).toBe(6);
   });
 });
 

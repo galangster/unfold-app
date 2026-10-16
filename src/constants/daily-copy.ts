@@ -114,11 +114,11 @@ export const SERIES_COMPLETE_TITLES = [
  * `ordinal` is the number of readings finished before this one, across every
  * series (countReadsBefore), and never below one past the last overlay this
  * device opened (takeCompletionOrdinal), so a deleted series cannot move it
- * back. A day finished on this device keeps that order for its act note
- * (actNoteOrdinal). Two completions in a row are next to each other in the
- * bag, so they never share an entry, whether they fall on one day or on
- * either side of midnight. A day finished on another device goes by the
- * history alone, which a delete or a sync can still move.
+ * back. A day finished on this device keeps that order for its act note,
+ * and a day finished on another device takes one when its act is first
+ * marked here (actNoteOrdinal). Two completions in a row are next to each
+ * other in the bag, so they never share an entry, whether they fall on one
+ * day or on either side of midnight.
  */
 export function completionVariation(seed: string, ordinal: number): CopyVariation {
   return { seed, dayIndex: ordinal };

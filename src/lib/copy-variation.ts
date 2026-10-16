@@ -54,7 +54,7 @@ export function copyVariationFor(date: Date): CopyVariation {
 
 // ─── Copy memory ────────────────────────────────────────────────────────────
 // What this device last showed, so the next draw can step past it, and the
-// order each day finished here took, so its act note keeps it. It lives
+// order each day's act note draws at, so the note keeps it. It lives
 // here, on this device only, beside the seed: nothing is synced and no
 // stored day changes. Every key starts with COPY_MEMORY_KEY_PREFIX, which the
 // full reset sweeps (full-reset.ts).
@@ -110,22 +110,50 @@ export function takeCompletionOrdinal(readsBefore: number, finished?: SeriesDay)
   return ordinal;
 }
 
+/** The order this device holds for a day, if it took one. */
+function keptDayOrdinal(day: SeriesDay): number | undefined {
+  const kept = Number(readMemory(dayOrdinalKey(day)) ?? Number.NaN);
+  return Number.isInteger(kept) && kept >= 0 ? kept : undefined;
+}
+
+/** The series and their days, as the store holds them, for one day's lookup. */
+type ShelfProgress = readonly {
+  id: string;
+  days: readonly { dayNumber: number; isRead?: boolean; readAt?: string; actOutcome?: string }[];
+}[];
+
 /**
- * The completion order a day's act note draws at. A day finished on this
- * device keeps the order its overlay took, so the note steps with the
- * overlay and a series deleted since cannot move it. Any other day, such as
- * one finished on another device, goes by the readings finished before its
+ * Takes an order for a day whose act is being marked on this device for the
+ * first time, before its note draws (actNoteOrdinal). A day finished here
+ * already holds the order its overlay took, so nothing changes. A day
+ * finished on another device holds none, and after a delete its place in the
+ * history can be the order the day before it holds. So it takes the next
+ * order now (takeCompletionOrdinal), and its note steps past the last order
+ * this device used.
+ */
+export function holdActNoteOrdinal(devotionals: ShelfProgress, day: SeriesDay): void {
+  if (keptDayOrdinal(day) !== undefined) return;
+  const row = devotionals.find((devotional) => devotional.id === day.devotionalId)
+    ?.days.find((item) => item.dayNumber === day.dayNumber);
+  if (row?.actOutcome) return;
+  takeCompletionOrdinal(row?.readAt ? countReadsBefore(devotionals, new Date(row.readAt)) : 0, day);
+}
+
+/**
+ * The completion order a day's act note draws at: the order this device
+ * holds for the day. A day finished here holds the order its overlay took,
+ * and a day finished elsewhere takes one when its act is first marked here
+ * (holdActNoteOrdinal), so the note steps past this device's last one and a
+ * series deleted since cannot move it. A day with no order, such as one
+ * marked before orders were kept, goes by the readings finished before its
  * read time, which a delete or a sync can still move.
  */
 export function actNoteOrdinal(
   devotionals: readonly Pick<DevotionalReadingProgress, 'days'>[],
   { devotionalId, dayNumber, readAt }: Partial<SeriesDay> & { readAt?: string },
 ): number {
-  if (devotionalId && dayNumber !== undefined) {
-    const kept = Number(readMemory(dayOrdinalKey({ devotionalId, dayNumber })) ?? Number.NaN);
-    if (Number.isInteger(kept) && kept >= 0) return kept;
-  }
-  return readAt ? countReadsBefore(devotionals, new Date(readAt)) : 0;
+  const kept = devotionalId && dayNumber !== undefined ? keptDayOrdinal({ devotionalId, dayNumber }) : undefined;
+  return kept ?? (readAt ? countReadsBefore(devotionals, new Date(readAt)) : 0);
 }
 
 /**
