@@ -6,11 +6,12 @@ import { logger } from '@/lib/logger';
 import {
   getEveningWindDownCopy,
   getMiddayCheckInCopy,
+  type CheckInBannerCopy,
   type CopyVariation,
   type DayContext,
 } from '@/constants/check-in-messages';
 import { buildCheckInSchedule, getAllCheckInIdentifiers } from '@/lib/check-in-schedule';
-import { copySeed } from '@/lib/copy-variation';
+import { copySeed, cueCarriedBefore, readCarriedCues, rememberCarriedCues } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import {
   getCurrentDevotional,
@@ -913,9 +914,11 @@ interface CheckInSlot {
   /**
    * Copy for one occurrence. `today` is the devotional context when this
    * occurrence lands on today, and null on every later day — those days have
-   * no content yet and draw from the seeded pools instead.
+   * no content yet and draw from the seeded pools instead. `previousCue` is
+   * the tap cue the slot's fire date before this one carried, and the copy's
+   * `cue` is the one this occurrence carries.
    */
-  copyFor: (today: DayContext | null, variation: CopyVariation) => { title: string; body: string };
+  copyFor: (today: DayContext | null, variation: CopyVariation, previousCue?: string) => CheckInBannerCopy;
 }
 
 /**
@@ -974,17 +977,29 @@ async function scheduleCheckInSlot(
   }
 
   const seed = copySeed();
+  // Copy in fire-date order, carrying each banner's tap cue to the next, so
+  // no banner repeats the cue the fire date before it carried. The first one
+  // looks up the cue the last batch wrote for the fire date before it.
+  const carried = readCarriedCues(slot.idBase);
+  let previousCue = cueCarriedBefore(carried, occurrences[0].dayIndex);
+  const copies = occurrences.map((occurrence) => {
+    const isToday = occurrence.dayIndex === todayDayIndex;
+    const copy = slot.copyFor(isToday ? today : null, { seed, dayIndex: occurrence.dayIndex }, previousCue);
+    previousCue = copy.cue;
+    return copy;
+  });
+  rememberCarriedCues(slot.idBase, carried, occurrences.map((occurrence, i) => ({
+    dayIndex: occurrence.dayIndex,
+    cue: copies[i].cue,
+  })));
+
   // Written concurrently: identifiers are unique per occurrence and no write
   // reads another's result, so 14 serial bridge round trips buy nothing. The
   // per-occurrence catch stays inside the map — one failed write must not
   // discard the other thirteen, which is what Promise.all's fail-fast would do.
   const written = await Promise.all(
-    occurrences.map(async (occurrence) => {
-      const isToday = occurrence.dayIndex === todayDayIndex;
-      const { title, body } = slot.copyFor(isToday ? today : null, {
-        seed,
-        dayIndex: occurrence.dayIndex,
-      });
+    occurrences.map(async (occurrence, i) => {
+      const { title, body } = copies[i];
       try {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: occurrence.id,
@@ -1038,7 +1053,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       dataType: 'midday-checkin',
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
-      copyFor: (today, variation) => getMiddayCheckInCopy(today, today ? carryLine : null, variation),
+      copyFor: (today, variation, previousCue) => getMiddayCheckInCopy(today, today ? carryLine : null, variation, previousCue),
     },
     getTodayDayContext(currentDevotional),
     dayIndexFor(clock?.now ?? new Date()),

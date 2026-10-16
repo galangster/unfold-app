@@ -7,9 +7,10 @@ import { drawCopy } from './variation-bag';
 /**
  * The "Up next" step of the completion overlay. `now` decides the next day's
  * state. The paragraph steps once per completion through the bag: `seed` is
- * the install's copy seed (copySeed()), and `ordinal` is the number of
- * readings finished before this one (countReadsBefore), so two completions in
- * a row never get the same paragraph.
+ * the install's copy seed (copySeed()), and `ordinal` is this completion's
+ * place: the readings finished before it (countReadsBefore), never below one
+ * past the last overlay this device opened (takeCompletionOrdinal). So two
+ * completions in a row never get the same paragraph.
  */
 export function getCompletionNextStep(
   devotional: Devotional | null | undefined,

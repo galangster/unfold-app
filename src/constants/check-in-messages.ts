@@ -499,46 +499,37 @@ function bannerTitle(
 }
 
 /**
- * How many days back a stepped cue retraces. Two lookbacks that start on
- * different days agree from the first day a cue is settled either way, so
- * the cap almost never matters.
+ * The tap cue for a sentence of `length` characters: the first cue from the
+ * day's draw onward that fits and is not `previousCue`, the cue the slot's
+ * fire date before this one carried. The notification batch works its fire
+ * dates out in order and carries each cue to the next, and it keeps the
+ * last cues it wrote, so the next batch's first banner knows the one before
+ * it (lib/copy-variation.ts). When only one cue fits, it shows even when the
+ * day before carried it too: that repeat stands, because a cue is better
+ * than none. Undefined when no cue fits.
  */
-const CUE_LOOKBACK = 40;
-
-/**
- * The tap cue for a sentence of `length` characters: the day's draw when
- * every cue fits, which the bag keeps off yesterday's. Otherwise the first
- * cue from the day's draw onward that fits and that the day before did not
- * show. That day is taken to have had a sentence of the same length, as a
- * long nudge or act runs from day to day. Two cues that fit take turns. When
- * only one fits, it shows every day: that repeat stands, because a cue is
- * better than none. Undefined when no cue fits.
- */
-function tapCue(length: number, variation: CopyVariation, field: string, lookback = CUE_LOOKBACK): string | undefined {
-  const rotation = drawRotation(CHECK_IN_TAP_CUES, variation, field);
-  const fitting = rotation.filter((cue) => length + 1 + cue.length <= MAX_NOTIFICATION_BODY);
-  if (fitting.length === rotation.length || fitting.length <= 1) return fitting[0];
-  if (fitting.length === 2) {
-    // In pool order, by day, from a start the install's seed picks.
-    const [first, second] = CHECK_IN_TAP_CUES.filter((cue) => fitting.includes(cue));
-    const turn = drawCopy([0, 1], { ...variation, dayIndex: 0 }, `${field}-turn`);
-    return (variation.dayIndex + turn) % 2 === 0 ? first : second;
-  }
-  if (lookback === 0) return fitting[0];
-  const shownBefore = tapCue(length, { ...variation, dayIndex: variation.dayIndex - 1 }, field, lookback - 1);
-  return fitting.find((cue) => cue !== shownBefore) ?? fitting[0];
+function tapCue(length: number, variation: CopyVariation, field: string, previousCue?: string): string | undefined {
+  const fitting = drawRotation(CHECK_IN_TAP_CUES, variation, field)
+    .filter((cue) => length + 1 + cue.length <= MAX_NOTIFICATION_BODY);
+  return fitting.find((cue) => cue !== previousCue) ?? fitting[0];
 }
 
 /**
  * The banner body: the day's sentence, then a tap cue that fits inside the
  * 150 characters (tapCue). The cue drops only when the shortest one does not
- * fit, and a banner with no sentence keeps the cue alone.
+ * fit, and a banner with no sentence keeps the cue alone. `cue` is the cue
+ * the body carries, for the next fire date to step past.
  */
-function bannerBody(selected: string, variation: CopyVariation, field: string): string {
+function bannerBody(
+  selected: string,
+  variation: CopyVariation,
+  field: string,
+  previousCue?: string,
+): { body: string; cue?: string } {
   const message = selected.trim();
-  const cue = tapCue(message.length, variation, field);
-  if (!message) return cue ?? '';
-  return cue ? `${message} ${cue}` : truncateNotificationBody(message);
+  const cue = tapCue(message.length, variation, field, previousCue);
+  if (!message) return { body: cue ?? '', cue };
+  return cue ? { body: `${message} ${cue}`, cue } : { body: truncateNotificationBody(message) };
 }
 
 /** The line the check-in sheet shows once an answer is saved. */
@@ -737,9 +728,20 @@ export function getEveningWindDownBody(
 }
 
 /**
+ * One check-in banner: its title and body, and the tap cue the body carries
+ * (none when the sentence needs the room), for the next fire date.
+ */
+export interface CheckInBannerCopy {
+  title: string;
+  body: string;
+  cue?: string;
+}
+
+/**
  * A slot's banner for its selected sentence: the title, and the body with its
  * tap cue. `contextFreeBody` is the sentence the slot selects for a day with
  * no reading context, which is how every day but today is scheduled.
+ * `previousCue` is the cue the slot's fire date before this one carried.
  */
 function bannerCopy(
   titles: readonly string[],
@@ -747,10 +749,11 @@ function bannerCopy(
   contextFreeBody: (variation: CopyVariation) => string,
   variation: CopyVariation,
   slot: 'midday' | 'evening',
-): { title: string; body: string } {
+  previousCue?: string,
+): CheckInBannerCopy {
   return {
     title: bannerTitle(titles, variation, `${slot}-title`, body, contextFreeBody),
-    body: bannerBody(body, variation, `${slot}-cue`),
+    ...bannerBody(body, variation, `${slot}-cue`, previousCue),
   };
 }
 
@@ -759,13 +762,15 @@ export function getMiddayCheckInCopy(
   day: DayContext | null | undefined,
   carryLine: string | null | undefined,
   variation: CopyVariation,
-): { title: string; body: string } {
+  previousCue?: string,
+): CheckInBannerCopy {
   return bannerCopy(
     MIDDAY_TITLES,
     getMiddayCheckInBody(day, carryLine, variation),
     (other) => getMiddayCheckInBody(null, null, other),
     variation,
     'midday',
+    previousCue,
   );
 }
 
@@ -773,12 +778,14 @@ export function getMiddayCheckInCopy(
 export function getEveningWindDownCopy(
   day: DayContext | null | undefined,
   variation: CopyVariation,
-): { title: string; body: string } {
+  previousCue?: string,
+): CheckInBannerCopy {
   return bannerCopy(
     EVENING_TITLES,
     getEveningWindDownBody(day, variation),
     (other) => getEveningWindDownBody(null, other),
     variation,
     'evening',
+    previousCue,
   );
 }

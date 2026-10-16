@@ -112,9 +112,11 @@ export const SERIES_COMPLETE_TITLES = [
  * The draw for a finished reading. The completion overlay, its "Up next"
  * paragraph and the act note step once per completion, not once per day:
  * `ordinal` is the number of readings finished before this one, across every
- * series (countReadsBefore). Two completions in a row are next to each other
- * in the bag, so they never share an entry, whether they fall on one day or
- * on either side of midnight.
+ * series (countReadsBefore). For the overlay it is also never below one past
+ * the last overlay this device opened (takeCompletionOrdinal), so a deleted
+ * series cannot move it back. Two completions in a row are next to each
+ * other in the bag, so they never share an entry, whether they fall on one
+ * day or on either side of midnight.
  */
 export function completionVariation(seed: string, ordinal: number): CopyVariation {
   return { seed, dayIndex: ordinal };

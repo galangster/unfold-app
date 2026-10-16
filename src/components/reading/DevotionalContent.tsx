@@ -182,9 +182,10 @@ export function DevotionalContent({
 
   // The act note is drawn for this day's completion: its place among every
   // reading finished, from the read timestamps. Two days read one after the
-  // other get different notes, on one day or across midnight, and a past
-  // day's note stays put. The count reruns only when the history or this
-  // day's read time changes.
+  // other get different notes, on one day or across midnight. The note is
+  // worked out from the history each time, so deleting a series read before
+  // this day, or a sync that adds earlier reads, moves it to another note.
+  // The count reruns only when the history or this day's read time changes.
   const { readAt } = day;
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const actNoteOrdinal = useMemo(

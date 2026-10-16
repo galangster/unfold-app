@@ -95,7 +95,7 @@ import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
 import { getCompletionNextStep } from '@/lib/completion-next-step';
-import { copySeed } from '@/lib/copy-variation';
+import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -407,7 +407,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   // This completion's place in the reader's history: the readings finished
-  // before it. The overlay draws its copy by it, once, when the day completes.
+  // before it, and past the last overlay this device opened. The overlay
+  // draws its copy by it, once, when the day completes.
   const [celebrationOrdinal, setCelebrationOrdinal] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
@@ -1506,9 +1507,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         },
         completedTimeZone: getDeviceTimezone(),
       });
-      // Counted at the read time this day is about to get, so the overlay and
-      // the day's act note (DevotionalContent) take the same place.
-      setCelebrationOrdinal(countReadsBefore(store.devotionals, clock.at));
+      // Counted at the read time this day is about to get, as the day's act
+      // note counts it (DevotionalContent), and never below one past the last
+      // overlay this device opened, so a series deleted since cannot move the
+      // count back onto that overlay.
+      setCelebrationOrdinal(takeCompletionOrdinal(countReadsBefore(store.devotionals, clock.at)));
       markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({

@@ -29,9 +29,11 @@ interface CompletionCelebrationProps {
   message?: string;
   detail?: string;
   /**
-   * The readings finished before this one, across every series
-   * (countReadsBefore). The title and line step once per completion, so two
-   * completions in a row never share them, on one day or across midnight.
+   * This completion's place: the readings finished before it, across every
+   * series, and past the last overlay this device opened
+   * (takeCompletionOrdinal). The title and line step once per completion, so
+   * two completions in a row never share them, on one day, across midnight,
+   * or with a series deleted between them.
    */
   ordinal?: number;
   seriesReflectionSummary?: string;

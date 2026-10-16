@@ -503,19 +503,37 @@ describe('check-in banners', () => {
     }
   });
 
-  it('never shows yesterday’s cue for a long sentence while another cue fits', () => {
-    // A long nudge or act runs about as long from one day to the next. From
-    // 110 to 119 characters two or more cues fit, and the cue changes daily.
-    for (let length = 110; length <= 119; length += 1) {
-      const nudge = `${'a'.repeat(length - 1)}.`;
-      for (const seed of INSTALLS) {
-        const cues = Array.from({ length: 120 }, (_, offset) => cueOf(getMiddayCheckInCopy({ companionNudge: nudge }, null, day(START + offset, seed)).body));
-        expectNoRepeatWithin(cues, 2);
-      }
+  /**
+   * The banners of a run of fire dates, each given the cue the one before it
+   * carried, as the notification batch does. A null length is a day with no
+   * reading context.
+   */
+  function cueRun(lengths: readonly (number | null)[], seed: string, days: number) {
+    let previousCue: string | undefined;
+    return Array.from({ length: days }, (_, offset) => {
+      const length = lengths[offset % lengths.length];
+      const context: DayContext | null = length === null ? null : { companionNudge: `${'a'.repeat(length - 1)}.` };
+      const copy = getMiddayCheckInCopy(context, null, day(START + offset, seed), previousCue);
+      expect(copy.body.endsWith(copy.cue ?? '')).toBe(true);
+      previousCue = copy.cue;
+      return copy.cue;
+    });
+  }
+
+  it('never repeats the cue the fire date before carried while two or more cues fit', () => {
+    // Lengths that change from day to day, a day with no reading context,
+    // and runs of one length. From 110 to 119 characters two or more cues fit.
+    const runs: (number | null)[][] = [
+      [105, 116, 112, 118, null, 119, 110, 117, 114, null, 111, 115, 118, 113],
+      [118], [119], [116], [112],
+    ];
+    for (const lengths of runs) {
+      for (const seed of INSTALLS) expectNoRepeatWithin(cueRun(lengths, seed, 120), 2);
     }
-    // From 120 characters only the shortest cue fits, so it shows every day.
-    const nudge = `${'a'.repeat(119)}.`;
-    const cues = new Set(Array.from({ length: 30 }, (_, offset) => cueOf(getMiddayCheckInCopy({ companionNudge: nudge }, null, day(START + offset)).body)));
+  });
+
+  it('shows the one cue that fits a sentence of 120 to 123 characters, even two days running', () => {
+    const cues = new Set(cueRun([120, 121, 122, 123], 'install-a', 30));
     expect(cues.size).toBe(1);
   });
 
