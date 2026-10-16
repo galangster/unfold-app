@@ -18,8 +18,8 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberSystem } from '@/components/EmberSystem';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
 import { Button } from '@/components/ui/Button';
-import { completionCopy } from '@/constants/daily-copy';
-import { copyVariationFor } from '@/lib/copy-variation';
+import { completionCopy, completionVariation } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
 
 // ─── Main component ─────────────────────────────────────────────────────────
 interface CompletionCelebrationProps {
@@ -29,10 +29,11 @@ interface CompletionCelebrationProps {
   message?: string;
   detail?: string;
   /**
-   * Readings finished earlier on this local day. The drawn title and line
-   * move on one entry for each, so a second completion today reads differently.
+   * The readings finished before this one, across every series
+   * (countReadsBefore). The title and line step once per completion, so two
+   * completions in a row never share them, on one day or across midnight.
    */
-  step?: number;
+  ordinal?: number;
   seriesReflectionSummary?: string;
   nextStep?: {
     title: string;
@@ -50,7 +51,7 @@ export function CompletionCelebration({
   type,
   message,
   detail,
-  step = 0,
+  ordinal = 0,
   seriesReflectionSummary,
   nextStep,
 }: CompletionCelebrationProps) {
@@ -65,12 +66,8 @@ export function CompletionCelebration({
     action();
   };
 
-  // Drawn for the local day each time the overlay opens, so it does not
-  // repeat yesterday's title or line, and moved on by `step` within a day.
-  const copy = useMemo(
-    () => (visible ? completionCopy(type, copyVariationFor(new Date()), step) : null),
-    [visible, type, step],
-  );
+  // Drawn for this completion, so every render of one overlay shows the same words.
+  const copy = useMemo(() => completionCopy(type, completionVariation(copySeed(), ordinal)), [type, ordinal]);
 
   // Overlay + content animation values
   const overlayOpacity = useSharedValue(0);
@@ -151,7 +148,7 @@ export function CompletionCelebration({
     opacity: hintOpacity.value,
   }));
 
-  if (!visible || !copy) return null;
+  if (!visible) return null;
 
   const { title } = copy;
   const subtitle = message || copy.message;

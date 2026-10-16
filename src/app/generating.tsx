@@ -400,14 +400,16 @@ export default function GeneratingScreen() {
   // on another day opens on a different line.
   const waitingMessages = useMemo(() => generatingStatusLines(copyVariationFor(new Date())), []);
   const [messageIndex, setMessageIndex] = useState(0);
+  // A new attempt on this screen (Try again) starts the lines over in the
+  // render that starts it, before anything commits, so a retry's first frame
+  // is the first line and never the held one that says the work is nearly done.
+  const [prevIsGenerating, setPrevIsGenerating] = useState(isGenerating);
+  if (prevIsGenerating !== isGenerating) {
+    setPrevIsGenerating(isGenerating);
+    if (isGenerating) setMessageIndex(0);
+  }
   const lastMessageIndex = waitingMessages.length - 1;
   const holdingLastMessage = messageIndex >= lastMessageIndex;
-
-  // A new attempt on this screen (Try again) starts the lines over, so a
-  // retry never opens on the line that says the work is nearly done.
-  useEffect(() => {
-    if (isGenerating) setMessageIndex(0);
-  }, [isGenerating]);
 
   // Step through the waiting messages, and stop once the last one holds.
   // The steps pause while 'Reconnecting…' covers the line, so the reader

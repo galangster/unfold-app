@@ -75,7 +75,7 @@ import {
 } from '@/lib/devotional-canonical-days';
 import {
   blockedForwardMessage,
-  countReadsEarlierOnDay,
+  countReadsBefore,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -406,9 +406,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     savedPassage?: SavedScripturePassage;
   } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
-  // Readings finished earlier on this local day. The overlay moves its copy
-  // on one entry for each, so a catch-up session does not repeat it.
-  const [celebrationStep, setCelebrationStep] = useState(0);
+  // This completion's place in the reader's history: the readings finished
+  // before it. The overlay draws its copy by it, once, when the day completes.
+  const [celebrationOrdinal, setCelebrationOrdinal] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
@@ -1491,8 +1491,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const existingDay = useUnfoldStore.getState().devotionals
       .find((row) => row.id === effectiveDevotionalId)?.days?.find((row) => row.dayNumber === viewingDay);
     if (!existingDay || existingDay.isRead) return;
-    // Counted before this day is marked read, so it counts only earlier ones.
-    setCelebrationStep(countReadsEarlierOnDay(useUnfoldStore.getState().devotionals, new Date()));
     const soundEnding = endAmbientReflection();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
@@ -1508,6 +1506,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         },
         completedTimeZone: getDeviceTimezone(),
       });
+      // Counted at the read time this day is about to get, so the overlay and
+      // the day's act note (DevotionalContent) take the same place.
+      setCelebrationOrdinal(countReadsBefore(store.devotionals, clock.at));
       markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
@@ -1584,7 +1585,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   // Only the open overlay reads the step, so a hidden render skips the draw.
   const completionNextStep = showCelebration
-    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationStep)
+    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationOrdinal)
     : null;
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
@@ -3291,7 +3292,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
         } : undefined}
         type={celebrationType}
-        step={celebrationStep}
+        ordinal={celebrationOrdinal}
         seriesReflectionSummary={
           celebrationType === 'series'
             ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary

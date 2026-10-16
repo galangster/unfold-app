@@ -187,4 +187,14 @@ describe('daily reminder content', () => {
     // Past the end there is no next reading to promise.
     expect(PAST_END_BODIES).toContain(content.body);
   });
+
+  it('keeps a paused reminder past the series end from saying the series goes on', () => {
+    const pastEnd = devotional({ currentDay: 8, totalDays: 7, days: [day({ dayNumber: 7, isRead: true })] });
+    for (let offset = 0; offset < 60; offset += 1) {
+      const content = getDailyReminderContent({ currentDevotional: pastEnd, premiumPolicy: 'denied', now: new Date(2026, 4, 14 + offset, 9), seed });
+      expect(`${content.title} ${content.body}`).toMatch(/Bible/i);
+      expect(PAUSED_NO_SERIES_BODIES).toContain(content.body);
+      expect(content.body).not.toMatch(/series|devotional/i);
+    }
+  });
 });

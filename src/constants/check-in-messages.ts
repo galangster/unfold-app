@@ -499,16 +499,45 @@ function bannerTitle(
 }
 
 /**
- * The banner body: the day's sentence, then the first tap cue from the
- * day's draw onward that fits inside the 150 characters. The cue drops only
- * when the shortest one does not fit, and a banner with no sentence keeps
- * the cue alone.
+ * How many days back a stepped cue retraces. Two lookbacks that start on
+ * different days agree from the first day a cue is settled either way, so
+ * the cap almost never matters.
+ */
+const CUE_LOOKBACK = 40;
+
+/**
+ * The tap cue for a sentence of `length` characters: the day's draw when
+ * every cue fits, which the bag keeps off yesterday's. Otherwise the first
+ * cue from the day's draw onward that fits and that the day before did not
+ * show. That day is taken to have had a sentence of the same length, as a
+ * long nudge or act runs from day to day. Two cues that fit take turns. When
+ * only one fits, it shows every day: that repeat stands, because a cue is
+ * better than none. Undefined when no cue fits.
+ */
+function tapCue(length: number, variation: CopyVariation, field: string, lookback = CUE_LOOKBACK): string | undefined {
+  const rotation = drawRotation(CHECK_IN_TAP_CUES, variation, field);
+  const fitting = rotation.filter((cue) => length + 1 + cue.length <= MAX_NOTIFICATION_BODY);
+  if (fitting.length === rotation.length || fitting.length <= 1) return fitting[0];
+  if (fitting.length === 2) {
+    // In pool order, by day, from a start the install's seed picks.
+    const [first, second] = CHECK_IN_TAP_CUES.filter((cue) => fitting.includes(cue));
+    const turn = drawCopy([0, 1], { ...variation, dayIndex: 0 }, `${field}-turn`);
+    return (variation.dayIndex + turn) % 2 === 0 ? first : second;
+  }
+  if (lookback === 0) return fitting[0];
+  const shownBefore = tapCue(length, { ...variation, dayIndex: variation.dayIndex - 1 }, field, lookback - 1);
+  return fitting.find((cue) => cue !== shownBefore) ?? fitting[0];
+}
+
+/**
+ * The banner body: the day's sentence, then a tap cue that fits inside the
+ * 150 characters (tapCue). The cue drops only when the shortest one does not
+ * fit, and a banner with no sentence keeps the cue alone.
  */
 function bannerBody(selected: string, variation: CopyVariation, field: string): string {
   const message = selected.trim();
-  const cues = drawRotation(CHECK_IN_TAP_CUES, variation, field);
-  if (!message) return cues[0];
-  const cue = cues.find((candidate) => message.length + 1 + candidate.length <= MAX_NOTIFICATION_BODY);
+  const cue = tapCue(message.length, variation, field);
+  if (!message) return cue ?? '';
   return cue ? `${message} ${cue}` : truncateNotificationBody(message);
 }
 

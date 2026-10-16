@@ -176,12 +176,13 @@ function truncateBody(text: string, maxLength = 100): string {
 
 /**
  * Bible reading and a renewal invitation, with no claim that anything is
- * being written. Only a reader with a current series gets lines that name it.
+ * being written. Only a reader whose series still has days ahead gets lines
+ * that name it and say it goes on.
  */
-function pausedContent(variation: CopyVariation, hasSeries: boolean): DailyReminderContent {
+function pausedContent(variation: CopyVariation, seriesAhead: boolean): DailyReminderContent {
   return {
     title: drawCopy(PAUSED_TITLES, variation, 'reminder-paused-title'),
-    body: hasSeries
+    body: seriesAhead
       ? drawCopy(PAUSED_SERIES_BODIES, variation, 'reminder-paused-series-body')
       : drawCopy(PAUSED_NO_SERIES_BODIES, variation, 'reminder-paused-body'),
   };
@@ -250,10 +251,6 @@ export function getDailyReminderContent({
     return { title: currentDay.title, body: 'Your next reading is waiting.' };
   }
 
-  // Premium-denied users should never see generation or "next day is being
-  // prepared" copy. That implies work is happening when the series is paused.
-  if (premiumPolicy === 'denied') return pausedContent(variation, true);
-
   // The next day is not on device yet. This is the NORMAL state at bedtime:
   // today's reading is done, tomorrow's is generated overnight and only
   // arrives when the app next opens. The reminder is baked into the OS at
@@ -262,8 +259,15 @@ export function getDailyReminderContent({
   // fetch it on open.
   const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
   const totalDays = getServerOwnedSeriesTotalDays(currentDevotional);
-  // Past the last day there is no next day to promise.
-  if (totalDays > 0 && nextDayNumber > totalDays) {
+  // Past the last day there is no next day to promise, paused or not.
+  const pastEnd = totalDays > 0 && nextDayNumber > totalDays;
+
+  // Premium-denied users should never see generation or "next day is being
+  // prepared" copy. That implies work is happening when the series is paused.
+  // Past the end, the paused lines name no series, so none says it goes on.
+  if (premiumPolicy === 'denied') return pausedContent(variation, !pastEnd);
+
+  if (pastEnd) {
     return { title: currentDevotional.title, body: drawCopy(PAST_END_BODIES, variation, 'reminder-past-end-body') };
   }
   if (nextDayNumber === 1) return firstDayContent(variation, currentDevotional.title);

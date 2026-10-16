@@ -28,6 +28,7 @@ import {
   companionGreeting,
   companionInputPlaceholder,
   completionCopy,
+  completionVariation,
   generatingStatusLines,
   heroCtaLabel,
   quietEndingCopy,
@@ -70,8 +71,9 @@ import {
 } from '../check-in-messages';
 import { getCompletionNextStep } from '@/lib/completion-next-step';
 import { getDailyReminderContent, MAX_NOTIFICATION_BODY } from '@/lib/daily-reminder-content';
+import { countReadsBefore } from '@/lib/devotional-day-access';
 import type { Devotional, DevotionalDay } from '@/lib/store';
-import { dayIndexFor, drawCopy, minimumGapFor } from '@/lib/variation-bag';
+import { dayIndexFor, minimumGapFor } from '@/lib/variation-bag';
 
 const START = dayIndexFor(new Date(2026, 0, 1));
 const LONG_RANGE = 1500;
@@ -501,6 +503,22 @@ describe('check-in banners', () => {
     }
   });
 
+  it('never shows yesterday’s cue for a long sentence while another cue fits', () => {
+    // A long nudge or act runs about as long from one day to the next. From
+    // 110 to 119 characters two or more cues fit, and the cue changes daily.
+    for (let length = 110; length <= 119; length += 1) {
+      const nudge = `${'a'.repeat(length - 1)}.`;
+      for (const seed of INSTALLS) {
+        const cues = Array.from({ length: 120 }, (_, offset) => cueOf(getMiddayCheckInCopy({ companionNudge: nudge }, null, day(START + offset, seed)).body));
+        expectNoRepeatWithin(cues, 2);
+      }
+    }
+    // From 120 characters only the shortest cue fits, so it shows every day.
+    const nudge = `${'a'.repeat(119)}.`;
+    const cues = new Set(Array.from({ length: 30 }, (_, offset) => cueOf(getMiddayCheckInCopy({ companionNudge: nudge }, null, day(START + offset)).body)));
+    expect(cues.size).toBe(1);
+  });
+
   it('keeps the cue alone when the day’s sentence is empty', () => {
     for (let offset = 0; offset < 30; offset += 1) {
       const { body } = getMiddayCheckInCopy({ checkInQuestion: '   ' }, null, day(START + offset));
@@ -520,40 +538,65 @@ describe('generating screen lines', () => {
   });
 });
 
-describe('completion overlay within one local day', () => {
-  it('opens on the day’s draw, then moves the title and line on for each later completion that day', () => {
-    for (let offset = 0; offset < 100; offset += 1) {
-      const v = day(START + offset);
-      expect(completionCopy('day', v, 0)).toEqual({
-        title: drawCopy(DAY_COMPLETE_TITLES, v, 'day-complete-title'),
-        message: drawCopy(DAY_COMPLETE_MESSAGES, v, 'day-complete'),
-      });
-      for (const [type, size] of [['day', DAY_COMPLETE_TITLES.length], ['series', SERIES_COMPLETE_TITLES.length]] as const) {
-        const overlays = Array.from({ length: size }, (_, step) => completionCopy(type, v, step));
-        expect(new Set(overlays.map((copy) => copy.title)).size).toBe(size);
-        expect(new Set(overlays.map((copy) => copy.message)).size).toBe(size);
-        // Deterministic: the same day and step give the same overlay.
-        expect(completionCopy(type, v, 1)).toEqual(overlays[1]);
-      }
-    }
+/** Noon on the first test day, for a step whose next day is not on the device. */
+const NOON = new Date(2026, 0, 1, 12);
+
+/**
+ * When a synthetic reader finished each reading: on day i, `perDay[i]`
+ * readings an hour apart from 09:00, then one sitting from 23:55 to 00:05.
+ */
+function readingTimes(perDay: readonly number[]): Date[] {
+  const days = perDay.length;
+  return [
+    ...perDay.flatMap((count, offset) => Array.from({ length: count }, (_, i) => new Date(2026, 0, 1 + offset, 9 + i))),
+    new Date(2026, 0, days, 23, 55),
+    new Date(2026, 0, days + 1, 0, 5),
+  ];
+}
+
+/** Every completion field, drawn for one completion. */
+const COMPLETION_FIELDS: Record<string, (variation: CopyVariation) => string> = {
+  dayTitle: (v) => completionCopy('day', v).title,
+  dayLine: (v) => completionCopy('day', v).message,
+  seriesTitle: (v) => completionCopy('series', v).title,
+  seriesLine: (v) => completionCopy('series', v).message,
+  nextStepAhead: (v) => getCompletionNextStep(null, 2, 'day', NOON, v.seed, v.dayIndex).detail,
+  nextStepSeries: (v) => getCompletionNextStep(null, 2, 'series', NOON, v.seed, v.dayIndex).detail,
+  actDone: (v) => actOutcomeNote('done', v),
+  actSkipped: (v) => actOutcomeNote('skipped', v),
+};
+
+describe('completion copy by completion order', () => {
+  it('places each reading by the readings finished before it, across every series', () => {
+    const times = readingTimes([2, 1, 3]);
+    const readAt = (at: Date, i: number) => ({ dayNumber: i + 1, isRead: true, readAt: at.toISOString() });
+    // Two series, read in turns, and one day marked read with no timestamp.
+    const series = [
+      { days: [...times.filter((_, i) => i % 2 === 0).map(readAt), { dayNumber: 99, isRead: true }] },
+      { days: times.filter((_, i) => i % 2 === 1).map(readAt) },
+    ];
+    expect(times.map((at) => countReadsBefore(series, at))).toEqual(times.map((_, i) => i));
   });
 
-  it('moves the next-step paragraph and the act note on for each later completion that day', () => {
-    const date = new Date(2026, 0, 1, 12);
-    const details = NEXT_STEP_DETAILS.ahead.map((_, step) => getCompletionNextStep(null, 2, 'day', date, 'install-a', step).detail);
-    expect(new Set(details).size).toBe(NEXT_STEP_DETAILS.ahead.length);
-    expect(details[0]).toBe(getCompletionNextStep(null, 2, 'day', date, 'install-a').detail);
-    const notes = ACT_OUTCOME_NOTES.done.map((_, step) => actOutcomeNote('done', day(START), step));
-    expect(new Set(notes).size).toBe(ACT_OUTCOME_NOTES.done.length);
-  });
+  it.each(Object.entries(COMPLETION_FIELDS))(
+    '%s never repeats from one completion to the next, after a day of several or across midnight',
+    (_name, draw) => {
+      // Days with 2, 1, 3, 1, 4 and 2 completions, then a sitting across midnight.
+      const times = readingTimes([2, 1, 3, 1, 4, 2]);
+      const history = [{ days: times.map((at, i) => ({ dayNumber: i + 1, isRead: true, readAt: at.toISOString() })) }];
+      for (const seed of INSTALLS) {
+        const shown = times.map((at) => draw(completionVariation(seed, countReadsBefore(history, at))));
+        for (let i = 1; i < shown.length; i += 1) expect(shown[i]).not.toBe(shown[i - 1]);
+        // One completion keeps its words on every render.
+        expect(times.map((at) => draw(completionVariation(seed, countReadsBefore(history, at))))).toEqual(shown);
+      }
+    },
+  );
 });
 
 describe('completion next step', () => {
-  it('varies the paragraph by day and keeps the day-not-on-device facts', () => {
-    const details = Array.from({ length: LONG_RANGE }, (_, offset) => {
-      const date = new Date(2026, 0, 1 + offset, 12);
-      return getCompletionNextStep(null, 2, 'day', date, 'install-a').detail;
-    });
+  it('varies the paragraph by completion and keeps the day-not-on-device facts', () => {
+    const details = Array.from({ length: LONG_RANGE }, (_, ordinal) => getCompletionNextStep(null, 2, 'day', NOON, 'install-a', ordinal).detail);
     expectNoRepeatWithin(details, 2);
     for (const detail of details) {
       expect(NEXT_STEP_DETAILS.ahead).toContain(detail);

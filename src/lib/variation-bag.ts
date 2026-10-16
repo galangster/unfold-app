@@ -151,7 +151,10 @@ export function pickFromBag<T>(pool: readonly T[], seed: string, dayIndex: numbe
  * same sequence. `dayIndex` is the local calendar day (see `dayIndexFor`), so
  * the copy turns over at the reader's own midnight — and so a notification
  * being SCHEDULED for a day five days out can be given that day's copy now,
- * rather than today's copy baked into every future occurrence.
+ * rather than today's copy baked into every future occurrence. Copy that
+ * belongs to a finished reading instead steps once per completion: there the
+ * index is the completion's place in the reader's history
+ * (completionVariation in constants/daily-copy.ts).
  */
 export interface CopyVariation {
   seed: string;
@@ -175,16 +178,6 @@ export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field:
 export function drawRotation<T>(pool: readonly T[], variation: CopyVariation, field: string): T[] {
   const start = pool.indexOf(drawCopy(pool, variation, field));
   return [...pool.slice(start), ...pool.slice(0, start)];
-}
-
-/**
- * The entry `step` places after the day's draw, wrapping round. Step 0 is
- * the draw itself. For a surface that can show more than once in one day,
- * so each later showing moves on instead of repeating the first.
- */
-export function drawCopyAt<T>(pool: readonly T[], variation: CopyVariation, field: string, step: number): T {
-  const rotation = drawRotation(pool, variation, field);
-  return rotation[step % rotation.length] ?? pool[0];
 }
 
 /**

@@ -6,11 +6,13 @@
  *
  * Every draw goes through the seeded shuffle bag (lib/variation-bag.ts) with
  * its own field salt, so a line does not come back on the next day and two
- * readers are on different sequences. Keep each pool's length fixed in code:
- * the bag's spacing holds only while the length stays the same.
+ * readers are on different sequences. The completion overlay, its next step
+ * and the act note step once per completion instead (completionVariation).
+ * Keep each pool's length fixed in code: the bag's spacing holds only while
+ * the length stays the same.
  */
 
-import { drawCopy, drawCopyAt, drawRotation, type CopyVariation } from '@/lib/variation-bag';
+import { drawCopy, drawRotation, type CopyVariation } from '@/lib/variation-bag';
 
 // ─── Completion overlay ─────────────────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
@@ -107,24 +109,30 @@ export const SERIES_COMPLETE_TITLES = [
 ];
 
 /**
- * Title and line for the completion overlay. The first completion of a local
- * day shows the day's draw. `step` counts the completions earlier that day,
- * and each one moves the draw on one entry, so a catch-up session never
- * shows the same overlay twice.
+ * The draw for a finished reading. The completion overlay, its "Up next"
+ * paragraph and the act note step once per completion, not once per day:
+ * `ordinal` is the number of readings finished before this one, across every
+ * series (countReadsBefore). Two completions in a row are next to each other
+ * in the bag, so they never share an entry, whether they fall on one day or
+ * on either side of midnight.
  */
+export function completionVariation(seed: string, ordinal: number): CopyVariation {
+  return { seed, dayIndex: ordinal };
+}
+
+/** Title and line for the completion overlay, for one completion (completionVariation). */
 export function completionCopy(
   type: 'day' | 'series',
   variation: CopyVariation,
-  step = 0,
 ): { title: string; message: string } {
   return type === 'series'
     ? {
-      title: drawCopyAt(SERIES_COMPLETE_TITLES, variation, 'series-complete-title', step),
-      message: drawCopyAt(SERIES_COMPLETE_MESSAGES, variation, 'series-complete', step),
+      title: drawCopy(SERIES_COMPLETE_TITLES, variation, 'series-complete-title'),
+      message: drawCopy(SERIES_COMPLETE_MESSAGES, variation, 'series-complete'),
     }
     : {
-      title: drawCopyAt(DAY_COMPLETE_TITLES, variation, 'day-complete-title', step),
-      message: drawCopyAt(DAY_COMPLETE_MESSAGES, variation, 'day-complete', step),
+      title: drawCopy(DAY_COMPLETE_TITLES, variation, 'day-complete-title'),
+      message: drawCopy(DAY_COMPLETE_MESSAGES, variation, 'day-complete'),
     };
 }
 
@@ -455,13 +463,9 @@ export const ACT_OUTCOME_NOTES = {
   ],
 } as const;
 
-/**
- * The note for a day read on `variation`'s local day. `step` counts the days
- * read earlier that same local day, so two readings finished in one sitting
- * do not get the same note.
- */
-export function actOutcomeNote(outcome: keyof typeof ACT_OUTCOME_NOTES, variation: CopyVariation, step = 0): string {
-  return drawCopyAt(ACT_OUTCOME_NOTES[outcome], variation, `act-${outcome}`, step);
+/** The note under a day's act, for that day's completion (completionVariation). */
+export function actOutcomeNote(outcome: keyof typeof ACT_OUTCOME_NOTES, variation: CopyVariation): string {
+  return drawCopy(ACT_OUTCOME_NOTES[outcome], variation, `act-${outcome}`);
 }
 
 // ─── Companion empty state ──────────────────────────────────────────────────

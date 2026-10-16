@@ -3,8 +3,8 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { CompletionCelebration } from '../CompletionCelebration';
 import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { completionCopy } from '@/constants/daily-copy';
-import { copyVariationFor } from '@/lib/copy-variation';
+import { completionCopy, completionVariation } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
 
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: { background: '#fff', text: '#111', textMuted: '#666' } }) }));
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: true }) }));
@@ -58,20 +58,22 @@ it('keeps onboarding continuation available without reader next steps', () => {
   expect(dismiss).toHaveBeenCalledTimes(1);
 });
 
-it('moves the drawn title and line on for a later completion the same day', () => {
-  const firstCopy = completionCopy('day', copyVariationFor(new Date()));
-  const laterCopy = completionCopy('day', copyVariationFor(new Date()), 1);
-  expect(laterCopy.title).not.toBe(firstCopy.title);
-  expect(laterCopy.message).not.toBe(firstCopy.message);
+it('draws the title and line for its completion, the same on every render, and new for the next one', () => {
+  const copyFor = (ordinal: number) => completionCopy('day', completionVariation(copySeed(), ordinal));
+  expect(copyFor(5).title).not.toBe(copyFor(4).title);
+  expect(copyFor(5).message).not.toBe(copyFor(4).message);
 
-  const first = render(<CompletionCelebration visible type="day" onDismiss={jest.fn()} />);
-  expect(first.getByText(firstCopy.title)).toBeTruthy();
-  expect(first.getByText(firstCopy.message)).toBeTruthy();
-  first.unmount();
+  const screen = render(<CompletionCelebration visible type="day" ordinal={4} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(4).title)).toBeTruthy();
+  expect(screen.getByText(copyFor(4).message)).toBeTruthy();
+  // A re-render of the same completion keeps its words.
+  screen.rerender(<CompletionCelebration visible type="day" ordinal={4} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(4).title)).toBeTruthy();
 
-  const later = render(<CompletionCelebration visible type="day" step={1} onDismiss={jest.fn()} />);
-  expect(later.getByText(laterCopy.title)).toBeTruthy();
-  expect(later.getByText(laterCopy.message)).toBeTruthy();
+  // The next completion, on this day or the next, is the next draw.
+  screen.rerender(<CompletionCelebration visible type="day" ordinal={5} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(5).title)).toBeTruthy();
+  expect(screen.getByText(copyFor(5).message)).toBeTruthy();
 });
 
 describe('gentle completion feedback', () => {

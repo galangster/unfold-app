@@ -164,7 +164,14 @@ jest.mock('@/lib/theme', () => ({
 }));
 jest.mock('@/components/icons', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/UndoToast', () => ({ UndoToast: () => null }));
-jest.mock('@/components/CompletionCelebration', () => ({ CompletionCelebration: () => null }));
+// The overlay's last props, so a test can read the completion it was given.
+let mockCelebrationProps: { visible?: boolean; ordinal?: number } | null = null;
+jest.mock('@/components/CompletionCelebration', () => ({
+  CompletionCelebration: (props: { visible?: boolean; ordinal?: number }) => {
+    mockCelebrationProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/reading/StudyMethodSheet', () => ({ StudyMethodSheet: () => null }));
 jest.mock('@/components/reading/ReaderOutlineSheet', () => ({ ReaderOutlineSheet: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
@@ -671,6 +678,39 @@ describe('reader next step after a finished day', () => {
     });
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(study)');
     act(() => tree!.unmount());
+  });
+
+  it('places a completion among every reading finished before it, across series and days', async () => {
+    // Three readings in another series: two days ago, yesterday, and a
+    // minute ago. The overlay draws its copy by that place, not by the day.
+    seedReader();
+    const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const earlier = (dayNumber: number, readAt: string) => ({
+      id: `earlier-series-${dayNumber}`, devotionalId: 'earlier-series', dayNumber, title: `Day ${dayNumber}`, isRead: true, readAt,
+    });
+    useUnfoldStore.setState((state) => ({
+      devotionals: [...state.devotionals, {
+        id: 'earlier-series',
+        title: 'Earlier',
+        totalDays: 7,
+        currentDay: 4,
+        createdAt: '2026-09-01T12:00:00.000Z',
+        days: [earlier(1, minutesAgo(2 * 24 * 60)), earlier(2, minutesAgo(24 * 60)), earlier(3, minutesAgo(1))],
+      } as unknown as Devotional],
+    }));
+    const tree = await renderAt(PHONE);
+    const [complete] = tree.root.findAllByProps({ testID: 'reading-complete-day' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    await act(async () => {
+      (complete.props.onPress as () => void)();
+    });
+
+    expect(mockCelebrationProps?.visible).toBe(true);
+    expect(mockCelebrationProps?.ordinal).toBe(3);
+    // A later render of the same overlay keeps its place.
+    await resizeTo(tree, PHONE);
+    expect(mockCelebrationProps?.ordinal).toBe(3);
+    act(() => tree.unmount());
   });
 
   it('shows no return before the day is finished', async () => {
