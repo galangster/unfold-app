@@ -413,14 +413,16 @@ export const EVENING_TITLES: string[] = [
  * Every banner keeps the cue (PR #166), in wording that rotates, because one
  * fixed cue was the sentence a reader saw twice a day. The cue counts inside
  * the 150-character body and drops out only when the day's sentence needs the room.
+ * Each wording offers an update, never an answer: the tap opens the life
+ * update, which asks its own question, not the banner's.
  */
 export const CHECK_IN_TAP_CUES: string[] = [
   'Tap to talk or write an update.',
   'Tap to share an update, spoken or typed.',
   'Tap to record or write a few words.',
   'Tap to tell Unfold what’s going on.',
-  'Tap to answer in your own words.',
-  'Tap to reply by voice or text.',
+  'Tap to share what’s happening.',
+  'Tap to add a quick update.',
 ];
 
 /** Lowercase words with curly apostrophes made straight. */
@@ -443,30 +445,71 @@ export function echoes(title: string, body: string): boolean {
   return false;
 }
 
+/** The titles every day inside the bag's minimum gap around this one draws, its own included. */
+function drawsNear(pool: readonly string[], variation: CopyVariation, field: string): Set<string> {
+  const gap = minimumGapFor(pool.length);
+  return new Set(Array.from({ length: 2 * gap - 1 }, (_, i) =>
+    drawCopy(pool, { ...variation, dayIndex: variation.dayIndex - gap + 1 + i }, field)));
+}
+
+/**
+ * How many swaps back a banner title follows. Each step back needs an
+ * earlier day inside the gap that swapped too, so a chain this long almost
+ * never happens, and the cap keeps the work bounded.
+ */
+const SWAP_LOOKBACK = 8;
+
 /**
  * A banner title that does not repeat its body. Titles and bodies are drawn
  * independently, so a few pairs echo each other. On those days the title
- * steps to the next entry that neither echoes the body nor is drawn inside
- * the bag's minimum gap, so the swap cannot bring a title back early.
+ * steps to the next entry that does not echo the body, that no day inside
+ * the bag's minimum gap draws, and that no earlier day inside the gap swapped
+ * to. A later day avoids an earlier day's swap, never the other way round, so
+ * two days that both swap never meet on one title, and a swap cannot bring a
+ * title back early. Every day but today is scheduled with no reading
+ * context, so an earlier day's swap is worked out from its context-free body.
  */
-function bannerTitle(pool: readonly string[], variation: CopyVariation, field: string, body: string): string {
-  const [drawn, ...after] = drawRotation(pool, variation, field);
-  if (!echoes(drawn, body)) return drawn;
+function bannerTitle(
+  pool: readonly string[],
+  variation: CopyVariation,
+  field: string,
+  body: string,
+  contextFreeBody: (variation: CopyVariation) => string,
+): string {
   const gap = minimumGapFor(pool.length);
-  const nearby = new Set(
-    Array.from({ length: 2 * gap - 1 }, (_, i) =>
-      drawCopy(pool, { ...variation, dayIndex: variation.dayIndex - gap + 1 + i }, field)),
-  );
-  return after.find((candidate) => !nearby.has(candidate) && !echoes(candidate, body)) ?? drawn;
+  const shown = new Map<number, string>();
+  const titleOn = (day: CopyVariation, dayBody: string, lookback: number): string => {
+    const known = shown.get(day.dayIndex);
+    if (known !== undefined) return known;
+    const drawn = drawCopy(pool, day, field);
+    let title = drawn;
+    if (echoes(drawn, dayBody)) {
+      const taken = drawsNear(pool, day, field);
+      for (let back = 1; lookback > 0 && back < gap; back += 1) {
+        const earlier = { ...day, dayIndex: day.dayIndex - back };
+        taken.add(titleOn(earlier, contextFreeBody(earlier), lookback - 1));
+      }
+      title = drawRotation(pool, day, field).slice(1)
+        .find((candidate) => !taken.has(candidate) && !echoes(candidate, dayBody)) ?? drawn;
+    }
+    shown.set(day.dayIndex, title);
+    return title;
+  };
+  return titleOn(variation, body, SWAP_LOOKBACK);
 }
 
-/** The banner body: the day's sentence, then the tap cue when both fit. */
+/**
+ * The banner body: the day's sentence, then the first tap cue from the
+ * day's draw onward that fits inside the 150 characters. The cue drops only
+ * when the shortest one does not fit, and a banner with no sentence keeps
+ * the cue alone.
+ */
 function bannerBody(selected: string, variation: CopyVariation, field: string): string {
   const message = selected.trim();
-  const cue = drawCopy(CHECK_IN_TAP_CUES, variation, field);
-  return message && message.length + 1 + cue.length <= MAX_NOTIFICATION_BODY
-    ? `${message} ${cue}`
-    : truncateNotificationBody(message);
+  const cues = drawRotation(CHECK_IN_TAP_CUES, variation, field);
+  if (!message) return cues[0];
+  const cue = cues.find((candidate) => message.length + 1 + candidate.length <= MAX_NOTIFICATION_BODY);
+  return cue ? `${message} ${cue}` : truncateNotificationBody(message);
 }
 
 /** The line the check-in sheet shows once an answer is saved. */
@@ -593,10 +636,11 @@ function isViable(rendered: string): boolean {
  * A message that names the day when the day gives us something to name, and
  * otherwise draws from the slot's generic pool.
  *
- * The bag draws over the whole template list, then steps forward to the next
- * template this day can fill. Filtering first changed the list's length on
- * days missing a field, and the bag's spacing holds only for a stable length
- * (audit APP-29).
+ * The bag draws over the whole template list, whose length never changes, so
+ * its spacing holds (audit APP-29). A template the day cannot fill gives way
+ * to the generic pool instead of the next template: that pool keeps its own
+ * spacing and shares no line with the templates, so a day missing a field
+ * cannot land on the line the day before or after shows.
  */
 function contentAwareMessage(
   pool: string[],
@@ -605,9 +649,8 @@ function contentAwareMessage(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): string {
-  if (!day) return drawCopy(pool, variation, `${slot}-body`);
-  for (const template of drawRotation(templates, variation, `${slot}-template`)) {
-    const message = template(day);
+  if (day) {
+    const message = drawCopy(templates, variation, `${slot}-template`)(day);
     if (isViable(message)) return message;
   }
   return drawCopy(pool, variation, `${slot}-body`);
@@ -664,15 +707,20 @@ export function getEveningWindDownBody(
   return getContentAwareEveningMessage(day, variation);
 }
 
-/** A slot's banner for its selected sentence: the title, and the body with its tap cue. */
+/**
+ * A slot's banner for its selected sentence: the title, and the body with its
+ * tap cue. `contextFreeBody` is the sentence the slot selects for a day with
+ * no reading context, which is how every day but today is scheduled.
+ */
 function bannerCopy(
   titles: readonly string[],
   body: string,
+  contextFreeBody: (variation: CopyVariation) => string,
   variation: CopyVariation,
   slot: 'midday' | 'evening',
 ): { title: string; body: string } {
   return {
-    title: bannerTitle(titles, variation, `${slot}-title`, body),
+    title: bannerTitle(titles, variation, `${slot}-title`, body, contextFreeBody),
     body: bannerBody(body, variation, `${slot}-cue`),
   };
 }
@@ -683,7 +731,13 @@ export function getMiddayCheckInCopy(
   carryLine: string | null | undefined,
   variation: CopyVariation,
 ): { title: string; body: string } {
-  return bannerCopy(MIDDAY_TITLES, getMiddayCheckInBody(day, carryLine, variation), variation, 'midday');
+  return bannerCopy(
+    MIDDAY_TITLES,
+    getMiddayCheckInBody(day, carryLine, variation),
+    (other) => getMiddayCheckInBody(null, null, other),
+    variation,
+    'midday',
+  );
 }
 
 /** Title and truncated body for one evening notification occurrence. */
@@ -691,5 +745,11 @@ export function getEveningWindDownCopy(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): { title: string; body: string } {
-  return bannerCopy(EVENING_TITLES, getEveningWindDownBody(day, variation), variation, 'evening');
+  return bannerCopy(
+    EVENING_TITLES,
+    getEveningWindDownBody(day, variation),
+    (other) => getEveningWindDownBody(null, other),
+    variation,
+    'evening',
+  );
 }

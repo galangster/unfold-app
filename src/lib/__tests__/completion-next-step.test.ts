@@ -39,3 +39,12 @@ it('offers existing next-study choices after series completion, without inventin
   expect(next.detail).toContain('library');
   expect(next.nextDay).toBeUndefined();
 });
+
+it('moves the paragraph on for each reading finished earlier the same local day', () => {
+  const { devotional } = buildTrialSeriesSeed({ state: 'today-day3', now });
+  const first = getCompletionNextStep(devotional, 1, 'day', now, seed);
+  const second = getCompletionNextStep(devotional, 1, 'day', now, seed, 1);
+  expect(getCompletionNextStep(devotional, 1, 'day', now, seed, 0)).toEqual(first);
+  expect(second.detail).not.toBe(first.detail);
+  expect({ ...second, detail: first.detail }).toEqual(first);
+});

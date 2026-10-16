@@ -3,7 +3,14 @@ import {
   getDailyReminderContent,
 } from '../daily-reminder-content';
 import type { Devotional, DevotionalDay } from '../store';
-import { NEXT_DAY_BODIES, OVERDUE_TITLES } from '@/constants/reading-reminder-messages';
+import {
+  FIRST_DAY_TITLES,
+  NEXT_DAY_BODIES,
+  OVERDUE_TITLES,
+  PAST_END_BODIES,
+  PAUSED_NO_SERIES_BODIES,
+  PAUSED_SERIES_BODIES,
+} from '@/constants/reading-reminder-messages';
 
 const now = new Date(2026, 4, 14, 9, 0, 0);
 const seed = 'test-install';
@@ -81,6 +88,25 @@ describe('daily reminder content', () => {
     expect(`${content.title} ${content.body}`).toMatch(/Bible/i);
     expect(`${content.title} ${content.body}`).toMatch(/Premium/i);
     expect(`${content.title} ${content.body}`).not.toMatch(/generat|prepar|created|next day/i);
+    expect(PAUSED_SERIES_BODIES).toContain(content.body);
+  });
+
+  it('names no series in the paused reminder for a churned reader without one', () => {
+    const content = getDailyReminderContent({ currentDevotional: null, premiumPolicy: 'denied', now, seed });
+
+    expect(PAUSED_NO_SERIES_BODIES).toContain(content.body);
+    expect(content.body).not.toMatch(/series|devotional/i);
+  });
+
+  it('gives an unread Day 1 its own lines, overdue on the device or not there yet', () => {
+    const overdue = devotional({ currentDay: 1, days: [day({ id: 'day-1', dayNumber: 1 })], seriesStartDate: new Date(2026, 4, 9, 12).toISOString() });
+    const pending = devotional({ currentDay: 1, days: [] });
+    for (const currentDevotional of [overdue, pending]) {
+      const content = getDailyReminderContent({ currentDevotional, premiumPolicy: 'granted', now, seed });
+      expect(FIRST_DAY_TITLES).toContain(content.title);
+      expect(content.body).toContain('When God Calls You Home');
+      expect(`${content.title} ${content.body}`).not.toMatch(/left off|stopped|again|back|return/i);
+    }
   });
 
   it('keeps generated unread content reminders specific even if premium is denied', () => {
@@ -158,5 +184,7 @@ describe('daily reminder content', () => {
 
     expect(content.title).toBe('When God Calls You Home');
     expect(`${content.title} ${content.body}`).not.toMatch(/prepar/i);
+    // Past the end there is no next reading to promise.
+    expect(PAST_END_BODIES).toContain(content.body);
   });
 });

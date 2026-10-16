@@ -1304,6 +1304,36 @@ describe('honest wait line on /generating', () => {
     expect(textNodes(tree, lines[0])).toHaveLength(0);
   });
 
+  it('starts the waiting lines over when Try again starts a new wait', async () => {
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    let failFirstWait!: (error: Error) => void;
+    mockSubmitGenerationJob.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      failFirstWait = reject;
+    }));
+    const tree = await renderWaiting(7);
+
+    // A first wait long enough to reach the held last line, then a failure.
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    await act(async () => {
+      failFirstWait(new Error('Request rejected'));
+    });
+    await flush();
+
+    await press(tree, 'Try again');
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(0);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
+  });
+
   it.each([
     [30, THIRTY_DAYS],
     [21, LONGER],

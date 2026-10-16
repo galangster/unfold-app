@@ -16,6 +16,21 @@ function isSameLocalDate(value: string | undefined, now: Date): boolean {
   return parsed.toDateString() === now.toDateString();
 }
 
+/**
+ * How many days were marked read on the local day of `at`, across every
+ * series, before `at` itself. Copy shown once per finished reading steps on
+ * by this count, so two readings finished on one day do not say the same
+ * thing (the completion overlay and the act note).
+ */
+export function countReadsEarlierOnDay(
+  devotionals: readonly Pick<DevotionalReadingProgress, 'days'>[],
+  at: Date,
+): number {
+  return devotionals.reduce((count, devotional) => count + (devotional.days ?? []).filter((day) => (
+    day.isRead && isSameLocalDate(day.readAt, at) && Date.parse(day.readAt ?? '') < at.getTime()
+  )).length, 0);
+}
+
 function isDevotionalDayRead(devotional: Devotional, dayNumber: number): boolean {
   return devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
 }

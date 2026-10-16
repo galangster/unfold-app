@@ -1,5 +1,6 @@
 import {
   canOpenDevotionalDay,
+  countReadsEarlierOnDay,
   getCalendarDayNumber,
   getReadingDayLabel,
   getDayMenuPresentation,
@@ -678,5 +679,20 @@ describe('resolveBlockedForwardReason', () => {
 
     expect(getSelectableDayLimit(series, now)).toBe(4);
     expect(blockedForwardMessage(series, 4, 7, false, now)).toBe('Finish Day 2 to open the next day');
+  });
+});
+
+describe('countReadsEarlierOnDay', () => {
+  it('counts the days read earlier on the same local day, across every series', () => {
+    const read = (dayNumber: number, readAt?: Date) => ({ dayNumber, isRead: Boolean(readAt), readAt: readAt?.toISOString() });
+    const series = [
+      { days: [read(1, new Date(2026, 9, 15, 8)), read(2, new Date(2026, 9, 16, 8)), read(3, new Date(2026, 9, 16, 20)), read(4)] },
+      { days: [read(1, new Date(2026, 9, 16, 7)), read(2, new Date(2026, 9, 16, 22))] },
+    ];
+    expect(countReadsEarlierOnDay(series, new Date(2026, 9, 16, 21))).toBe(3);
+    // Only reads before the moment count, so the day just read is not one.
+    expect(countReadsEarlierOnDay(series, new Date(2026, 9, 16, 8))).toBe(1);
+    expect(countReadsEarlierOnDay(series, new Date(2026, 9, 17, 8))).toBe(0);
+    expect(countReadsEarlierOnDay([], new Date(2026, 9, 16, 21))).toBe(0);
   });
 });

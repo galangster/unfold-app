@@ -68,6 +68,42 @@ describe('pickRememberThis', () => {
     }
   });
 
+  it('never shows the same highlight two days running while the pool grows by one a day', () => {
+    // A new pool length starts a new bag, so the card steps past yesterday's
+    // pick. Ids follow the store's hl_<ms>_<rand> shape, one saved at noon
+    // each day, from one highlight and from five.
+    const savedAt = (offset: number) => new Date(2026, 0, 1 + offset, 12);
+    const saved = (offset: number, n: number) => ({
+      ...devotionalHighlight,
+      id: `hl_${savedAt(offset).getTime()}_${String(n).padStart(4, '0')}`,
+      highlightedText: `Line ${n}`,
+      createdAt: savedAt(offset).toISOString(),
+    }) as unknown as Highlight;
+    for (const startSize of [1, 5]) {
+      const earlier = Array.from({ length: startSize }, (_, n) => saved(-30, n));
+      for (const installSeed of ['install-a', 'install-b', 'install-c']) {
+        const pool = [...earlier];
+        let previous: string | undefined;
+        for (let offset = 0; offset < 300; offset += 1) {
+          pool.push(saved(offset, startSize + offset));
+          const id = pickRememberThis(pool, [], { seed: installSeed, dayIndex: dayIndexFor(savedAt(offset)) })!.highlight.id;
+          expect(id).not.toBe(previous);
+          previous = id;
+        }
+      }
+    }
+  });
+
+  it('takes turns between two highlights, the newer one first on the day it is saved', () => {
+    const older = { ...devotionalHighlight, id: 'h-older', createdAt: new Date(2026, 8, 1, 9).toISOString() } as unknown as Highlight;
+    const newer = { ...devotionalHighlight, id: 'h-newer', createdAt: new Date(2026, 8, 5, 9).toISOString() } as unknown as Highlight;
+    const pickOn = (date: number, pool: Highlight[]) => pickRememberThis(pool, [], { seed, dayIndex: dayIndexFor(new Date(2026, 8, date)) })!.highlight.id;
+    expect(pickOn(4, [older])).toBe('h-older');
+    const days = Array.from({ length: 20 }, (_, offset) => pickOn(5 + offset, [older, newer]));
+    expect(days[0]).toBe('h-newer');
+    for (let i = 1; i < days.length; i += 1) expect(days[i]).not.toBe(days[i - 1]);
+  });
+
   it('puts two installs on different sequences', () => {
     const sequence = (installSeed: string) => Array.from({ length: 30 }, (_, offset) => (
       pickRememberThis(tenHighlights, [], { seed: installSeed, dayIndex: START + offset })!.highlight.id

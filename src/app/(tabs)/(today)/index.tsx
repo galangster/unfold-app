@@ -1708,7 +1708,8 @@ export default function HomeScreen() {
         title: cardCopy.bridge,
         body: validBridgeText,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: validBridgeText,
+        // The spoken label carries the drawn title the card shows, then the text.
+        accessibilityLabel: `${cardCopy.bridge}. ${validBridgeText}`,
         accessibilityHint: 'A personal bridge into today’s reading',
         dismissAccessibilityLabel: 'Dismiss bridge stack card',
         dismissAccessibilityHint: 'Hides this bridge text for today',
@@ -1724,7 +1725,7 @@ export default function HomeScreen() {
         title: cardCopy.bridgeLoading,
         body: cardCopy.bridgeLoadingBody,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: 'Preparing today’s thread',
+        accessibilityLabel: `${cardCopy.bridgeLoading} ${cardCopy.bridgeLoadingBody}`,
         accessibilityHint: 'A personal bridge into today’s reading is loading',
         dismissAccessibilityLabel: 'Dismiss bridge loading stack card',
         dismissAccessibilityHint: 'Hides this bridge card for today',
@@ -1747,7 +1748,7 @@ export default function HomeScreen() {
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
-        accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
+        accessibilityLabel: `${cardCopy.rememberThis}. Saved highlight from ${rememberedSource}: ${quote}`,
         accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
         dismissAccessibilityLabel: 'Dismiss saved highlight stack card',
         dismissAccessibilityHint: 'Hides this saved highlight card for today without deleting the highlight',
@@ -1961,6 +1962,7 @@ export default function HomeScreen() {
           {/* Zone 1: Greeting */}
           <GreetingRow
             userName={user?.name}
+            now={clockNow}
             avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
             headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}

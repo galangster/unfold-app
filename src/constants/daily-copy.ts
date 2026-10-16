@@ -10,7 +10,7 @@
  * the bag's spacing holds only while the length stays the same.
  */
 
-import { drawCopy, drawRotation, type CopyVariation } from '@/lib/variation-bag';
+import { drawCopy, drawCopyAt, drawRotation, type CopyVariation } from '@/lib/variation-bag';
 
 // ─── Completion overlay ─────────────────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
@@ -90,7 +90,7 @@ export const DAY_COMPLETE_TITLES = [
   'Done for Today',
   'Today’s Reading, Done',
   'Finished',
-  'All Read',
+  'Reading Done',
   'Day Finished',
   'Reading Complete',
   'Reading Finished',
@@ -101,24 +101,30 @@ export const DAY_COMPLETE_TITLES = [
 export const SERIES_COMPLETE_TITLES = [
   'Series Complete',
   'Series Finished',
-  'Every Day Read',
-  'The Last Day, Read',
+  'Every Day Complete',
+  'Last Day Finished',
   'All the Way Through',
 ];
 
-/** Title and line for the completion overlay. */
+/**
+ * Title and line for the completion overlay. The first completion of a local
+ * day shows the day's draw. `step` counts the completions earlier that day,
+ * and each one moves the draw on one entry, so a catch-up session never
+ * shows the same overlay twice.
+ */
 export function completionCopy(
   type: 'day' | 'series',
   variation: CopyVariation,
+  step = 0,
 ): { title: string; message: string } {
   return type === 'series'
     ? {
-      title: drawCopy(SERIES_COMPLETE_TITLES, variation, 'series-complete-title'),
-      message: drawCopy(SERIES_COMPLETE_MESSAGES, variation, 'series-complete'),
+      title: drawCopyAt(SERIES_COMPLETE_TITLES, variation, 'series-complete-title', step),
+      message: drawCopyAt(SERIES_COMPLETE_MESSAGES, variation, 'series-complete', step),
     }
     : {
-      title: drawCopy(DAY_COMPLETE_TITLES, variation, 'day-complete-title'),
-      message: drawCopy(DAY_COMPLETE_MESSAGES, variation, 'day-complete'),
+      title: drawCopyAt(DAY_COMPLETE_TITLES, variation, 'day-complete-title', step),
+      message: drawCopyAt(DAY_COMPLETE_MESSAGES, variation, 'day-complete', step),
     };
 }
 
@@ -313,7 +319,11 @@ export function rhythmLine(streak: number, variation: CopyVariation): string {
   return drawCopy(RHYTHM_LINES[tier], variation, `rhythm-${tier}`);
 }
 
-/** The unread hero button, by streak tier. Each opens the current reading. */
+/**
+ * The unread hero button, by streak tier. Each opens the current reading.
+ * No label is in two tiers, so a streak that moves to another tier overnight
+ * cannot show yesterday's label.
+ */
 export const HERO_CTA_LABELS = {
   practiced: [
     'Deepen Your Practice',
@@ -334,12 +344,12 @@ export const HERO_CTA_LABELS = {
     'Keep Going',
     'Read Today',
     'Take the Next Step',
-    'Open Today’s Reading',
+    'Go to Today’s Reading',
   ],
   returning: [
     'Continue Reading',
     'Pick Up the Reading',
-    'Open the Reading',
+    'Resume the Series',
     'Return to Today’s Reading',
   ],
 } as const;
@@ -353,51 +363,55 @@ export function heroCtaLabel(streak: number, variation: CopyVariation): string {
   return drawCopy(HERO_CTA_LABELS[tier], variation, `hero-cta-${tier}`);
 }
 
-/** The line above the reader's name on Today, by local hour. */
+/**
+ * The line above the reader's name on Today, by local hour. No line is in
+ * two parts of the day, so a reader who opens Today at a different hour
+ * tomorrow cannot get today's greeting back.
+ */
 export const TODAY_GREETINGS = {
   late: [
     'Still awake?',
     'Up late?',
     'Late night',
     'The quiet hours',
-    'Peace to you tonight',
+    'Grace for the small hours',
     'Hello, night owl',
   ],
   morning: [
     'Good morning',
     'Morning',
     'Grace and peace',
-    'Good to see you',
     'Peace to you this morning',
     'A good morning to you',
+    'A new morning',
   ],
   afternoon: [
     'Good afternoon',
     'Afternoon',
-    'Grace and peace',
     'Good to see you',
     'Peace to you today',
     'Hello again',
+    'Good day to you',
   ],
   evening: [
     'Good evening',
     'Evening',
-    'Grace and peace',
-    'Good to see you',
-    'Peace to you tonight',
     'The day is winding down',
+    'Peace to you this evening',
+    'A good evening to you',
+    'Evening is here',
   ],
   night: [
     'Wind down',
     'Winding down',
     'Rest is close',
     'Peace to you tonight',
-    'Good evening',
     'The day is almost done',
+    'A quiet night to you',
   ],
 } as const;
 
-/** The greeting for local hour `hour`. Each part of the day has its own sequence. */
+/** The greeting for local hour `hour`. Each part of the day has its own lines and its own sequence. */
 export function todayGreeting(hour: number, variation: CopyVariation): string {
   let slot: keyof typeof TODAY_GREETINGS = 'night';
   if (hour < 5) slot = 'late';
@@ -441,8 +455,13 @@ export const ACT_OUTCOME_NOTES = {
   ],
 } as const;
 
-export function actOutcomeNote(outcome: keyof typeof ACT_OUTCOME_NOTES, variation: CopyVariation): string {
-  return drawCopy(ACT_OUTCOME_NOTES[outcome], variation, `act-${outcome}`);
+/**
+ * The note for a day read on `variation`'s local day. `step` counts the days
+ * read earlier that same local day, so two readings finished in one sitting
+ * do not get the same note.
+ */
+export function actOutcomeNote(outcome: keyof typeof ACT_OUTCOME_NOTES, variation: CopyVariation, step = 0): string {
+  return drawCopyAt(ACT_OUTCOME_NOTES[outcome], variation, `act-${outcome}`, step);
 }
 
 // ─── Companion empty state ──────────────────────────────────────────────────
@@ -511,42 +530,60 @@ export function companionGreeting(name: string | null, variation: CopyVariation)
     : drawCopy(COMPANION_GREETINGS, variation, 'companion-greeting');
 }
 
+/** Placeholder of the companion's message field on the Ask tab. */
+export const COMPANION_INPUT_PLACEHOLDERS = [
+  'What’s on your mind?',
+  'Ask me anything…',
+  'What are you thinking about?',
+  'How can I help today?',
+];
+
+export function companionInputPlaceholder(variation: CopyVariation): string {
+  return drawCopy(COMPANION_INPUT_PLACEHOLDERS, variation, 'companion-placeholder');
+}
+
 // ─── Generating screen ──────────────────────────────────────────────────────
 
-/** Status lines while a series is written. Each wait shows each line once. */
+/**
+ * Status lines while a series is written. Each wait shows each line once.
+ * They claim no step the screen already shows as done (the series title
+ * appears once the server names it) and no day the series opens on. A
+ * no-break space holds the last word to the one before it, so a large text
+ * size never leaves it alone on a line.
+ */
 export const GENERATING_STATUS_LINES = [
-  'Reading your story',
-  'Choosing scripture',
-  'Finding the right words',
-  'Weaving your narrative',
-  'Crafting something personal',
-  'Reading what you shared',
-  'Looking for the right passage',
-  'Planning the days ahead',
-  'Shaping the first day',
-  'Naming your series',
-  'Writing your first reading',
-  'Choosing questions for you',
-  'Thinking about where to begin',
-  'Weighing a few passages',
-  'Writing a closing prayer',
-  'Finding a line worth keeping',
-  'Drafting the reflection',
-  'Choosing a small act for today',
-  'Laying out the series',
-  'Finding a way into the text',
-  'Matching scripture to your story',
-  'Keeping your words in mind',
-  'Building the first day',
-  'Checking the details',
+  'Reading your\u00A0story',
+  'Choosing\u00A0scripture',
+  'Finding the right\u00A0words',
+  'Weaving your\u00A0narrative',
+  'Crafting something\u00A0personal',
+  'Reading what you\u00A0shared',
+  'Looking for the right\u00A0passage',
+  'Planning the days\u00A0ahead',
+  'Shaping the first\u00A0day',
+  'Writing your first\u00A0reading',
+  'Choosing questions for\u00A0you',
+  'Thinking about where to\u00A0begin',
+  'Weighing a few\u00A0passages',
+  'Writing a closing\u00A0prayer',
+  'Finding a line worth\u00A0keeping',
+  'Drafting the\u00A0reflection',
+  'Choosing a small\u00A0act',
+  'Laying out the\u00A0series',
+  'Finding a way into the\u00A0text',
+  'Matching scripture to your\u00A0story',
+  'Keeping your words in\u00A0mind',
+  'Building the first\u00A0day',
+  'Checking the\u00A0details',
 ];
 
 /** Shown last, and held for the rest of a long wait. */
-export const GENERATING_FINAL_LINE = 'Putting it all together';
+export const GENERATING_FINAL_LINE = 'Putting it all\u00A0together';
 
 /**
- * This wait's lines: the pool once through from a start the bag picks, so
- * each series opens on a different line, then the final line, held.
+ * The lines for a wait on `variation`'s local day: the pool once through
+ * from a start the bag picks, so a wait on another day opens on a different
+ * line, then the final line, held. Two waits on one day share the draw.
  */
 export function generatingStatusLines(variation: CopyVariation): string[] {
   return [...drawRotation(GENERATING_STATUS_LINES, variation, 'generating-status'), GENERATING_FINAL_LINE];

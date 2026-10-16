@@ -19,17 +19,23 @@ export function getGreeting(hour: number, dayIndex: number): string {
 
 interface Props {
   userName?: string;
+  /**
+   * Today's clock (HomeScreen's clockNow). It ticks each minute and moves at
+   * local midnight and on resume, so the greeting follows the hour and the
+   * day while Today stays mounted.
+   */
+  now: Date;
   onAvatarPress: () => void;
   /** Test selector forwarded to the avatar button for e2e flows */
   avatarTestID?: string;
   headerActions?: ReactNode;
 }
 
-export function GreetingRow({ userName, onAvatarPress, avatarTestID, headerActions }: Props) {
+export function GreetingRow({ userName, now, onAvatarPress, avatarTestID, headerActions }: Props) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
-  // Drawn once per hour and local day, not on every render.
-  const now = new Date();
+  // Drawn once per hour and local day of the clock Today passes in, not on
+  // every minute's render.
   const hour = now.getHours();
   const dayIndex = dayIndexFor(now);
   const greeting = useMemo(() => getGreeting(hour, dayIndex), [hour, dayIndex]);

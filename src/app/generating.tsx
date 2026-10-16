@@ -395,21 +395,30 @@ export default function GeneratingScreen() {
   // Sample preview state -- shows after a short delay to give users something to read
   const [showSamplePreview, setShowSamplePreview] = useState(false);
 
-  // Contemplative status lines. Each wait opens on a different line, shows
-  // each once, and holds the last instead of looping.
+  // Contemplative status lines: this local day's draw, each shown once from
+  // a start the bag picks, then the last one held instead of looping. A wait
+  // on another day opens on a different line.
   const waitingMessages = useMemo(() => generatingStatusLines(copyVariationFor(new Date())), []);
   const [messageIndex, setMessageIndex] = useState(0);
   const lastMessageIndex = waitingMessages.length - 1;
   const holdingLastMessage = messageIndex >= lastMessageIndex;
 
-  // Step through the waiting messages, and stop once the last one holds.
+  // A new attempt on this screen (Try again) starts the lines over, so a
+  // retry never opens on the line that says the work is nearly done.
   useEffect(() => {
-    if (!isGenerating || isComplete || holdingLastMessage) return;
+    if (isGenerating) setMessageIndex(0);
+  }, [isGenerating]);
+
+  // Step through the waiting messages, and stop once the last one holds.
+  // The steps pause while 'Reconnecting…' covers the line, so the reader
+  // does not miss lines nobody could see.
+  useEffect(() => {
+    if (!isGenerating || isComplete || isReconnecting || holdingLastMessage) return;
     const interval = setInterval(() => {
       setMessageIndex((prev) => Math.min(prev + 1, lastMessageIndex));
     }, MESSAGE_CYCLE_MS);
     return () => clearInterval(interval);
-  }, [isGenerating, isComplete, holdingLastMessage, lastMessageIndex]);
+  }, [isGenerating, isComplete, isReconnecting, holdingLastMessage, lastMessageIndex]);
 
   // Show sample preview after a delay (only during initial loading, before complete)
   useEffect(() => {

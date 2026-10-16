@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
   Modal,
@@ -49,14 +49,14 @@ export function AmbientQuietEnding({
   const toggle = useAmbientSoundActions();
   const track = getAmbientTrack(selectedTrackId);
   const playback = { status, pauseReason, volume };
-  // Tonight's heading and lines, drawn when the ending opens.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const copy = useMemo(() => quietEndingCopy(copyVariationFor(new Date())), [visible]);
+  // Tonight's heading and lines, drawn again each time the ending opens.
+  const [copy, setCopy] = useState(() => quietEndingCopy(copyVariationFor(new Date())));
 
   useEffect(() => {
     if (visible) {
       setQuiet(false);
       setSettings(false);
+      setCopy(quietEndingCopy(copyVariationFor(new Date())));
     }
   }, [visible]);
 

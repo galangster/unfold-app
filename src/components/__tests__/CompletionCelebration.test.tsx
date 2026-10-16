@@ -3,6 +3,8 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { CompletionCelebration } from '../CompletionCelebration';
 import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { completionCopy } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: { background: '#fff', text: '#111', textMuted: '#666' } }) }));
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: true }) }));
@@ -54,6 +56,22 @@ it('keeps onboarding continuation available without reader next steps', () => {
   const screen = render(<CompletionCelebration visible type="day" message="A beginning" onDismiss={dismiss} />);
   fireEvent.press(screen.getByRole('button', { name: /\. A beginning\. Continue$/ }));
   expect(dismiss).toHaveBeenCalledTimes(1);
+});
+
+it('moves the drawn title and line on for a later completion the same day', () => {
+  const firstCopy = completionCopy('day', copyVariationFor(new Date()));
+  const laterCopy = completionCopy('day', copyVariationFor(new Date()), 1);
+  expect(laterCopy.title).not.toBe(firstCopy.title);
+  expect(laterCopy.message).not.toBe(firstCopy.message);
+
+  const first = render(<CompletionCelebration visible type="day" onDismiss={jest.fn()} />);
+  expect(first.getByText(firstCopy.title)).toBeTruthy();
+  expect(first.getByText(firstCopy.message)).toBeTruthy();
+  first.unmount();
+
+  const later = render(<CompletionCelebration visible type="day" step={1} onDismiss={jest.fn()} />);
+  expect(later.getByText(laterCopy.title)).toBeTruthy();
+  expect(later.getByText(laterCopy.message)).toBeTruthy();
 });
 
 describe('gentle completion feedback', () => {

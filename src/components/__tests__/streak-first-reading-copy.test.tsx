@@ -112,7 +112,8 @@ import StreakSettingsScreen from '../../app/streak-settings';
 import { hasReadDevotionalToday } from '@/lib/home-devotional-state';
 import { persistOnboardingFirstReading } from '@/lib/onboarding-first-reading';
 import { flushUnfoldStorePersist, useUnfoldStore, type DevotionalDay } from '@/lib/store';
-import { RHYTHM_LINES } from '@/constants/daily-copy';
+import { RHYTHM_LINES, rhythmLine } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
 const SAMPLE_ID = 'onboarding-sample-streak-copy';
 const STARTS_TOMORROW = 'Your streak starts with tomorrow’s reading.';
@@ -226,6 +227,32 @@ describe('streak copy after the onboarding devotional', () => {
       const afterMidnight = texts(tree);
       expect(afterMidnight).not.toContain(STARTS_TOMORROW);
       expect(afterMidnight).toContain('Start your streak by completing a devotional');
+    } finally {
+      act(() => tree?.unmount());
+      jest.useRealTimers();
+    }
+  });
+
+  // Today can stay mounted overnight too. The rhythm line is drawn by local
+  // day, so it moves on at midnight even when the streak and the read state
+  // hold still.
+  it('draws the next day’s rhythm line in an open Today after local midnight', () => {
+    jest.useFakeTimers({ now: new Date(2026, 4, 10, 23, 59, 50) });
+    let tree!: ReturnType<typeof renderer.create>;
+    try {
+      act(() => {
+        tree = renderer.create(<StreakBox streakCount={0} hasReadToday={false} />);
+      });
+      const before = texts(tree).find((text) => BEGIN_LINES.includes(text));
+
+      act(() => {
+        jest.advanceTimersByTime(20_000);
+      });
+
+      const after = texts(tree).find((text) => BEGIN_LINES.includes(text));
+      expect(before).toBe(rhythmLine(0, copyVariationFor(new Date(2026, 4, 10, 12))));
+      expect(after).toBe(rhythmLine(0, copyVariationFor(new Date(2026, 4, 11, 12))));
+      expect(after).not.toBe(before);
     } finally {
       act(() => tree?.unmount());
       jest.useRealTimers();

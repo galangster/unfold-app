@@ -28,6 +28,11 @@ interface CompletionCelebrationProps {
   type: 'day' | 'series';
   message?: string;
   detail?: string;
+  /**
+   * Readings finished earlier on this local day. The drawn title and line
+   * move on one entry for each, so a second completion today reads differently.
+   */
+  step?: number;
   seriesReflectionSummary?: string;
   nextStep?: {
     title: string;
@@ -45,6 +50,7 @@ export function CompletionCelebration({
   type,
   message,
   detail,
+  step = 0,
   seriesReflectionSummary,
   nextStep,
 }: CompletionCelebrationProps) {
@@ -59,14 +65,12 @@ export function CompletionCelebration({
     action();
   };
 
-  // Drawn by local day each time the overlay opens, so it does not repeat
-  // yesterday's title or line.
+  // Drawn for the local day each time the overlay opens, so it does not
+  // repeat yesterday's title or line, and moved on by `step` within a day.
   const copy = useMemo(
-    () => completionCopy(type, copyVariationFor(new Date())),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible, type],
+    () => (visible ? completionCopy(type, copyVariationFor(new Date()), step) : null),
+    [visible, type, step],
   );
-  const subtitle = message || copy.message;
 
   // Overlay + content animation values
   const overlayOpacity = useSharedValue(0);
@@ -147,9 +151,10 @@ export function CompletionCelebration({
     opacity: hintOpacity.value,
   }));
 
-  if (!visible) return null;
+  if (!visible || !copy) return null;
 
   const { title } = copy;
+  const subtitle = message || copy.message;
   const seriesSummaryExcerpt = formatSeriesCompletionSummary(seriesReflectionSummary);
 
   return (

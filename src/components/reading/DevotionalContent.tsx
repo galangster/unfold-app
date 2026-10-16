@@ -24,6 +24,7 @@ import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark, useUnfo
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
 import { actOutcomeNote } from '@/constants/daily-copy';
 import { copySeed } from '@/lib/copy-variation';
+import { countReadsEarlierOnDay } from '@/lib/devotional-day-access';
 import { dayIndexFor } from '@/lib/variation-bag';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -181,11 +182,17 @@ export function DevotionalContent({
   const readingFont = useReadingFont();
 
   // The act note is drawn for the date the day was read, so a past day's note
-  // stays put. The draw reruns only when the outcome or that day changes.
-  const actNoteDayIndex = dayIndexFor(day.readAt ? new Date(day.readAt) : new Date());
+  // stays put, and moved on by the days read earlier that date, so two days
+  // finished in one sitting get different notes. The draw reruns only when
+  // the outcome, that day or that count changes.
+  const { readAt } = day;
+  const actNoteStep = useUnfoldStore((s) => (readAt ? countReadsEarlierOnDay(s.devotionals, new Date(readAt)) : 0));
+  const actNoteDayIndex = dayIndexFor(readAt ? new Date(readAt) : new Date());
   const actNote = useMemo(
-    () => (day.actOutcome ? actOutcomeNote(day.actOutcome, { seed: copySeed(), dayIndex: actNoteDayIndex }) : null),
-    [day.actOutcome, actNoteDayIndex],
+    () => (day.actOutcome
+      ? actOutcomeNote(day.actOutcome, { seed: copySeed(), dayIndex: actNoteDayIndex }, actNoteStep)
+      : null),
+    [day.actOutcome, actNoteDayIndex, actNoteStep],
   );
 
   // Fetch scripture with verse numbers from local DB, fallback to remote API.

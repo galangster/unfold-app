@@ -13,26 +13,27 @@
 type DayFrame = (day: number, series: string) => string;
 
 /**
- * The next day is not on the device yet. The title names it, with the day
- * number near the front so a long series name cannot push it off a banner.
+ * The next day (day 2 or later) is not on the device yet. The title names
+ * it. The frame and the day number come first and the series name last, so a
+ * long series name that runs off a lock-screen banner cuts only the name.
  */
 export const NEXT_DAY_TITLES: DayFrame[] = [
   (day, series) => `Day ${day} of ${series}`,
   (day, series) => `Day ${day} · ${series}`,
   (day, series) => `On to day ${day} of ${series}`,
-  (day, series) => `Day ${day} of ${series} is next`,
+  (day, series) => `What’s next: day ${day} of ${series}`,
   (day, series) => `Next up: day ${day} of ${series}`,
   (day, series) => `Day ${day} in ${series}`,
   (day, series) => `Today: day ${day} of ${series}`,
   (day, series) => `Day ${day}, ${series}`,
   (day, series) => `Coming up: day ${day} of ${series}`,
   (day, series) => `Back for day ${day} of ${series}`,
-  (day, series) => `Ready for day ${day} of ${series}?`,
+  (day, series) => `Your next step: day ${day} of ${series}`,
   (day, series) => `Time for day ${day} of ${series}`,
-  (day, series) => `Day ${day} of ${series}, when you’re ready`,
+  (day, series) => `When you’re ready: day ${day} of ${series}`,
   (day, series) => `Continue with day ${day} of ${series}`,
   (day, series) => `Day ${day}: ${series}`,
-  (day, series) => `Day ${day} of ${series} for today`,
+  (day, series) => `Turn to day ${day} of ${series}`,
 ];
 
 /**
@@ -72,6 +73,49 @@ export const NEXT_DAY_BODIES: string[] = [
   'Give today’s reading your attention when you can.',
   'Read today’s passage, then carry one line with you.',
   'God’s Word for today is waiting for you.',
+];
+
+/**
+ * Day 1 of the current series is unread: overdue on the device, or not on
+ * the device yet. Nothing has been read, so none of these claim a return or
+ * earlier progress, and none claims the day is ready.
+ */
+export const FIRST_DAY_TITLES: string[] = [
+  'Ready to begin?',
+  'A first reading for you',
+  'Start whenever you like',
+  'Begin at your own pace',
+  'A new series to start',
+  'Where your series starts',
+  'The first step is small',
+  'The start of something new',
+];
+
+/** Bodies for an unread Day 1. They name the day and the series. */
+export const FIRST_DAY_BODIES: DayFrame[] = [
+  (day, series) => `${series} begins with day ${day}.`,
+  (day, series) => `Start ${series} with day ${day}, whenever you have a moment.`,
+  (day, series) => `Your first reading in ${series} is one tap away.`,
+  (day, series) => `Day ${day} of ${series} is where it all starts.`,
+  (day, series) => `Open Unfold to begin day ${day} of ${series}.`,
+  (day, series) => `There is no rush to start ${series}. Day ${day} comes first.`,
+  (day, series) => `Day ${day} of ${series} only needs a few quiet minutes.`,
+  (day, series) => `Begin ${series} at day ${day}, at whatever pace suits you.`,
+];
+
+/**
+ * The pointer sits past the last day of the series. The title stays the
+ * series name. No body claims more of the series or that it is finished.
+ */
+export const PAST_END_BODIES: string[] = [
+  'Open Unfold to choose what you read next.',
+  'Your next step is on Today.',
+  'Scripture is here whenever you want it.',
+  'See what Today has for you.',
+  'This series stays in your library.',
+  'Choose a new direction on Today when you’re ready.',
+  'A few minutes in Scripture is a good place to start.',
+  'Read something new today, at your own pace.',
 ];
 
 /** The day is on the device but its date has passed unread. */
@@ -162,9 +206,12 @@ export const PAUSED_TITLES: string[] = [
   'The Bible, at your pace',
 ];
 
-/** Paused bodies. Every one names Premium and none suggests work is underway. */
-export const PAUSED_BODIES: string[] = [
-  'Open scripture today, or renew Premium when you’re ready for another personal reading.',
+/**
+ * Paused bodies when a series is current. Every one names Premium and none
+ * suggests work is underway.
+ */
+export const PAUSED_SERIES_BODIES: string[] = [
+  'Your series is paused, and Scripture is open to you. Renew Premium to go on with it.',
   'Read scripture today, or renew Premium when you’re ready for the next personal reading.',
   'Read a chapter today. Renew Premium when you want personal readings again.',
   'Scripture is always here to read. Premium brings back your personal readings.',
@@ -194,6 +241,44 @@ export const PAUSED_BODIES: string[] = [
   'The Scriptures are open to you today. Premium is ready when you are.',
   'Read today, and keep the habit going. Renew Premium for personal readings.',
   'Keep your place in Scripture today. Renew Premium for readings written for you.',
+];
+
+/**
+ * Paused bodies when no series is current. The same rules, and none names a
+ * series. No line is in both paused pools, so a change between the two
+ * states cannot bring yesterday's line back.
+ */
+export const PAUSED_NO_SERIES_BODIES: string[] = [
+  'Open scripture today, or renew Premium when you’re ready for another personal reading.',
+  'Read a psalm slowly today. Renew Premium when you want a personal study.',
+  'Scripture is open to you today. Premium adds readings written for you.',
+  'Start with a few verses today. Renew Premium for a study made for you.',
+  'Read a story from the Gospels today. Premium can shape a study around your life.',
+  'Find one verse to carry with you today. Renew Premium for personal readings.',
+  'Read a little today, even a few lines. Premium is here when you want more.',
+  'Choose any passage today. Renew Premium when you want readings shaped for you.',
+  'Read a short passage today. Renew Premium to start a personal study.',
+  'Spend a while in John today. Premium can begin a study of your own.',
+  'Read the words of Jesus today. Renew Premium for readings shaped around you.',
+  'Pick any book of Scripture today. Premium makes a study just for you.',
+  'Read a little Scripture today. Renew Premium for a study of your own.',
+  'Scripture is a good place to start today. Premium can add a personal reading.',
+  'Read a parable today. Premium brings personal readings when you’re ready.',
+  'Open to any page of Scripture today. Renew Premium for a personal study.',
+  'Read a verse and stay with it today. Premium is there for a personal study.',
+  'Let a psalm speak today. Renew Premium when you want readings written for you.',
+  'Read the Sermon on the Mount today. Premium can give you a study of your own.',
+  'Spend a few minutes in Scripture today. Premium adds a personal study when you want it.',
+  'Read Scripture in your own way today. Renew Premium for personal readings.',
+  'Read a few lines of Scripture today. Renew Premium for a personal reading.',
+  'Read Romans 8 today, or any passage you love. Renew Premium for a personal study.',
+  'A few minutes with Scripture is enough today. Premium adds a study made for you.',
+  'Read a few Proverbs today. Premium can shape a study for you.',
+  'Read slowly and see what stays with you. Renew Premium for personal readings.',
+  'Read a passage you know well today. Renew Premium for readings made for you.',
+  'Open a psalm and read it twice today. Premium is ready when you want a personal study.',
+  'Read whatever Scripture you like today. Premium brings personal studies when you want them.',
+  'Start in the Psalms today. Renew Premium for a study shaped around you.',
 ];
 
 /** No active series. */

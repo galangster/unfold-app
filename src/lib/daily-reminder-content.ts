@@ -1,11 +1,15 @@
 import {
+  FIRST_DAY_BODIES,
+  FIRST_DAY_TITLES,
   IDLE_BODIES,
   IDLE_TITLES,
   NEXT_DAY_BODIES,
   NEXT_DAY_TITLES,
   OVERDUE_BODIES,
   OVERDUE_TITLES,
-  PAUSED_BODIES,
+  PAST_END_BODIES,
+  PAUSED_NO_SERIES_BODIES,
+  PAUSED_SERIES_BODIES,
   PAUSED_TITLES,
 } from '@/constants/reading-reminder-messages';
 import { getReadingDayLabel } from './devotional-day-access';
@@ -170,11 +174,24 @@ function truncateBody(text: string, maxLength = 100): string {
   return truncateNotificationBody(text, maxLength);
 }
 
-/** Bible reading and a renewal invitation, with no claim that anything is being written. */
-function pausedContent(variation: CopyVariation): DailyReminderContent {
+/**
+ * Bible reading and a renewal invitation, with no claim that anything is
+ * being written. Only a reader with a current series gets lines that name it.
+ */
+function pausedContent(variation: CopyVariation, hasSeries: boolean): DailyReminderContent {
   return {
     title: drawCopy(PAUSED_TITLES, variation, 'reminder-paused-title'),
-    body: drawCopy(PAUSED_BODIES, variation, 'reminder-paused-body'),
+    body: hasSeries
+      ? drawCopy(PAUSED_SERIES_BODIES, variation, 'reminder-paused-series-body')
+      : drawCopy(PAUSED_NO_SERIES_BODIES, variation, 'reminder-paused-body'),
+  };
+}
+
+/** Day 1 is unread, on the device or not: no claim of a return or of earlier progress. */
+function firstDayContent(variation: CopyVariation, series: string): DailyReminderContent {
+  return {
+    title: drawCopy(FIRST_DAY_TITLES, variation, 'reminder-first-day-title'),
+    body: drawCopy(FIRST_DAY_BODIES, variation, 'reminder-first-day-body')(1, series),
   };
 }
 
@@ -193,7 +210,7 @@ export function getDailyReminderContent({
 
   // No active devotional
   if (!currentDevotional) {
-    if (premiumPolicy === 'denied') return pausedContent(variation);
+    if (premiumPolicy === 'denied') return pausedContent(variation, false);
 
     return {
       title: drawCopy(IDLE_TITLES, variation, 'reminder-idle-title'),
@@ -208,6 +225,8 @@ export function getDailyReminderContent({
     const isOverdue = getReadingDayLabel(currentDevotional, currentDay, now) === 'Overdue';
 
     if (isOverdue) {
+      // An overdue Day 1 was never read, so there is nothing to return to.
+      if (currentDay.dayNumber <= 1) return firstDayContent(variation, currentDevotional.title);
       return {
         title: drawCopy(OVERDUE_TITLES, variation, 'reminder-overdue-title'),
         body: drawCopy(OVERDUE_BODIES, variation, 'reminder-overdue-body')(currentDay.dayNumber, currentDevotional.title),
@@ -233,7 +252,7 @@ export function getDailyReminderContent({
 
   // Premium-denied users should never see generation or "next day is being
   // prepared" copy. That implies work is happening when the series is paused.
-  if (premiumPolicy === 'denied') return pausedContent(variation);
+  if (premiumPolicy === 'denied') return pausedContent(variation, true);
 
   // The next day is not on device yet. This is the NORMAL state at bedtime:
   // today's reading is done, tomorrow's is generated overnight and only
@@ -242,7 +261,13 @@ export function getDailyReminderContent({
   // on a day that was already waiting. Name the day instead and let the app
   // fetch it on open.
   const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
-  const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
+  const totalDays = getServerOwnedSeriesTotalDays(currentDevotional);
+  // Past the last day there is no next day to promise.
+  if (totalDays > 0 && nextDayNumber > totalDays) {
+    return { title: currentDevotional.title, body: drawCopy(PAST_END_BODIES, variation, 'reminder-past-end-body') };
+  }
+  if (nextDayNumber === 1) return firstDayContent(variation, currentDevotional.title);
+  const inSeries = nextDayNumber <= totalDays;
   return {
     title: inSeries
       ? drawCopy(NEXT_DAY_TITLES, variation, 'reminder-next-title')(nextDayNumber, currentDevotional.title)

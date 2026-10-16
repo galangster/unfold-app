@@ -30,7 +30,9 @@ import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { companionGreeting } from '@/constants/daily-copy';
-import { copyVariationFor } from '@/lib/copy-variation';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 
@@ -80,8 +82,15 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
   const reducedMotion = useReducedMotion();
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
 
-  // One greeting per local day from the bag, so it does not come back tomorrow.
-  const greeting = useMemo(() => companionGreeting(userName, copyVariationFor(new Date())), [userName]);
+  // One greeting per local day from the bag, so it does not come back
+  // tomorrow. The day moves at midnight and on resume, so a tab left mounted
+  // overnight greets with the next day's line.
+  const calendarNow = useCalendarNow();
+  const greetingDay = dayIndexFor(calendarNow);
+  const greeting = useMemo(
+    () => companionGreeting(userName, { seed: copySeed(), dayIndex: greetingDay }),
+    [userName, greetingDay],
+  );
 
   const hasHistory = useUnfoldStore((s) => (s.devotionals?.length ?? 0) > 0);
 

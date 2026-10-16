@@ -75,6 +75,7 @@ import {
 } from '@/lib/devotional-canonical-days';
 import {
   blockedForwardMessage,
+  countReadsEarlierOnDay,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -405,6 +406,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     savedPassage?: SavedScripturePassage;
   } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
+  // Readings finished earlier on this local day. The overlay moves its copy
+  // on one entry for each, so a catch-up session does not repeat it.
+  const [celebrationStep, setCelebrationStep] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
@@ -1487,6 +1491,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     const existingDay = useUnfoldStore.getState().devotionals
       .find((row) => row.id === effectiveDevotionalId)?.days?.find((row) => row.dayNumber === viewingDay);
     if (!existingDay || existingDay.isRead) return;
+    // Counted before this day is marked read, so it counts only earlier ones.
+    setCelebrationStep(countReadsEarlierOnDay(useUnfoldStore.getState().devotionals, new Date()));
     const soundEnding = endAmbientReflection();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
@@ -1578,7 +1584,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
   // Only the open overlay reads the step, so a hidden render skips the draw.
   const completionNextStep = showCelebration
-    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed())
+    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationStep)
     : null;
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
@@ -3285,6 +3291,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
         } : undefined}
         type={celebrationType}
+        step={celebrationStep}
         seriesReflectionSummary={
           celebrationType === 'series'
             ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary

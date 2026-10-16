@@ -178,6 +178,16 @@ export function drawRotation<T>(pool: readonly T[], variation: CopyVariation, fi
 }
 
 /**
+ * The entry `step` places after the day's draw, wrapping round. Step 0 is
+ * the draw itself. For a surface that can show more than once in one day,
+ * so each later showing moves on instead of repeating the first.
+ */
+export function drawCopyAt<T>(pool: readonly T[], variation: CopyVariation, field: string, step: number): T {
+  const rotation = drawRotation(pool, variation, field);
+  return rotation[step % rotation.length] ?? pool[0];
+}
+
+/**
  * Days since the Unix epoch for the LOCAL calendar day of `date`.
  *
  * Built from the local Y/M/D rather than the timestamp so that "which day is
