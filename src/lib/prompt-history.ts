@@ -67,6 +67,28 @@ export function openingWords(text: string, count = 4): string {
   return trimTrailing(text.trim().split(/\s+/).slice(0, count).join(' '), OPENING_END);
 }
 
+/**
+ * `line` with the reader's name replaced by "[name]", so a line kept from a
+ * morning that used the name cannot carry it into a request on a morning
+ * that withholds it. The whole name and each of its words count, as whole
+ * words in any case, unless the match starts with a lowercase letter: a
+ * name is written with a capital, and "grace" in a sentence is not Grace.
+ * A straight apostrophe in the name matches a curly one too.
+ */
+export function withoutName(line: string, name: string | null | undefined): string {
+  const full = (name ?? '').trim();
+  const forms = [...new Set([full, ...full.split(/\s+/)])]
+    .filter((form) => form.length > 1)
+    .sort((a, b) => b.length - a.length);
+  return forms.reduce((text, form) => {
+    const body = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/['’]/g, "['’]").replace(/\s+/g, '\\s+');
+    const pattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${body})(?![\\p{L}\\p{N}])`, 'giu');
+    return text.replace(pattern, (whole: string, before: string, found: string) =>
+      found[0] === found[0].toUpperCase() ? `${before}[name]` : whole,
+    );
+  }, line);
+}
+
 /** The lines with repeats removed, in first-seen order. Case and punctuation do not make two lines different. */
 function uniqueLines(lines: readonly string[]): string[] {
   const seen = new Set<string>();

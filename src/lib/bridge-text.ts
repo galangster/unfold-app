@@ -5,9 +5,11 @@
  * Banned phrases used to be deleted as raw substrings, case-insensitively,
  * from the middle of the text. That cut words apart: "journeyed" became
  * "ed", "boyfriend," became "boy", and "a season of rest" became "a of rest".
- * Now a phrase counts only as whole words, and a sentence that holds one goes
- * whole. When too little is left to read as a bridge, the result is null and
- * Today shows no bridge, the same state as a failed request.
+ * Removing the one sentence that held a phrase still broke bridges, because
+ * a sentence split can be wrong: after an ellipsis, before a dialogue tag,
+ * or inside a quotation. Now a phrase counts only as whole words outside
+ * quotation marks, and a bridge that holds one is dropped whole, never cut.
+ * Today then shows no bridge, the same state as a failed request.
  */
 
 import { BANNED_PHRASES } from '@/constants/persona';
@@ -15,14 +17,10 @@ import { capitalizeGodSlips } from '@/lib/god-capitalization';
 
 /**
  * Crude words the persona forbids. They used to be deleted mid-sentence too,
- * and "freaking" was swapped for "really", which is itself banned. A sentence
- * that holds one now goes whole, like a sentence with a banned phrase.
+ * and "freaking" was swapped for "really", which is itself banned. A bridge
+ * that holds one is now dropped whole, like a bridge with a banned phrase.
  */
 const CRUDE_PHRASES = ['as hell', 'hell of a', 'damn', 'freaking'];
-
-/** What must remain after a sentence is removed for the rest to read as a bridge. */
-const MIN_KEPT_SENTENCES = 2;
-const MIN_KEPT_WORDS = 15;
 
 // ---------------------------------------------------------------------------
 // Shared text rules
@@ -77,10 +75,20 @@ const WORD_START = '(?:^|[^\\p{L}\\p{N}])';
 /** After a phrase that ends in a letter or digit: no letter or digit. */
 const WORD_END = '(?![\\p{L}\\p{N}])';
 
-/** Every banned phrase, lowercased and longest first, so "season of" is found before "season". */
+/**
+ * "Friend," is banned as the vocative that opens a sentence ("Friend, this
+ * one is for you."), so it counts only where a sentence starts. "Think of a
+ * friend, a sister" keeps its friend.
+ */
+const SENTENCE_OPENER = 'friend,';
+const SENTENCE_OPENER_PATTERN = /(^|[.!?…]["'”’)\]]*\s+)friend,/giu;
+
+/** Every other banned phrase, lowercased and longest first, so "season of" is found before "season". */
 const BANNED: readonly string[] = [
   ...new Set([...BANNED_PHRASES, ...CRUDE_PHRASES].map((phrase) => phrase.toLowerCase())),
-].sort((a, b) => b.length - a.length);
+]
+  .filter((phrase) => phrase !== SENTENCE_OPENER)
+  .sort((a, b) => b.length - a.length);
 
 /**
  * One phrase as a pattern body. Spaces match any run of whitespace, and a
@@ -96,9 +104,10 @@ function phraseBody(phrase: string): string {
 }
 
 /**
- * Two patterns test a sentence for every banned phrase at once. The phrases
- * that end in a letter or digit need the word-end check. The few that end in
- * punctuation ("Friend,", "Can I be honest?") do not.
+ * Two patterns test a text for every banned phrase at once, quoted or not, so
+ * clean text costs two tests. The phrases that end in a letter or digit need
+ * the word-end check. The few that end in punctuation ("Can I be honest?")
+ * do not.
  */
 const BANNED_GATES: readonly RegExp[] = [true, false].flatMap((needsWordEnd) => {
   const bodies = BANNED.filter((phrase) => LETTER_OR_DIGIT_END.test(phrase) === needsWordEnd).map(phraseBody);
@@ -109,19 +118,67 @@ function holdsBannedPhrase(text: string): boolean {
   return BANNED_GATES.some((gate) => gate.test(text));
 }
 
-/** Built on the first call: only tests and logs need to know which phrase matched. */
+/**
+ * The spans of `text` inside matched double quotation marks, the marks
+ * included: straight marks in pairs, in order, and each “ with the next ”.
+ * Quoted words belong to someone else, often the passage itself ("the
+ * journey is too much for you"), so a banned word there does not count. A
+ * mark with no partner opens no span.
+ */
+function quotedSpans(text: string): [number, number][] {
+  const spans: [number, number][] = [];
+  let open = -1;
+  for (let at = text.indexOf('"'); at >= 0; at = text.indexOf('"', at + 1)) {
+    if (open < 0) {
+      open = at;
+    } else {
+      spans.push([open, at + 1]);
+      open = -1;
+    }
+  }
+  for (let at = text.indexOf('“'); at >= 0; at = text.indexOf('“', at + 1)) {
+    const close = text.indexOf('”', at + 1);
+    if (close < 0) break;
+    spans.push([at, close + 1]);
+    at = close;
+  }
+  return spans;
+}
+
+/**
+ * Built on the first call: each phrase as a pattern that finds every place
+ * it occurs. The first group is the character before the phrase, so the
+ * phrase starts at the end of that group.
+ */
 let phrasePatterns: { phrase: string; pattern: RegExp }[] | null = null;
 
-/** The longest banned phrase `text` holds as whole words, or null. */
+/**
+ * The longest banned phrase `text` holds as whole words outside quotation
+ * marks, or null. "Friend," counts only where a sentence starts.
+ */
 export function findBannedPhrase(text: string): string | null {
-  if (!holdsBannedPhrase(text)) return null;
-  if (!phrasePatterns) {
-    phrasePatterns = BANNED.map((phrase) => ({
-      phrase,
-      pattern: new RegExp(`${WORD_START}${phraseBody(phrase)}${LETTER_OR_DIGIT_END.test(phrase) ? WORD_END : ''}`, 'iu'),
-    }));
+  const spans = quotedSpans(text);
+  const unquoted = (match: RegExpMatchArray) => {
+    const at = (match.index ?? 0) + match[1].length;
+    return !spans.some(([start, end]) => at >= start && at < end);
+  };
+  if (holdsBannedPhrase(text)) {
+    if (!phrasePatterns) {
+      phrasePatterns = BANNED.map((phrase) => ({
+        phrase,
+        pattern: new RegExp(`(${WORD_START})${phraseBody(phrase)}${LETTER_OR_DIGIT_END.test(phrase) ? WORD_END : ''}`, 'giu'),
+      }));
+    }
+    for (const { phrase, pattern } of phrasePatterns) {
+      for (const match of text.matchAll(pattern)) {
+        if (unquoted(match)) return phrase;
+      }
+    }
   }
-  return phrasePatterns.find(({ pattern }) => pattern.test(text))?.phrase ?? null;
+  for (const match of text.matchAll(SENTENCE_OPENER_PATTERN)) {
+    if (unquoted(match)) return SENTENCE_OPENER;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,12 +235,14 @@ export function isDisplayableBridge(text: string): boolean {
 }
 
 /**
- * Clean a bridge the model wrote: no em dashes, God capitalized where it
- * names God, and no sentence that holds a banned or crude phrase.
+ * Clean a bridge the model wrote: no em dashes, and God capitalized where it
+ * names God.
  *
- * Returns null when the bridge cannot be shown: it was cut off, or removing
- * the sentences with banned phrases left too little to read as a bridge.
- * Running it twice gives the same result as running it once.
+ * Returns null when the bridge cannot be shown: it holds a banned or crude
+ * phrase outside quotation marks, or it was cut off mid-sentence. A bridge
+ * is kept whole or dropped whole, never cut, so a sentence split that goes
+ * wrong cannot leave half a sentence on Today. Running it twice gives the
+ * same result as running it once.
  */
 export function sanitizeBridgeText(text: string): string | null {
   const cleaned = capitalizeGodSlips(
@@ -194,16 +253,6 @@ export function sanitizeBridgeText(text: string): string | null {
       .replace(/^,\s*/, '')
       .trim(),
   );
-
-  const sentences = splitSentences(cleaned);
-  // A reply cut off mid-sentence keeps only its complete sentences.
-  if (sentences.length > 1 && !endsSentence(sentences[sentences.length - 1])) {
-    sentences.pop();
-  }
-
-  const kept = sentences.filter((sentence) => !holdsBannedPhrase(sentence));
-  const result = kept.join(' ');
-  const removedSome = kept.length < sentences.length;
-  if (removedSome && (kept.length < MIN_KEPT_SENTENCES || countWords(result) < MIN_KEPT_WORDS)) return null;
-  return isDisplayableBridge(result) ? result : null;
+  if (findBannedPhrase(cleaned) !== null) return null;
+  return isDisplayableBridge(cleaned) ? cleaned : null;
 }

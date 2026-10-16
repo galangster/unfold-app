@@ -68,18 +68,27 @@ jest.mock('@/lib/theme', () => ({
   }),
 }));
 jest.mock('@/hooks/useGuardedBack', () => ({ useGuardedBack: () => jest.fn() }));
+// A test that needs a reader and a series puts them here and restores it after.
+const mockStoreState: {
+  user: object | null;
+  devotionals: object[];
+  currentDevotionalId: string | null;
+  checkIns: object[];
+  addCheckIn: jest.Mock;
+  markEveningWindDownCompleted: jest.Mock;
+  beginRitualSession: jest.Mock;
+} = {
+  user: null,
+  devotionals: [],
+  currentDevotionalId: null,
+  checkIns: [],
+  addCheckIn: jest.fn(),
+  markEveningWindDownCompleted: jest.fn(),
+  beginRitualSession: jest.fn(),
+};
 jest.mock('@/lib/store', () => {
-  const state = {
-    user: null,
-    devotionals: [],
-    currentDevotionalId: null,
-    checkIns: [],
-    addCheckIn: jest.fn(),
-    markEveningWindDownCompleted: jest.fn(),
-    beginRitualSession: jest.fn(),
-  };
-  const useUnfoldStore = (selector: (s: typeof state) => unknown) => selector(state);
-  useUnfoldStore.getState = () => state;
+  const useUnfoldStore = (selector: (s: typeof mockStoreState) => unknown) => selector(mockStoreState);
+  useUnfoldStore.getState = () => mockStoreState;
   return { useUnfoldStore };
 });
 jest.mock('@/lib/examen-service', () => ({ generateExamen: jest.fn() }));
@@ -195,6 +204,46 @@ describe('Evening wind-down pages', () => {
     // The lower pane runs from the fold gutter to the bottom of the window.
     expect(flatStyle(lower).height).toBe(duoUpright.height / 2 + 20);
     expect(flatStyle(lower).justifyContent).toBe('flex-end');
+  });
+
+  it('keeps the prayer on screen when midnight passes while it is open', () => {
+    mockLayout = phone;
+    const saved = { ...mockStoreState };
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 9, 16, 23, 50));
+    try {
+      Object.assign(mockStoreState, {
+        user: { name: 'Alex', currentSituation: '' },
+        currentDevotionalId: 'dev-1',
+        devotionals: [{
+          id: 'dev-1',
+          title: 'Rest',
+          currentDay: 3,
+          totalDays: 7,
+          days: [{
+            dayNumber: 3,
+            title: 'Bread Under the Broom Tree',
+            scriptureReference: '1 Kings 19:5',
+            isRead: true,
+            readAt: new Date(2026, 9, 16, 23, 40).toISOString(),
+          }],
+        }],
+      });
+      const tree = render();
+      const prayerText = () => textOf(tree.root.findByProps({ testID: 'evening-wind-down-prayer-page' }));
+      expect(prayerText()).toContain('Keep me through the night.');
+
+      // Past midnight the day was read yesterday by the live clock. Any
+      // re-render, such as a store update, asks the screen again.
+      jest.setSystemTime(new Date(2026, 9, 17, 0, 10));
+      act(() => { tree.update(React.createElement(EveningWindDownScreen)); });
+
+      expect(prayerText()).toContain('Keep me through the night.');
+      expect(prayerText()).not.toContain('Read it now');
+    } finally {
+      Object.assign(mockStoreState, saved);
+      jest.useRealTimers();
+    }
   });
 
   it("prints the night's closing line under the prayer, or no line", () => {

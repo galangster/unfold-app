@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ./src/lib/__tests__/fixtures/pacific-time-environment.js
+ */
 /* eslint-disable import/first */
 /**
  * The requests behind the prompts the app writes itself: the evening examen,
@@ -5,6 +8,10 @@
  * already got, recorded when it was cached, so the model does not write it
  * again, and the day's shape from the bag. The bridge and examen caches key on
  * the local day of the date the caller passes.
+ *
+ * The file runs on a reader's clock in Los Angeles (the environment above),
+ * on every machine and in CI. There, 00:30 and 23:30 on one local day fall on
+ * two UTC dates, so a cache key built from the UTC date fails the key tests.
  */
 
 jest.mock('@/lib/api-config', () => ({
@@ -34,8 +41,9 @@ jest.mock('@/lib/mmkv-storage', () => ({
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { authenticatedFetch } from '@/lib/device-credential';
 import { clearBridgeCache, generateBridge } from '../bridge-service';
-import { clearExamenCache, generateExamen, parseCachedExamen } from '../examen-service';
+import { clearExamenCache, generateExamen } from '../examen-service';
 import { buildGoDeeperRequest } from '../go-deeper-prompt';
+import { withoutName } from '../prompt-history';
 import { bridgeShapeFor, examenShapeFor, goDeeperAnglesFor } from '../prompt-variety';
 import type { JournalEntry } from '../store';
 import { dayIndexFor } from '../variation-bag';
@@ -77,6 +85,15 @@ function examenReply(tag: string) {
 
 function bridgeReply(text: string) {
   return { content: [{ text }] };
+}
+
+/** The first local morning in October 2026, from `fromDay` on, whose bridge does or does not use the name. */
+function bridgeMorning(useName: boolean, fromDay = 1): Date {
+  for (let day = fromDay; day <= 31; day += 1) {
+    const morning = new Date(2026, 9, day, 7, 0);
+    if (bridgeShapeFor({ seed: SEED, dayIndex: dayIndexFor(morning) }).useName === useName) return morning;
+  }
+  throw new Error('no such morning in October 2026');
 }
 
 function lastRequest(): { system: string; userMessage: string } {
@@ -178,7 +195,10 @@ describe('examen request', () => {
   });
 
   it("keys the cache by the local day of the date it is given, not the UTC date", async () => {
-    // Outside UTC, these two local times fall on different UTC dates.
+    // In this file's zone, 23:30 on 16 October is already 17 October in UTC.
+    // This fails first if the zone pin at the top of the file is lost.
+    expect(new Date(2026, 9, 16, 23, 30).toISOString().slice(0, 10)).toBe('2026-10-17');
+
     respondWith(examenReply('echo'));
     await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, new Date(2026, 9, 16, 0, 30));
 
@@ -192,12 +212,57 @@ describe('examen request', () => {
     expect(nextDay?.movements[0].title).toBe('foxtrot title 0');
   });
 
-  it('reads a cached examen from before the closing line varied as ending on "Amen."', () => {
-    const movements = [0, 1, 2, 3, 4].map((i) => ({ title: `Title ${i}`, prayer: 'A prayer.' }));
-    expect(parseCachedExamen(JSON.stringify({ movements, totalWordCount: 10 }))?.closingLine).toBe('Amen.');
-    expect(parseCachedExamen(JSON.stringify({ movements, totalWordCount: 10, closingLine: null }))?.closingLine).toBeNull();
-    expect(parseCachedExamen(JSON.stringify({ movements: movements.slice(1), totalWordCount: 8 }))).toBeNull();
-    expect(parseCachedExamen('not json')).toBeNull();
+  it('keeps a night with no closing line when it reads the prayer back from the cache', async () => {
+    let night = new Date(2026, 9, 1, 21, 0);
+    while (examenShapeFor({ seed: SEED, dayIndex: dayIndexFor(night) }).closingLine !== null) {
+      night = new Date(night.getFullYear(), night.getMonth(), night.getDate() + 1, 21, 0);
+    }
+    respondWith(examenReply('hotel'));
+    expect((await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, night))?.closingLine).toBeNull();
+
+    const cached = await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, night);
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+    expect(cached?.movements[0].title).toBe('hotel title 0');
+    expect(cached?.closingLine).toBeNull();
+  });
+
+  it("strips an Amen with its Jesus' name clause, every repeated Amen, and an Amen inside closing quotation marks", async () => {
+    respondWith({
+      content: [{
+        text: JSON.stringify({
+          movements: [
+            { title: 'Kept close', prayer: 'Keep me, Lord, in Jesus’ name, amen.' },
+            { title: 'Rest', prayer: 'Rest me tonight. Amen. Amen.' },
+            { title: 'Held', prayer: 'I rest in you. Amen.”' },
+            { title: 'Quoted', prayer: '“I rest in you. Amen.”' },
+            { title: 'Close', prayer: 'Hold us close. In Jesus’ name we pray. Amen.' },
+          ],
+        }),
+      }],
+    });
+
+    const prayer = await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, new Date(2026, 9, 14, 21, 0));
+
+    expect(prayer?.movements.map((movement) => movement.prayer)).toEqual([
+      'Keep me, Lord.',
+      'Rest me tonight.',
+      'I rest in you.',
+      '“I rest in you.”',
+      'Hold us close.',
+    ]);
+  });
+
+  it('asks again when a movement is only an Amen', async () => {
+    const onlyAmen = examenReply('india');
+    const movements = JSON.parse(onlyAmen.content[0].text).movements as { title: string; prayer: string }[];
+    movements[2].prayer = 'Amen.';
+    respondWith({ content: [{ text: JSON.stringify({ movements }) }] });
+    respondWith(examenReply('juliet'));
+
+    const prayer = await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, new Date(2026, 9, 14, 21, 0));
+
+    expect(authenticatedFetch).toHaveBeenCalledTimes(2);
+    expect(prayer?.movements[2].prayer).toBe('juliet opens movement 2 tonight. The rest of the prayer follows here.');
   });
 });
 
@@ -248,6 +313,10 @@ describe('bridge request', () => {
   });
 
   it("keys the cache by the local day of the date it is given, not the UTC date", async () => {
+    // In this file's zone, 23:30 on 16 October is already 17 October in UTC.
+    // This fails first if the zone pin at the top of the file is lost.
+    expect(new Date(2026, 9, 16, 23, 30).toISOString().slice(0, 10)).toBe('2026-10-17');
+
     respondWith(bridgeReply(BRIDGE_A));
     expect(await generateBridge(BRIDGE_INPUT, 'dev-1', 6, new Date(2026, 9, 16, 0, 30))).toBe(BRIDGE_A);
 
@@ -259,6 +328,21 @@ describe('bridge request', () => {
     expect(authenticatedFetch).toHaveBeenCalledTimes(2);
   });
 
+  it('sends a first sentence that held the name as "[name]" on a morning without the name', async () => {
+    const namedMorning = bridgeMorning(true);
+    const plainMorning = bridgeMorning(false, namedMorning.getDate() + 1);
+    respondWith(bridgeReply('Rest gets a whole chapter today, Alex. Elijah sleeps under a tree and wakes to bread. What would you do with that kind of morning?'));
+    await generateBridge(BRIDGE_INPUT, 'dev-1', 10, namedMorning);
+
+    respondWith(bridgeReply(BRIDGE_B));
+    await generateBridge(BRIDGE_INPUT, 'dev-1', 11, plainMorning);
+
+    const { userMessage } = lastRequest();
+    expect(userMessage).toContain('- Name: Do not use their name today.');
+    expect(userMessage).toContain('RECENT FIRST SENTENCES (do not reuse their wording or their first words):\n- Rest gets a whole chapter today, [name].');
+    expect(userMessage).not.toContain('Alex');
+  });
+
   it('caches and shows a bridge that ends in a curly closing quote', async () => {
     const quoted = 'Elijah is done, and he says so. Today the reading lets him sleep. The angel said, “Get up and eat.”';
     const morning = new Date(2026, 9, 16, 7, 0);
@@ -268,7 +352,7 @@ describe('bridge request', () => {
     expect(authenticatedFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('shows no bridge, and caches and records none, when banned phrases leave too little', async () => {
+  it('shows no bridge, and caches and records none, when a banned phrase sits outside quotation marks', async () => {
     const morning = new Date(2026, 9, 16, 7, 0);
     respondWith(bridgeReply("It's about a season of rest. Elijah slept for a long time."));
     expect(await generateBridge(BRIDGE_INPUT, 'dev-1', 7, morning)).toBeNull();
@@ -343,5 +427,54 @@ describe('Go Deeper request', () => {
 
   it('sends no recent block before the reader has any prompts', () => {
     expect(request([entry('e1', '2026-10-10T10:00:00.000Z')]).userMessage).not.toContain('RECENT PROMPTS');
+  });
+
+  it('leaves a saved prompt that is not a string out of the request, and still counts its entry', () => {
+    const broken = entry('e6', '2026-10-15T10:00:00.000Z', [{ prompt: 'P6x' }, null, 7, 'P6a'] as unknown as string[]);
+
+    const { userMessage } = request([...ENTRIES, broken]);
+
+    expect(userMessage).toContain('RECENT PROMPTS (do not reuse their wording or their first words):\n- P6a\n- P5a');
+    expect(userMessage).not.toContain('P6x');
+    // Five entries hold prompts, the broken one included, so this is request number five.
+    goDeeperAnglesFor({ seed: SEED, dayIndex: 5 }).forEach((angle, index) => {
+      expect(userMessage).toContain(`${index + 1}. ${angle.instruction}`);
+    });
+  });
+});
+
+describe('withoutName', () => {
+  it('replaces the name and each of its words in any case, but not a lowercase word or a longer name', () => {
+    expect(withoutName('Rest gets a whole chapter today, Alex.', 'Alex')).toBe('Rest gets a whole chapter today, [name].');
+    expect(withoutName('ALEX, rest. Alex’s week was long.', 'alex')).toBe('[name], rest. [name]’s week was long.');
+    expect(withoutName('Mary Ann, rest. Mary, eat.', 'Mary Ann')).toBe('[name], rest. [name], eat.');
+    expect(withoutName('God’s grace meets Grace today.', 'Grace')).toBe('God’s grace meets [name] today.');
+    expect(withoutName('O’Brien rests.', "O'Brien")).toBe('[name] rests.');
+    expect(withoutName('Alexander rests.', 'Alex')).toBe('Alexander rests.');
+    expect(withoutName('Nothing to hide.', '')).toBe('Nothing to hide.');
+  });
+});
+
+describe('the shared persona in the bridge and examen requests', () => {
+  it('quotes no opener or example line the model could copy', async () => {
+    respondWith(examenReply('kilo'));
+    await generateExamen(EXAMEN_INPUT, EXAMEN_CONTEXT, new Date(2026, 9, 14, 21, 0));
+    const examenSystem = lastRequest().system;
+    respondWith(bridgeReply(BRIDGE_A));
+    await generateBridge(BRIDGE_INPUT, 'dev-1', 3, new Date(2026, 9, 14, 7, 0));
+    const bridgeSystem = lastRequest().system;
+
+    for (const line of [
+      'You may have noticed',
+      'You know that feeling when',
+      'God, help us see',
+      'A woman once',
+      'There was a farmer who',
+      "You've been stressed about money",
+      'That takes courage',
+    ]) {
+      expect(examenSystem).not.toContain(line);
+      expect(bridgeSystem).not.toContain(line);
+    }
   });
 });

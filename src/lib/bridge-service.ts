@@ -22,7 +22,7 @@ import { HAIKU_REQUEST_MODEL } from './ai-model';
 import { firstSentence, sanitizeBridgeText } from '@/lib/bridge-text';
 import { copyVariationFor } from '@/lib/copy-variation';
 import { localDayKey } from '@/lib/home-devotional-state';
-import { avoidList, isString, promptHistory } from '@/lib/prompt-history';
+import { avoidList, isString, promptHistory, withoutName } from '@/lib/prompt-history';
 import { bridgeShapeFor, type BridgeShape } from '@/lib/prompt-variety';
 
 // ---------------------------------------------------------------------------
@@ -86,14 +86,21 @@ function getCachedBridge(cacheKey: string): string | null {
   return null;
 }
 
-/** The first sentence of each of the reader's newest bridges, newest first. */
+/**
+ * The first sentence of each of the reader's newest bridges, newest first,
+ * with the reader's name as "[name]" (withoutName).
+ */
 const recentFirstSentences = promptHistory(bridgeCache, 'recent_bridge_first_sentences', 7, isString);
 
-/** Stores a bridge sanitizeBridgeText already passed, and records its first sentence. */
-function setCachedBridge(cacheKey: string, text: string): void {
+/**
+ * Stores a bridge sanitizeBridgeText already passed, and records its first
+ * sentence without the reader's name, so the history never sends the name
+ * on a morning that withholds it.
+ */
+function setCachedBridge(cacheKey: string, text: string, userName: string): void {
   bridgeCache.set(cacheKey, text);
   logger.log(`${LOG_PREFIX} cache SET, key=${cacheKey}, len=${text.length}`);
-  recentFirstSentences.record(firstSentence(text));
+  recentFirstSentences.record(withoutName(firstSentence(text), userName));
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +224,7 @@ CRITICAL RULES:
 - NEVER use negative framing to emphasize a positive. No "not X, but Y" constructions.
 - NEVER use poetic/vague phrasing. No "what X holds", "those quiet moments", metaphors.
 - NEVER mention scripture references.
+- When you use the passage's own words, put them in double quotation marks.
 - NEVER use metacommentary about the text itself. No "this hits hard", "let that sink in", "this changes everything." If the content needs a hype line, the content is weak.
 - NEVER use empty intensifiers: deeply, profoundly, truly, really, incredibly.
 - NEVER use serial parallelism (Rule of Three) as default structure. Vary between 1, 2, 4+ items.
@@ -267,9 +275,11 @@ function buildBridgeUserMessage(
       : '- Name: Do not use their name today.'
   );
 
+  // The name comes out of the avoid lines as well, so a line recorded before
+  // the history redacted names cannot send it either.
   const recent = avoidList(
     'RECENT FIRST SENTENCES (do not reuse their wording or their first words):',
-    recentSentences,
+    recentSentences.map((line) => withoutName(line, input.userName)),
     300
   );
   if (recent) parts.push(`\n${recent}`);
@@ -297,7 +307,7 @@ function buildBridgeUserMessage(
  * @param now          - The moment the caller asks for. Its local day keys the
  *                       cache and picks the day's opening, closing, and name use.
  * @returns The bridge text, or null when generation fails or the sanitizer
- *          leaves too little to show (Today then shows no bridge).
+ *          drops the bridge (Today then shows no bridge).
  */
 export async function generateBridge(
   input: BridgeInput,
@@ -341,8 +351,8 @@ export async function generateBridge(
     });
 
     const cleanText = sanitizeBridgeText(result.bridgeText);
-    if (cleanText) setCachedBridge(cacheKey, cleanText);
-    else logger.warn(`${LOG_PREFIX} bridge dropped: cut off, or too little left after removing banned phrases`);
+    if (cleanText) setCachedBridge(cacheKey, cleanText, input.userName);
+    else logger.warn(`${LOG_PREFIX} bridge dropped: cut off, or a banned phrase outside quotation marks`);
     // The generation counts whether or not its text survives the sanitizer.
     await incrementRateLimit('bridge');
     return cleanText;

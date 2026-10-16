@@ -23,9 +23,8 @@ import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
-import { countWords, trimTrailing } from '@/lib/bridge-text';
+import { countWords, endsSentence, trimTrailing } from '@/lib/bridge-text';
 import { copyVariationFor } from '@/lib/copy-variation';
-import { titleWithPeriod } from '@/lib/display-title';
 import { localDayKey } from '@/lib/home-devotional-state';
 import { avoidList, isString, openingWords, promptHistory } from '@/lib/prompt-history';
 import { examenShapeFor, type ExamenShape } from '@/lib/prompt-variety';
@@ -88,15 +87,17 @@ function buildCacheKey(
 }
 
 /**
- * A cached examen, or null when the entry is unreadable or does not hold five
- * movements. An entry written before closingLine existed keeps the "Amen." the
- * screen always printed.
+ * A cached examen, or null when the entry is unreadable or is not one this
+ * build writes: five movements and a closing line, null for a night with no
+ * line. Every key carries the local day since closingLine was added, so no
+ * entry from before it is ever read.
  */
-export function parseCachedExamen(raw: string): ExamenPrayer | null {
+function parseCachedExamen(raw: string): ExamenPrayer | null {
   try {
-    const parsed = JSON.parse(raw) as Omit<ExamenPrayer, 'closingLine'> & { closingLine?: string | null };
+    const parsed = JSON.parse(raw) as Partial<ExamenPrayer>;
     if (!Array.isArray(parsed.movements) || parsed.movements.length !== 5) return null;
-    return { ...parsed, closingLine: parsed.closingLine === undefined ? 'Amen.' : parsed.closingLine };
+    if (parsed.closingLine !== null && typeof parsed.closingLine !== 'string') return null;
+    return parsed as ExamenPrayer;
   } catch {
     return null;
   }
@@ -329,25 +330,55 @@ function movementTitle(raw: unknown, fallback: string): string {
   return title;
 }
 
+/** End marks and closing quotation marks, which can follow a trailing "Amen". */
+const AMEN_END_MARKS = '.!"\'”’';
+
+/** An "in Jesus' name" clause at the end of the text, which goes with the Amen after it. */
+const JESUS_NAME_CLAUSE = /(?:^|[\s,;:])in\s+(?:the\s+name\s+of\s+jesus|jesus['’]?\s+name)(?:\s+(?:we|i)\s+pray)?$/i;
+
+/** `text` without the spaces, commas, semicolons, and colons at its end. An index loop, so a long run costs one pass. */
+function withoutTrailingSeparators(text: string): string {
+  let end = text.length;
+  while (end > 0 && /[\s,;:]/.test(text[end - 1])) end--;
+  return text.slice(0, end);
+}
+
+/** The mark that closes a double quotation `text` opens and leaves open, or ''. */
+function openQuotationCloser(text: string): string {
+  const count = (mark: string) => text.split(mark).length - 1;
+  if (count('“') > count('”')) return '”';
+  return count('"') % 2 === 1 ? '"' : '';
+}
+
 /**
- * The prayer without a closing "Amen" the model wrote anyway: the evening
+ * The prayer without the closing "Amen" the model wrote anyway: the evening
  * screen prints the night's own closing line, and two "Amen"s read as a
- * stutter.
+ * stutter. Each trailing "Amen" goes, with any "in Jesus' name" clause
+ * before it, until none is left. What remains gets a full stop when it does
+ * not already end a sentence (endsSentence). Closing quotation marks after
+ * the Amen go with it, unless the prayer opened a quotation that they close.
+ * A movement that was only "Amen" comes back empty, which
+ * parseExamenResponse rejects like any empty movement, so the request is
+ * tried again.
  */
 function withoutTrailingAmen(prayer: string): string {
-  const trimmed = prayer.trim();
-  // Index loops from the end, so a long run of separators costs one pass.
-  const end = trimTrailing(trimmed, '.!').length;
-  const start = end - 4;
-  const endsInAmen =
-    start >= 0 &&
-    trimmed.slice(start, end).toLowerCase() === 'amen' &&
-    (start === 0 || !/[\p{L}\p{N}_]/u.test(trimmed[start - 1]));
-  if (!endsInAmen) return trimmed;
-  let cut = start;
-  while (cut > 0 && /[\s,;:]/.test(trimmed[cut - 1])) cut--;
-  const stripped = trimmed.slice(0, cut);
-  return stripped ? titleWithPeriod(stripped) : trimmed;
+  let text = prayer.trim();
+  for (;;) {
+    const end = trimTrailing(text, AMEN_END_MARKS).length;
+    const start = end - 4;
+    const endsInAmen =
+      start >= 0 &&
+      text.slice(start, end).toLowerCase() === 'amen' &&
+      (start === 0 || !/[\p{L}\p{N}_]/u.test(text[start - 1]));
+    if (!endsInAmen) return text;
+    const closedQuotation = /["”]/.test(text.slice(end));
+    let head = withoutTrailingSeparators(text.slice(0, start));
+    const core = trimTrailing(head, '.!');
+    const clause = JESUS_NAME_CLAUSE.exec(core);
+    if (clause) head = withoutTrailingSeparators(core.slice(0, clause.index));
+    if (!head) return '';
+    text = (endsSentence(head) ? head : `${head}.`) + (closedQuotation ? openQuotationCloser(head) : '');
+  }
 }
 
 /**

@@ -12,7 +12,7 @@
 import { buildPromptWithPersona } from '@/constants/persona';
 import { sanitizeForPrompt } from '@/lib/api-config';
 import { lifecycleTimestampMs } from '@/lib/devotional-lifecycle';
-import { avoidList } from '@/lib/prompt-history';
+import { avoidList, isString } from '@/lib/prompt-history';
 import { goDeeperAnglesFor } from '@/lib/prompt-variety';
 import type { JournalEntry } from '@/lib/store';
 
@@ -44,12 +44,19 @@ const GO_DEEPER_SYSTEM_PROMPT = buildPromptWithPersona('brief', GO_DEEPER_INSTRU
  * The entries that hold Go Deeper prompts, newest first. An entry's
  * `updatedAt` moves when its prompts are saved, so an old entry that just got
  * prompts counts as recent. Each timestamp is parsed once.
+ *
+ * A saved prompt that is not a string, from a malformed reply or a sync row,
+ * stays out of the request, which would otherwise throw on it. Its entry
+ * still counts as a saved request, so the angles do not move.
  */
 function promptedNewestFirst(entries: readonly JournalEntry[]): { prompts: string[]; time: number }[] {
   return entries
     .flatMap((entry) =>
       entry.deeperQuestions?.length
-        ? [{ prompts: entry.deeperQuestions, time: lifecycleTimestampMs(entry.updatedAt || entry.createdAt) }]
+        ? [{
+          prompts: entry.deeperQuestions.filter(isString),
+          time: lifecycleTimestampMs(entry.updatedAt || entry.createdAt),
+        }]
         : [],
     )
     .sort((a, b) => b.time - a.time);

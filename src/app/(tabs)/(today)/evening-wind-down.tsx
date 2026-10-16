@@ -213,13 +213,14 @@ export default function EveningWindDownScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
   // The prayer belongs to the day this screen opened on. Holding that date
-  // keeps the query on one prayer when midnight passes while someone reads.
+  // keeps the day, its readiness, the midday check-in, and the query on one
+  // prayer when midnight passes while someone reads.
   const [openedAt] = useState(() => new Date());
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
   const currentDevotional = devotionals.find((d) => d.id === effectiveDevotionalId);
-  const eveningDayNumber = resolveEveningWindDownDayNumber(currentDevotional, requestedDayNumber);
+  const eveningDayNumber = resolveEveningWindDownDayNumber(currentDevotional, requestedDayNumber, openedAt);
   const currentDay = currentDevotional?.days.find(
     (d) => d.dayNumber === eveningDayNumber
   );
@@ -227,7 +228,7 @@ export default function EveningWindDownScreen() {
   // The evening push notification deep-links straight here and gates nothing,
   // so this screen has to enforce the same rule. See
   // resolveEveningWindDownReadiness for the report behind it.
-  const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber);
+  const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber, openedAt);
   const [reflectAnyway, setReflectAnyway] = useState(false);
   // A missing progressive day still belongs to this series. Its reader can
   // recover the content. Only readers with no series need the creation state.
@@ -240,8 +241,8 @@ export default function EveningWindDownScreen() {
     // By date: midday check-ins target the readable day, the evening targets
     // the day completed today, so a day-number lookup drops the afternoon
     // check-in after a morning read.
-    return findTodayMiddayCheckIn(checkIns, currentDevotional.id, currentDay.dayNumber);
-  }, [currentDevotional, currentDay, checkIns]);
+    return findTodayMiddayCheckIn(checkIns, currentDevotional.id, currentDay.dayNumber, openedAt);
+  }, [currentDevotional, currentDay, checkIns, openedAt]);
 
   const middayCheckInInput = useMemo(() => {
     if (!middayCheckIn) return undefined;
