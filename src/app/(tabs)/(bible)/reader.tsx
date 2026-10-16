@@ -178,6 +178,7 @@ const VerseItem = React.memo(function VerseItem({
   fontSize,
   lineHeight,
   fontFamily,
+  fontScale,
   isSelected,
   highlightColor,
   hasNote,
@@ -197,6 +198,15 @@ const VerseItem = React.memo(function VerseItem({
   fontSize: number;
   lineHeight: number;
   fontFamily: string;
+  /**
+   * The system text size. It keys the native Text hosts. iOS can paint larger
+   * Dynamic Type glyphs before a host invalidates its measured bounds, which
+   * dropped the last line of a verse when the text size changed with the reader
+   * open; a new host re-measures. ReaderText does the same for the devotional
+   * reader but also sets a 1.8 scaling cap, so it is not used here and the
+   * Bible text keeps its current scaling.
+   */
+  fontScale: number;
   isSelected: boolean;
   highlightColor?: BibleHighlightColor;
   hasNote: boolean;
@@ -334,7 +344,7 @@ const VerseItem = React.memo(function VerseItem({
     <View ref={rowRef} collapsable={false} onLayout={handleLayout}>
       {/* Section heading before this verse */}
       {sectionHeading ? (
-        <Text style={[
+        <Text key={fontScale} style={[
           styles.sectionHeading,
           {
             color: textColor,
@@ -391,6 +401,7 @@ const VerseItem = React.memo(function VerseItem({
 
         {/* Text */}
         <Text
+          key={fontScale}
           onTextLayout={handleTextLayout}
           style={{
             fontSize,
@@ -1523,6 +1534,7 @@ export default function BibleReaderScreen() {
                 fontSize={fontSize}
                 lineHeight={lineHeight}
                 fontFamily={readingFont.body}
+                fontScale={adaptiveLayout.fontScale}
                 isSelected={selectedVerses.has(v.verse)}
                 highlightColor={highlightMap[v.verse]}
                 hasNote={!!noteMap[v.verse]}
@@ -1538,8 +1550,9 @@ export default function BibleReaderScreen() {
               />
             ))}
 
-            {/* End-of-chapter ornament */}
-            <View style={styles.endMarker}>
+            {/* End-of-chapter ornament and the prompts below it are keyed on
+                fontScale like the verse text. */}
+            <View key={`end-marker-${adaptiveLayout.fontScale}`} style={styles.endMarker}>
               <Text style={[styles.endOrnament, { color: colors.textHint }]}>
                 {'\u00B7\u00B7\u00B7'}
               </Text>
@@ -1547,13 +1560,14 @@ export default function BibleReaderScreen() {
 
             {/* Next chapter prompt */}
             {isEndOfBible ? (
-              <View style={styles.endOfBibleContainer}>
+              <View key={`end-of-bible-${adaptiveLayout.fontScale}`} style={styles.endOfBibleContainer}>
                 <Text style={[styles.endOfBibleText, { color: colors.textMuted }]}>
                   You've reached the end of the Bible
                 </Text>
               </View>
             ) : canGoNext && (
               <TouchableOpacity
+                key={`next-chapter-${adaptiveLayout.fontScale}`}
                 onPress={() => navigateChapter(1)}
                 style={[
                   styles.nextChapterPrompt,
