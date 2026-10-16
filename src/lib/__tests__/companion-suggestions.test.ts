@@ -113,15 +113,27 @@ describe('sharesCrisisLine', () => {
     'Call 1\u2013800\u2013273\u20138255.',
     'If you are in danger, call\n911.',
     'In the U.S., call 911 if you are in danger.',
+    // Round 3: a 988 with a call word counts whatever comes before it.
+    'Since 988 is free and open all night, please call or text it now.',
+    'Since 988 answers all night, please call.',
+    'Since 988 is always open, you can call it right now.',
+    'Type in 988 and tap call.',
+    'Punch in 988 and press call.',
+    'You can text or call the counselors of 988 tonight.',
+    'Dial in 988 and someone will answer.',
+    'Think of 988 as a friend you can call at 3 a.m.',
+    'Make use of 988 tonight: call or text any time.',
+    // A bare "of" is no year cue.
+    'Lean on the support of 988 tonight.',
   ])('finds a crisis line in: %s', (reply) => {
     expect(sharesCrisisLine(reply)).toBe(true);
   });
 
   it.each([
     'Vladimir of Kyiv was baptized in 988, and his people followed.',
-    'In 988 AD the faith reached Kyiv.',
+    'In 988 AD the faith came to Kyiv.',
     'The year 988 marks the baptism of the Rus.',
-    'Since 988 the church in Kyiv has sung those psalms.',
+    'In the summer of 988 the people gathered at the river.',
     'The chronicle dates it to around 988.',
     'Prince Vladimir was baptized circa 988.',
     'The baptism of the Rus, 988 CE, is still remembered.',

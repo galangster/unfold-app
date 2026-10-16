@@ -55,19 +55,22 @@ export function readSuggestionList(value: unknown): string[] | undefined {
   return chipsKey(list) === SERVER_FALLBACK_TRIO ? undefined : list;
 }
 
-/** A word for reaching a line, in any form: "call", "calling", "texted", "contact". */
-const REACH = String.raw`\b(?:call|text|dial|phone|chat|contact)\w*`;
+/** A word for reaching a line, in any form: "call", "calling", "texted", "contact", "reach". */
+const REACH = String.raw`\b(?:call|text|dial|phone|chat|contact|reach)\w*`;
 
 /**
  * Crisis lines as a reply can give them, matched loosely on purpose: hiding
  * chips under a reply that did not need it costs little, and a chip under a
  * crisis answer is the harm this module exists to stop.
  *
- * - Every 988, in any wording ("reach out to 988", "988 is still there",
- *   988lifeline.org), unless a year cue sits next to it: in, of, year,
- *   since, around or circa before it, or AD, CE or BC after it. A 988 near
- *   "suicide" or "crisis" counts even then.
- * - 911 with a way to reach it on either side: "call 911", "911, by phone".
+ * - 988 or 911 with a way to reach it in the same sentence, on either side:
+ *   "call 911", "Since 988 answers all night, please call." A year cue does
+ *   not excuse it.
+ * - 988 near "suicide" or "crisis", in either order.
+ * - Every other 988, in any wording ("988 is still there", 988lifeline.org),
+ *   unless a year cue sits next to it: in, year, around or circa before it,
+ *   "of" after a time word ("the summer of 988"), or AD, CE or BC after it.
+ *   A bare "of" is no cue: "the support of 988" counts.
  * - A lifeline, hotline, helpline or crisis line by name, plural too, and
  *   inside an address (thehotline.org). The metaphor counts too.
  * - The numbers: 741741 for the Crisis Text Line; 799-7233, 799-SAFE and
@@ -76,8 +79,8 @@ const REACH = String.raw`\b(?:call|text|dial|phone|chat|contact)\w*`;
  */
 const CRISIS_LINES: readonly RegExp[] = [
   /\b988\b[^.!?]{0,40}\b(?:suicid|crisis)|\b(?:suicid\w*|crisis)\b[^.!?]{0,40}\b988\b/i,
-  new RegExp(String.raw`${REACH}\b[^.!?]{0,60}\b911\b`, 'i'),
-  new RegExp(String.raw`\b911\b[^.!?]{0,60}${REACH}`, 'i'),
+  new RegExp(String.raw`${REACH}\b[^.!?]{0,60}\b(?:988|911)\b`, 'i'),
+  new RegExp(String.raw`\b(?:988|911)\b[^.!?]{0,60}${REACH}`, 'i'),
   /(?:life|hot|help)lines?\b|\bcrisis (?:text )?lines?\b/i,
   /\b741[- ]?741\b|\b88788\b/,
   /\b799[- .]?(?:7233|safe)\b/i,
@@ -86,8 +89,9 @@ const CRISIS_LINES: readonly RegExp[] = [
 
 /** Every 988 that is not part of a longer number: "1988", "988,000" and "9.88" do not count. */
 const NINE_EIGHT_EIGHT = /(^|\D)988(?!\d|[.,]\d)/g;
-/** The word right before a year: "in 988", "the year 988", "circa 988". */
-const YEAR_BEFORE = /\b(?:in|of|year|since|around|circa|c\.)\s+$/i;
+/** The words right before a year: "in 988", "the year 988", "circa 988", "the summer of 988". */
+const YEAR_BEFORE =
+  /\b(?:in|year|around|circa|c\.|(?:year|summer|winter|spring|autumn|fall|end|beginning|start|middle|century) of)\s+$/i;
 /** An era right after a year: "988 AD", "988 CE", "988 B.C." */
 const YEAR_AFTER = /^\s*(?:A\.?D|C\.?E|B\.?C\.?E?)\b/;
 
