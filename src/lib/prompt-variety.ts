@@ -17,17 +17,12 @@
  */
 
 import type { ClosingStyle } from '@/constants/devotional-personas-v2';
-import { pickFromBag, type CopyVariation } from '@/lib/variation-bag';
+import { drawCopy, type CopyVariation } from '@/lib/variation-bag';
 
 /** One move a prompt can make, as the instruction the model reads. */
 export interface PromptMove {
   id: string;
   instruction: string;
-}
-
-function drawFrom<T>(pool: readonly T[], draw: CopyVariation, field: string, index = draw.dayIndex): T {
-  // Every pool below is a non-empty constant, so the bag always returns an entry.
-  return pickFromBag(pool, `${draw.seed}|${field}`, index) as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,9 +65,9 @@ export interface BridgeShape {
 
 export function bridgeShapeFor(draw: CopyVariation): BridgeShape {
   return {
-    opening: drawFrom(BRIDGE_OPENINGS, draw, 'bridge-opening'),
-    closing: drawFrom(BRIDGE_CLOSINGS, draw, 'bridge-closing'),
-    useName: drawFrom(BRIDGE_NAME_DAYS, draw, 'bridge-name'),
+    opening: drawCopy(BRIDGE_OPENINGS, draw, 'bridge-opening'),
+    closing: drawCopy(BRIDGE_CLOSINGS, draw, 'bridge-closing'),
+    useName: drawCopy(BRIDGE_NAME_DAYS, draw, 'bridge-name'),
   };
 }
 
@@ -112,8 +107,8 @@ export interface ExamenShape {
 
 export function examenShapeFor(draw: CopyVariation): ExamenShape {
   return {
-    closing: drawFrom(EXAMEN_CLOSINGS, draw, 'examen-closing'),
-    closingLine: drawFrom(EXAMEN_CLOSING_LINES, draw, 'examen-closing-line'),
+    closing: drawCopy(EXAMEN_CLOSINGS, draw, 'examen-closing'),
+    closingLine: drawCopy(EXAMEN_CLOSING_LINES, draw, 'examen-closing-line'),
   };
 }
 
@@ -159,7 +154,7 @@ export const GO_DEEPER_ANGLES_PER_REQUEST = 3;
 export function goDeeperAnglesFor(draw: CopyVariation): PromptMove[] {
   const first = draw.dayIndex * GO_DEEPER_ANGLES_PER_REQUEST;
   return Array.from({ length: GO_DEEPER_ANGLES_PER_REQUEST }, (_, offset) =>
-    drawFrom(GO_DEEPER_ANGLES, draw, 'go-deeper-angle', first + offset),
+    drawCopy(GO_DEEPER_ANGLES, draw, 'go-deeper-angle', first + offset),
   );
 }
 
@@ -193,7 +188,7 @@ export interface LegacyDevotionalDayShape {
 export function legacyDevotionalDayShape(seed: string, dayNumber: number): LegacyDevotionalDayShape {
   const draw: CopyVariation = { seed, dayIndex: dayNumber };
   return {
-    closing: drawFrom(LEGACY_DEVOTIONAL_CLOSINGS, draw, 'devotional-closing'),
-    useName: dayNumber > 1 && drawFrom(LEGACY_DEVOTIONAL_NAME_DAYS, draw, 'devotional-name'),
+    closing: drawCopy(LEGACY_DEVOTIONAL_CLOSINGS, draw, 'devotional-closing'),
+    useName: dayNumber > 1 && drawCopy(LEGACY_DEVOTIONAL_NAME_DAYS, draw, 'devotional-name'),
   };
 }

@@ -163,11 +163,14 @@ export interface CopyVariation {
 
 /**
  * One field of one day's copy: the bag salted with the field name, so a
- * title and a body drawn for the same day move independently. The
- * `?? pool[0]` floor only fires if a pool is emptied by a bad edit.
+ * title and a body drawn for the same day move independently. `index` is the
+ * day unless a caller takes several entries for one draw. The `pool[0]`
+ * floor fires only on undefined, when a pool is emptied by a bad edit, so a
+ * pool can hold null as a real entry.
  */
-export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field: string): T {
-  return pickFromBag(pool, `${variation.seed}|${field}`, variation.dayIndex) ?? pool[0];
+export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field: string, index = variation.dayIndex): T {
+  const picked = pickFromBag(pool, `${variation.seed}|${field}`, index);
+  return picked === undefined ? pool[0] : picked;
 }
 
 /**
