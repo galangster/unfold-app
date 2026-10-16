@@ -2722,12 +2722,12 @@ function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituati
   if (hasEmotional && hasSeeking) {
     reflection = pick([
       `${nameClause}something real brought you here — a weight you've been carrying, and a hope you haven't let go of.`,
-      `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at work.`,
+      `Between where you are and where you're reaching, ${nameClause}God is already at work.`,
     ]);
   } else if (hasEmotional) {
     reflection = pick([
       `${nameClause}you named something that matters. That kind of honesty is where God meets us.`,
-      `What you shared took courage, ${nameClause.toLowerCase() || ''}and it's exactly the right place to begin.`,
+      `What you shared took courage, ${nameClause}and it's exactly the right place to begin.`,
     ]);
   } else {
     reflection = pick([

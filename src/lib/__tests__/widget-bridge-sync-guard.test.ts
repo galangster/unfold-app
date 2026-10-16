@@ -37,6 +37,7 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 jest.mock('@/lib/widget-timeline', () => ({
   getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
   getTodayReadingProps: jest.requireActual('@/lib/widget-timeline').getTodayReadingProps,
+  getTimelineReadingProps: jest.requireActual('@/lib/widget-timeline').getTimelineReadingProps,
   getNextMidnight: jest.requireActual('@/lib/widget-timeline').getNextMidnight,
   buildWidgetTimelineEntries: jest.fn(() => [{ date: new Date(), props: {} }]),
   getWeeklyProgress: (
@@ -358,7 +359,13 @@ describe('syncWidgets follows the day Today shows', () => {
       syncWidgets();
       syncWidgets();
       expect(todayWidget).toHaveBeenCalledTimes(1);
-      expect(titles(0)).toEqual(['Title 5', 'Day 6 isn’t available yet']);
+      // At midnight Day 6 is still not on the device: the entry names it as ready.
+      const { WIDGET_DAY_READY_LINES } = jest.requireActual('@/lib/widget-timeline') as {
+        WIDGET_DAY_READY_LINES: ((day: number) => string)[];
+      };
+      const [nowTitle, midnightTitle] = titles(0);
+      expect(nowTitle).toBe('Title 5');
+      expect(WIDGET_DAY_READY_LINES.map((line) => line(6))).toContain(midnightTitle);
 
       // The focus pull or the day watch lands Day 6 on the device.
       showSeries(series({ withDay6: true }));

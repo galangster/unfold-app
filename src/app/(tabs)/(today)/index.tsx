@@ -32,7 +32,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
-import { getLockScreenProps, getNextMidnight, getTodayReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
+import { getLockScreenProps, getTimelineReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { isDisplayableBridge } from '@/lib/bridge-text';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -887,7 +887,7 @@ export default function HomeScreen() {
   // total, the weekly checks and the Lock Screen ring. Writing on a day does
   // not change them, so it does not re-sync.
   const widgetSyncKey = useMemo(() => JSON.stringify({
-    reading: [clockNow, getNextMidnight(clockNow)].map((forDate) => getTodayReadingProps(currentDevotional, forDate)),
+    reading: getTimelineReadingProps(currentDevotional, clockNow),
     totalDays: getServerOwnedSeriesTotalDays(currentDevotional),
     weeklyProgress: getWeeklyProgress(devotionals, clockNow),
     lock: getLockScreenProps(currentDevotional, clockNow),

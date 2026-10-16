@@ -18,8 +18,7 @@ import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/d
 import {
   buildWidgetTimelineEntries,
   getLockScreenProps,
-  getNextMidnight,
-  getTodayReadingProps,
+  getTimelineReadingProps,
   getWeeklyProgress,
 } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
@@ -47,10 +46,10 @@ let activeReadingSession: LiveActivity<{
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
 //   3. current day id — the series and the day it is on
 //   4. weeklyProgress — the M-Su "read" indicator dots
-//   5. the Today and Dashboard reading fields (getTodayReadingProps) for
+//   5. the Today and Dashboard reading fields (getTimelineReadingProps) for
 //      BOTH entries, built exactly as the timeline builds them: the day Today
-//      shows, its verse and quote, and the next day, which can land after
-//      today's reading
+//      shows, its verse and quote, the next day, which can land after
+//      today's reading, and the midnight line for a day not on the device
 //   6. the Lock Screen fields (getLockScreenProps), built exactly as the
 //      timeline builds them: the day read today, its verse, and the ring
 //
@@ -85,7 +84,7 @@ function buildSyncFingerprint(now: Date): string {
     streakLastReadDate: state.streakLastReadDate,
     hasReadToday,
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
-    reading: [now, getNextMidnight(now)].map((forDate) => getTodayReadingProps(devotional, forDate)),
+    reading: getTimelineReadingProps(devotional, now),
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
     // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was

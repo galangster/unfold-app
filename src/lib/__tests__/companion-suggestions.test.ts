@@ -1,0 +1,118 @@
+import { copyRuleBreaks } from './fixtures/copy-rules';
+import {
+  FALLBACK_SUGGESTIONS,
+  FALLBACK_SUGGESTIONS_PER_REPLY,
+  fallbackSuggestions,
+  readSuggestionList,
+  replySuggestions,
+  sharesCrisisLine,
+} from '../companion-suggestions';
+
+const SEED = 'test-install|companion-chips|conversation-1';
+const OLD_TRIO = ['Tell me more', 'How do I apply this?', 'Help me with a prayer'];
+
+describe('readSuggestionList', () => {
+  it('reads an absent or malformed field as no list', () => {
+    expect(readSuggestionList(undefined)).toBeUndefined();
+    expect(readSuggestionList(null)).toBeUndefined();
+    expect(readSuggestionList('Tell me more')).toBeUndefined();
+  });
+
+  it('keeps an explicit empty list empty', () => {
+    expect(readSuggestionList([])).toEqual([]);
+  });
+
+  it('keeps only non-blank strings', () => {
+    expect(readSuggestionList(['Keep going', 3, null, '  ', 'Pray with me'])).toEqual([
+      'Keep going',
+      'Pray with me',
+    ]);
+  });
+});
+
+describe('sharesCrisisLine', () => {
+  it.each([
+    'If you are not safe tonight, please call or text 988 to reach someone, any time.',
+    'Reach out to the 988 Suicide and Crisis Lifeline right now.',
+    'You can dial 988 from any phone.',
+    'Text HOME to 741741 to reach the Crisis Text Line.',
+    'Call the National Domestic Violence Hotline at 1-800-799-7233.',
+  ])('finds a crisis line in: %s', (reply) => {
+    expect(sharesCrisisLine(reply)).toBe(true);
+  });
+
+  it.each([
+    'Vladimir of Kyiv was baptized in 988, and his people followed.',
+    'Psalm 98:8 asks the rivers to clap their hands.',
+    'Start with one honest sentence to God about today.',
+  ])('finds none in: %s', (reply) => {
+    expect(sharesCrisisLine(reply)).toBe(false);
+  });
+});
+
+describe('replySuggestions', () => {
+  const fallback = { seed: SEED, draw: 0 };
+
+  it('shows no chips when the server sends an explicit empty list', () => {
+    expect(replySuggestions([], 'Here is a short answer about Romans 8.', fallback)).toEqual([]);
+  });
+
+  it('shows no chips under a refusal or crisis reply, even when chips were sent', () => {
+    const crisisReply =
+      'You do not have to carry this alone. Please call or text 988 (Suicide and Crisis Lifeline) tonight.';
+    expect(replySuggestions([], crisisReply, fallback)).toEqual([]);
+    expect(replySuggestions(['How do I apply this?'], crisisReply, fallback)).toEqual([]);
+    expect(replySuggestions(undefined, crisisReply, fallback)).toEqual([]);
+  });
+
+  it('keeps the chips the server sent', () => {
+    expect(replySuggestions(['Keep going'], 'An answer.', fallback)).toEqual(['Keep going']);
+  });
+
+  it('draws fallback chips only when the reply carried no list', () => {
+    const chips = replySuggestions(undefined, 'An answer.', fallback);
+    expect(chips).toHaveLength(FALLBACK_SUGGESTIONS_PER_REPLY);
+    for (const chip of chips) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+  });
+});
+
+describe('fallbackSuggestions', () => {
+  it('holds the pool size the no-repeat guarantee rests on', () => {
+    expect(FALLBACK_SUGGESTIONS.length).toBeGreaterThanOrEqual(12);
+    expect(FALLBACK_SUGGESTIONS.length % FALLBACK_SUGGESTIONS_PER_REPLY).toBe(0);
+    expect(new Set(FALLBACK_SUGGESTIONS).size).toBe(FALLBACK_SUGGESTIONS.length);
+  });
+
+  it('never repeats a chip on two consecutive draws for one install', () => {
+    for (const seed of [SEED, 'other-install|companion-chips|conversation-1', 'x|companion-chips|y']) {
+      for (let draw = 0; draw < 200; draw += 1) {
+        const current = fallbackSuggestions(seed, draw);
+        const next = fallbackSuggestions(seed, draw + 1);
+        expect(new Set(current).size).toBe(FALLBACK_SUGGESTIONS_PER_REPLY);
+        expect(next.filter((chip) => current.includes(chip))).toEqual([]);
+      }
+    }
+  });
+
+  it('is never the old fixed trio, and the same draw always shows the same chips', () => {
+    for (let draw = 0; draw < 40; draw += 1) {
+      const chips = fallbackSuggestions(SEED, draw);
+      expect(chips).not.toEqual(OLD_TRIO);
+      expect(chips).not.toContain('How do I apply this?');
+      expect(fallbackSuggestions(SEED, draw)).toEqual(chips);
+    }
+  });
+});
+
+describe('fallback chip copy', () => {
+  it.each([...FALLBACK_SUGGESTIONS])('follows the copy rules: %s', (chip) => {
+    expect(copyRuleBreaks(chip)).toEqual([]);
+  });
+
+  it('catches a broken rule', () => {
+    expect(copyRuleBreaks('Let that sink in — truly!')).toEqual(
+      expect.arrayContaining(['Let that sink in', 'truly', 'em dash', 'exclamation mark']),
+    );
+    expect(copyRuleBreaks('Go a little deeper')).toEqual([]);
+  });
+});

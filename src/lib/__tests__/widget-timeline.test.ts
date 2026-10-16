@@ -3,8 +3,12 @@ import {
   getWeeklyProgress,
   buildWidgetSharedProps,
   buildWidgetTimelineEntries,
+  getTimelineReadingProps,
+  getTodayReadingProps,
+  WIDGET_DAY_READY_LINES,
   type WidgetStateSlice,
 } from '@/lib/widget-timeline';
+import { copyRuleBreaks } from './fixtures/copy-rules';
 
 const day = (over: Record<string, unknown> = {}) => ({
   dayNumber: 1,
@@ -291,16 +295,38 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     });
   });
 
-  it('says the next day is not on the device yet at midnight, never "Start your series"', () => {
-    const [, midnight] = entriesFor(readDays(readThisMorning));
+  it('names the next day as ready at midnight, never "isn’t available" or "Start your series"', () => {
+    const [today, midnight] = entriesFor(readDays(readThisMorning));
+    const readyLines = WIDGET_DAY_READY_LINES.map((line) => line(6));
+    expect(readyLines).toContain(midnight.props.dayTitle);
+    expect(midnight.props.dayTitle).not.toContain('available');
     expect(midnight.props).toMatchObject({
-      dayTitle: 'Day 6 isn’t available yet',
+      dayReadyLine: midnight.props.dayTitle,
       dayNumber: 6,
       scriptureReference: '',
       scriptureText: '',
       quotableLine: '',
       lockDayNumber: 6,
+      lockLine: '',
     });
+    expect(today.props.dayReadyLine).toBe('');
+  });
+
+  it('draws a different ready line on consecutive mornings for one series', () => {
+    const d = devo(readDays(readThisMorning), { totalDays: 7, currentDay: 6 });
+    const lines = Array.from({ length: 60 }, (_, offset) =>
+      getTodayReadingProps(d, new Date(2026, 9, 8 + offset), 'midnight').dayTitle
+    );
+    for (let i = 1; i < lines.length; i += 1) expect(lines[i]).not.toBe(lines[i - 1]);
+    expect(new Set(lines).size).toBe(WIDGET_DAY_READY_LINES.length);
+  });
+
+  it('builds the sync key reading from the same entries the timeline pushes', () => {
+    const d = devo(readDays(readThisMorning), { totalDays: 7, currentDay: 6 });
+    const entries = buildWidgetTimelineEntries(slice({ currentDevotional: d, allDevotionals: [d] }), now);
+    const reading = getTimelineReadingProps(d, now);
+    expect(reading).toHaveLength(entries.length);
+    reading.forEach((props, i) => expect(entries[i].props).toMatchObject(props));
   });
 
   it('keeps a behind reader on the day read today though the next day is on the device', () => {
@@ -329,10 +355,18 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     const [today] = entriesFor(readDays(readYesterday), readYesterday);
     expect(today.props).toMatchObject({
       dayTitle: 'Day 6 isn’t available yet',
+      dayReadyLine: '',
       dayNumber: 6,
       scriptureReference: '',
       quotableLine: '',
       lockDayNumber: 6,
     });
+  });
+});
+
+describe('the midnight ready lines', () => {
+  it.each(WIDGET_DAY_READY_LINES.map((line) => line(6)))('follow the copy rules: %s', (line) => {
+    expect(copyRuleBreaks(line)).toEqual([]);
+    expect(line).toContain('Day 6');
   });
 });

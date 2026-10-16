@@ -69,8 +69,8 @@ type MockUser = {
 const mockUnfoldState: {
   user: MockUser | null;
   companionName: null;
-  currentDevotionalId: null;
-  devotionals: never[];
+  currentDevotionalId: string | null;
+  devotionals: unknown[];
   streakCurrent: number;
 } = {
   user: { name: 'Nick', hasCompletedOnboarding: true, companionPersonality: undefined },
@@ -93,6 +93,7 @@ jest.mock('../companion-service', () => ({
 import { useCompanionChat } from '../use-companion-chat';
 import { useCompanionChatStore } from '../companion-chat-store';
 import { COMPANION_ERROR_CAPACITY, COMPANION_ERROR_CONNECTION } from '../companion-error-copy';
+import { FALLBACK_SUGGESTIONS } from '../companion-suggestions';
 
 const completedMockUser = (): MockUser => ({
   name: 'Nick',
@@ -106,6 +107,8 @@ function getMockGetAuthHeaders(): jest.Mock {
 
 beforeEach(() => {
   mockUnfoldState.user = completedMockUser();
+  mockUnfoldState.currentDevotionalId = null;
+  mockUnfoldState.devotionals = [];
 });
 
 function streamingResponseWithoutDone() {
@@ -1711,5 +1714,181 @@ describe('daily AI budget (429 SPEND_CAP_REACHED)', () => {
     expect(reply?.status).toBe('error');
     expect(reply?.content).toBe("You've used up your daily AI budget. It resets in about 10 minutes.");
     expect(hook.error).toBe("You've used up your daily AI budget. It resets in about 10 minutes.");
+  });
+});
+
+describe('suggestion chips under a finished reply (COMP-08)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  async function renderHook() {
+    let hook!: ReturnType<typeof useCompanionChat>;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+    return () => hook;
+  }
+
+  const companionReplies = () =>
+    useCompanionChatStore.getState().conversations[0]
+      ?.messages.filter((message) => message.role === 'companion') ?? [];
+
+  const doneFrame = (frame: Record<string, unknown>) => `data: ${JSON.stringify({ d: true, ...frame })}\n\n`;
+
+  it('shows no chips when the stream sends an explicit empty list', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Romans 8 opens with no condemnation."}\n\n',
+      doneFrame({ s: [] }),
+    ]));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('What does Romans 8 say?'); });
+
+    expect(hook().suggestions).toEqual([]);
+    expect(companionReplies()[0]).toMatchObject({ status: 'complete', suggestions: [] });
+  });
+
+  it('shows no chips under a refused turn the server replaced with its crisis reply', async () => {
+    const crisisReply =
+      'Please call or text 988 (Suicide and Crisis Lifeline) or text HOME to 741741 tonight.';
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"I want to"}\n\n',
+      doneFrame({ s: [], ct: crisisReply }),
+    ]));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('I do not want to be here anymore'); });
+
+    expect(hook().suggestions).toEqual([]);
+    expect(companionReplies()[0]).toMatchObject({ content: crisisReply, suggestions: [] });
+  });
+
+  it('shows no chips under a crisis answer even when the model sent chips', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"You do not have to carry this alone. "}\n\n',
+      'data: {"t":"You can call or text 988 any time, day or night."}\n\n',
+      doneFrame({ s: ['How do I apply this?', 'Help me with a prayer'] }),
+    ]));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('Everything feels too heavy'); });
+
+    expect(hook().suggestions).toEqual([]);
+    expect(companionReplies()[0]?.suggestions).toEqual([]);
+  });
+
+  it('keeps the chips the stream sent', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Here is the passage."}\n\n',
+      doneFrame({ s: ['Keep going'] }),
+    ]));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('Show me the passage'); });
+
+    expect(hook().suggestions).toEqual(['Keep going']);
+  });
+
+  it('draws different fallback chips for consecutive replies that carry no list', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingResponseFromChunks(['data: {"t":"First answer."}\n\n', doneFrame({})]))
+      .mockResolvedValueOnce(streamingResponseFromChunks(['data: {"t":"Second answer."}\n\n', doneFrame({})]));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('First question'); });
+    const first = hook().suggestions;
+    await act(async () => { await hook().sendMessage('Second question'); });
+    const second = hook().suggestions;
+
+    for (const chips of [first, second]) {
+      expect(chips).toHaveLength(3);
+      for (const chip of chips) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+      expect(chips).not.toContain('How do I apply this?');
+    }
+    expect(second.filter((chip) => first.includes(chip))).toEqual([]);
+    expect(companionReplies().map((reply) => reply.suggestions)).toEqual([first, second]);
+  });
+
+  it('shows no chips when the non-streaming reply sends an explicit empty list', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingRejectedResponse())
+      .mockResolvedValueOnce(jsonResponse({ content: 'A full answer.', suggestions: [] }));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('Answer without streaming'); });
+
+    expect(hook().suggestions).toEqual([]);
+    expect(companionReplies()[0]).toMatchObject({ status: 'complete', suggestions: [] });
+  });
+
+  it('draws fallback chips when the non-streaming reply carries no list', async () => {
+    mockFetch
+      .mockResolvedValueOnce(streamingRejectedResponse())
+      .mockResolvedValueOnce(jsonResponse({ content: 'A full answer.' }));
+    const hook = await renderHook();
+
+    await act(async () => { await hook().sendMessage('Answer without streaming'); });
+
+    expect(hook().suggestions).toHaveLength(3);
+    for (const chip of hook().suggestions) expect(FALLBACK_SUGGESTIONS).toContain(chip);
+  });
+});
+
+describe('the devotional day the companion request names (APP-24)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  const seriesDay = (dayNumber: number, readAt?: string) => ({
+    dayNumber,
+    title: `Title ${dayNumber}`,
+    scriptureReference: `Psalm ${dayNumber}:1`,
+    scriptureText: `Verse ${dayNumber}.`,
+    bodyText: '',
+    isRead: readAt !== undefined,
+    readAt,
+  });
+
+  async function sentDevotionalDay(devotional: Record<string, unknown>) {
+    mockUnfoldState.currentDevotionalId = 'devotional-1';
+    mockUnfoldState.devotionals = [{ id: 'devotional-1', title: 'Quiet Path', totalDays: 7, ...devotional }];
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Hello."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+    let hook!: ReturnType<typeof useCompanionChat>;
+    await act(async () => {
+      createTestRenderer(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+    await act(async () => { await hook.sendMessage('Walk me through today’s reading'); });
+    return JSON.parse(mockFetch.mock.calls[0][1].body).context.devotionalDay;
+  }
+
+  it('names the day read today, not the next day currentDay moved to', async () => {
+    const readToday = new Date().toISOString();
+    const readYesterday = new Date(Date.now() - 86_400_000).toISOString();
+    const day = await sentDevotionalDay({
+      currentDay: 6,
+      days: [seriesDay(4, readYesterday), seriesDay(5, readToday), seriesDay(6)],
+    });
+    expect(day).toBe(5);
+  });
+
+  it('names currentDay when nothing was read today and its day is not on the device', async () => {
+    const readYesterday = new Date(Date.now() - 86_400_000).toISOString();
+    const day = await sentDevotionalDay({
+      currentDay: 6,
+      days: [seriesDay(5, readYesterday)],
+    });
+    expect(day).toBe(6);
   });
 });

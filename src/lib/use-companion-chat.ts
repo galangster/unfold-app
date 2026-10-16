@@ -29,7 +29,11 @@ import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
+import { copySeed } from '@/lib/copy-variation';
+import { getTodayDay } from '@/lib/home-devotional-state';
+import type { Devotional } from '@/lib/store';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { readSuggestionList, replySuggestions } from './companion-suggestions';
 
 /**
  * WR-20: screen-reader users get no signal when a reply lands — the list
@@ -109,7 +113,7 @@ function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {
 function buildCompanionContext(
   userName: string | null,
   companionName: string | null,
-  devotional: { title?: string; currentDay?: number; totalDays?: number } | null,
+  devotional: Devotional | null,
   streakDays: number,
   companionPersonality: CompanionPersonality,
   regenerate?: RegenerateTurn
@@ -124,7 +128,11 @@ function buildCompanionContext(
     companionName: companionName ?? undefined,
     companionPersonality,
     devotionalTitle: devotional?.title ?? undefined,
-    devotionalDay: devotional?.currentDay ?? undefined,
+    // The day the reader is on today, as the check-in copy names it.
+    // Finishing a reading moves currentDay to tomorrow, so currentDay alone
+    // names a day the reader has not read. It still answers when today's day
+    // is not on the device yet, because then nothing was read today.
+    devotionalDay: getTodayDay(devotional)?.dayNumber ?? devotional?.currentDay,
     devotionalTotal: devotional?.totalDays ?? undefined,
     streakDays: streakDays ?? 0,
     timeOfDay: getTimeOfDay(),
@@ -137,7 +145,8 @@ function buildCompanionContext(
 interface SSECallbacks {
   onToken: (text: string) => void;
   onThinking: () => void;
-  onDone: (suggestions: string[], cleanText?: string) => void;
+  /** `suggestions` is undefined when the done frame carried no list. */
+  onDone: (suggestions: string[] | undefined, cleanText?: string) => void;
   onError: (message: string) => void;
   onActivity: () => void;
 }
@@ -257,10 +266,7 @@ async function consumeSSE(
     }
     if (typeof event.t === 'string' && event.t) onToken(event.t);
     if (event.d) {
-      onDone(
-        Array.isArray(event.s) ? event.s.filter((item): item is string => typeof item === 'string') : [],
-        typeof event.ct === 'string' ? event.ct : undefined,
-      );
+      onDone(readSuggestionList(event.s), typeof event.ct === 'string' ? event.ct : undefined);
       return 'done';
     }
     if (event.error) {
@@ -358,7 +364,7 @@ async function fallbackNonStreaming(
   companionContext: Record<string, unknown>,
   chatMessages: { role: 'user' | 'assistant'; content: string }[],
   signal: AbortSignal,
-): Promise<{ responseText: string; suggestions: string[] }> {
+): Promise<{ responseText: string; suggestions: string[] | undefined }> {
   // Call companion/chat with stream:false — gets full JSON response
   // with the proper system prompt and companion personality.
   const response = await raceWithAbort(
@@ -383,14 +389,7 @@ async function fallbackNonStreaming(
 
   const data = await raceWithAbort(response.json(), signal);
   const rawText = data?.content ?? data?.text ?? '';
-  const suggestions: string[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
-
-  const fallbackSuggestions =
-    suggestions.length > 0
-      ? suggestions
-      : ['Tell me more', 'How do I apply this?', 'Help me with a prayer'];
-
-  return { responseText: rawText, suggestions: fallbackSuggestions };
+  return { responseText: rawText, suggestions: readSuggestionList(data?.suggestions) };
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
@@ -607,6 +606,18 @@ export function useCompanionChat() {
       const isStreamConversationVisible = () =>
         useCompanionChatStore.getState().activeConversationId === streamConversationId;
 
+      // A reply with no list draws fallback chips by its place among this
+      // conversation's replies, so consecutive replies never share a chip.
+      const chipsFor = (sent: string[] | undefined, replyText: string) => {
+        const conversation = useCompanionChatStore.getState().conversations
+          .find((candidate) => candidate.id === streamConversationId);
+        const replies = (conversation?.messages ?? []).filter((message) => message.role === 'companion');
+        return replySuggestions(sent, replyText, {
+          seed: `${copySeed()}|companion-chips|${streamConversationId}`,
+          draw: Math.max(0, replies.findIndex((message) => message.id === companionId)),
+        });
+      };
+
       try {
         const streamConversation = useCompanionChatStore.getState().conversations
           .find((conversation) => conversation.id === streamConversationId);
@@ -673,17 +684,10 @@ export function useCompanionChat() {
                 cancelThrottle();
                 if (isStreamConversationVisible()) setIsSearching(false);
                 const rawText = cleanText || accumulatedText;
-                const finalSuggestions =
-                  sug.length > 0
-                    ? sug
-                    : [
-                        'Tell me more',
-                        'How do I apply this?',
-                        'Help me with a prayer',
-                      ];
 
                 // Extract deep links from response
                 const { cleanContent, deepLinks } = parseDeepLinks(rawText);
+                const finalSuggestions = chipsFor(sug, cleanContent);
 
                 updateMessage(companionId, {
                   content: cleanContent,
@@ -784,14 +788,15 @@ export function useCompanionChat() {
 
           // Extract deep links from fallback response
           const { cleanContent: fallbackClean, deepLinks: fallbackLinks } = parseDeepLinks(result.responseText);
+          const fallbackSuggestions = chipsFor(result.suggestions, fallbackClean);
 
           updateMessage(companionId, {
             content: fallbackClean,
             deepLinks: fallbackLinks,
             status: 'complete',
-            suggestions: result.suggestions,
+            suggestions: fallbackSuggestions,
           }, streamConversationId);
-          if (isStreamConversationVisible()) setSuggestions(result.suggestions);
+          if (isStreamConversationVisible()) setSuggestions(fallbackSuggestions);
           announceCompanionReply(fallbackClean);
         }
 

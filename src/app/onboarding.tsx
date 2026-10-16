@@ -798,7 +798,7 @@ export default function OnboardingScreen() {
     if (hasEmotional && hasSeeking) {
       reflection = pickRandom([
         `${nameClause}something real brought you here\u00A0\u2014 a weight you've been carrying, and a hope you haven't let go\u00A0of.`,
-        `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at\u00A0work.`,
+        `Between where you are and where you're reaching, ${nameClause}God is already at\u00A0work.`,
         `${nameClause}you named what many people never pause long enough to say out\u00A0loud.`,
       ]);
     } else if (hasEmotional) {
