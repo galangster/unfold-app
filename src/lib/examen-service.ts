@@ -23,6 +23,10 @@ import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { copyVariationFor } from '@/lib/copy-variation';
+import { localDayKey } from '@/lib/home-devotional-state';
+import { avoidBlock, newestCacheKeys, openingWords, uniqueLines } from '@/lib/prompt-history';
+import { examenShapeFor, type ExamenShape } from '@/lib/prompt-variety';
 
 // ---------------------------------------------------------------------------
 // MMKV cache instance
@@ -57,18 +61,35 @@ export interface ExamenMovement {
 export interface ExamenPrayer {
   movements: ExamenMovement[];
   totalWordCount: number;
+  /**
+   * The line the evening screen prints under the prayer, drawn for the day
+   * the prayer was written. Null is a night with no line. An examen cached
+   * before 2026-10-16 has no field and keeps the "Amen." it always had.
+   */
+  closingLine?: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Cache helpers
 // ---------------------------------------------------------------------------
 
+const EXAMEN_KEY_PREFIX = 'examen_';
+/** How many earlier examens a request reads back as openings not to reuse. */
+const RECENT_EXAMEN_LIMIT = 7;
+/** Five movements each, from seven examens. */
+const RECENT_EXAMEN_LINE_LIMIT = 35;
+
+/**
+ * `day` is the reader's local day (`localDayKey`). Keys carried the UTC date
+ * before 2026-10-16, so a reader in the Americas could get a second examen
+ * on one local evening once UTC rolled over.
+ */
 function buildCacheKey(
   devotionalId: string,
   dayNumber: number,
-  date: string
+  day: string
 ): string {
-  return `examen_${devotionalId}_${dayNumber}_${date}`;
+  return `${EXAMEN_KEY_PREFIX}${devotionalId}_${dayNumber}_${day}`;
 }
 
 function getCachedExamen(cacheKey: string): ExamenPrayer | null {
@@ -103,6 +124,46 @@ function setCachedExamen(cacheKey: string, prayer: ExamenPrayer): void {
   }
 }
 
+interface RecentExamenLines {
+  /** The first few words of each movement, newest examen first. */
+  openings: string[];
+  titles: string[];
+}
+
+function cachedMovements(raw: string | undefined): ExamenMovement[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as Partial<ExamenPrayer>;
+    if (!Array.isArray(parsed.movements)) return [];
+    return parsed.movements.filter(
+      (movement): movement is ExamenMovement =>
+        !!movement && typeof movement.title === 'string' && typeof movement.prayer === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The openings and titles of the reader's newest cached examens. No earlier
+ * examen was ever sent before 2026-10-16, so nothing stopped the model from
+ * opening the same way every night. A storage failure costs only the avoid
+ * list, never the prayer.
+ */
+function recentExamenLines(): RecentExamenLines {
+  try {
+    const movements = newestCacheKeys(examenCache.getAllKeys(), EXAMEN_KEY_PREFIX, RECENT_EXAMEN_LIMIT)
+      .flatMap((key) => cachedMovements(examenCache.getString(key)));
+    return {
+      openings: movements.map((movement) => openingWords(movement.prayer)).filter(Boolean),
+      titles: movements.map((movement) => movement.title.trim()).filter(Boolean),
+    };
+  } catch (error) {
+    logger.warn('[Examen] Could not read recent examens', error instanceof Error ? error.message : error);
+    return { openings: [], titles: [] };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Network request with backend fallback
 // ---------------------------------------------------------------------------
@@ -111,33 +172,60 @@ function setCachedExamen(cacheKey: string, prayer: ExamenPrayer): void {
 // Examen prompt — sent to the generic /api/generate/go-deeper endpoint
 // ---------------------------------------------------------------------------
 
+// Each movement used to come with a quoted opener ("Lord, I thank you
+// for...", "I felt you near when...", "I confess that...", "I release...",
+// "Tomorrow, I trust that...") under the same five titles every night, and
+// the model prayed those words back verbatim. Each movement now says what it
+// does, the model writes a fresh title, and the request names tonight's close
+// and the openings of recent examens.
 const EXAMEN_SYSTEM_PROMPT = `${PERSONA_FULL}
 
 WHAT YOU'RE DOING: Writing a personalized evening Examen prayer for someone to pray aloud or silently.
 
-Generate a 5-movement evening prayer in FIRST PERSON — the user is speaking directly to God. Use "I" and "we" voice, never "you." These are words the user prays, not instructions about how to pray. Think Common Prayer by Shane Claiborne — liturgical, intimate, honest.
+Generate a 5-movement evening prayer in FIRST PERSON: the user is speaking directly to God. Use "I" and "we". In the prayer, "you" always means God, never the user. These are words the user prays, not instructions about how to pray. Think Common Prayer by Shane Claiborne: liturgical, intimate, honest.
 
 CRITICAL: Each movement MUST be 2-3 sentences, no more than 40 words. Be concise and intimate. Do NOT write long paragraphs.
 
-The 5 movements:
-1. GRATITUDE — "Lord, I thank you for..." Thank God for specific gifts from today, woven into their devotional theme
-2. PRESENCE — "I felt you near when..." Name where God showed up today
-3. HONESTY — "I confess that..." or "Lord, I struggled with..." Name what was hard, without shame
-4. TURNING — "I release..." or "I lay down..." Let go of what they're carrying. Grace, not guilt
-5. HOPE — "Tomorrow, I trust that..." or "I look forward to..." Anticipation, light
+The 5 movements, in this order. Each line says what the movement does, not how it begins:
+1. GRATITUDE: thank God for one or two specific gifts from today, woven into their devotional theme.
+2. PRESENCE: name where God was near today, or was at work without being noticed.
+3. HONESTY: name what was hard today, plainly and without shame.
+4. TURNING: set down what they are carrying, and ask for grace.
+5. HOPE: look toward tomorrow with trust and some light.
+
+OPENINGS:
+- Begin each movement in a different way. No two movements start with the same word.
+- Ways to begin include a name for God, a plain detail from the day, a short question to God, a statement of fact, or the middle of a thought.
+- Never begin a movement with an opening listed under RECENT OPENINGS in the request, or with a close variant of one.
+
+TITLES:
+- Give each movement a fresh title of two to four words for what that movement carries tonight.
+- Do not use the movement names above as titles. Do not reuse a title listed under RECENT TITLES.
+- No numbers and no end punctuation in a title.
+
+CLOSING:
+- End the fifth movement with the move the request names under TONIGHT'S CLOSE.
+- Do not write "Amen" anywhere. The app adds its own closing line.
 
 RULES:
-- FIRST PERSON ONLY — "I thank you," "I felt," "I confess," "I release," "I trust"
-- Address God directly — "Lord," "Father," "God" — like a conversation
+- FIRST PERSON ONLY
+- Address God directly ("Lord," "Father," "God"), like a conversation
+- Never use the user's name. This is their own prayer.
 - Reference their specific context naturally
 - Vary emotional register between movements
 - These are prayers to be PRAYED, not reflections to be READ
 
 RESPOND WITH ONLY valid JSON, no markdown, no code blocks:
-{"movements": [{"title": "Gratitude", "prayer": "..."}, {"title": "Presence", "prayer": "..."}, {"title": "Honesty", "prayer": "..."}, {"title": "Turning", "prayer": "..."}, {"title": "Hope", "prayer": "..."}]}`;
+{"movements": [{"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}, {"title": "...", "prayer": "..."}]}`;
 
-function buildExamenUserMessage(input: ExamenInput): string {
-  let msg = `Name: ${sanitizeForPrompt(input.userName, 50)}\nToday's theme: "${sanitizeForPrompt(input.todayTheme, 200)}"\nScripture: ${sanitizeForPrompt(input.todayScripture, 200)}`;
+// The reader's name is not sent: the examen is their own prayer, and a name
+// in the request is a name the model can slip into it.
+function buildExamenUserMessage(
+  input: ExamenInput,
+  shape: ExamenShape,
+  recent: RecentExamenLines
+): string {
+  let msg = `Today's theme: "${sanitizeForPrompt(input.todayTheme, 200)}"\nScripture: ${sanitizeForPrompt(input.todayScripture, 200)}`;
   if (input.middayCheckIn) {
     msg += `\nMidday mood: ${sanitizeForPrompt(input.middayCheckIn.moodLabel, 50)} (${input.middayCheckIn.mood}/5)`;
     if (input.middayCheckIn.chipAnswer) msg += `\nThey said: "${sanitizeForPrompt(input.middayCheckIn.chipAnswer, 200)}"`;
@@ -146,11 +234,23 @@ function buildExamenUserMessage(input: ExamenInput): string {
   if (input.currentSituation) {
     msg += `\nTheir situation: ${sanitizeForPrompt(input.currentSituation, 500)}`;
   }
+  msg += `\n\nTONIGHT'S CLOSE: ${shape.closing.instruction}`;
+
+  const openings = avoidBlock(
+    'RECENT OPENINGS (do not begin a movement with these words):',
+    uniqueLines(recent.openings.map((line) => sanitizeForPrompt(line, 80)), RECENT_EXAMEN_LINE_LIMIT)
+  );
+  const titles = avoidBlock(
+    'RECENT TITLES (do not reuse):',
+    uniqueLines(recent.titles.map((line) => sanitizeForPrompt(line, 80)), RECENT_EXAMEN_LINE_LIMIT)
+  );
+  if (openings) msg += `\n\n${openings}`;
+  if (titles) msg += `\n\n${titles}`;
   return msg;
 }
 
 async function postToBackend(
-  input: ExamenInput,
+  userMessage: string,
   timeoutMs: number
 ): Promise<Response> {
   const backendCandidates = getBackendCandidates();
@@ -161,7 +261,7 @@ async function postToBackend(
     max_tokens: 2000,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildExamenUserMessage(input) }],
+    messages: [{ role: 'user', content: userMessage }],
   };
 
   for (let i = 0; i < backendCandidates.length; i++) {
@@ -228,7 +328,38 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter((w) => w.length > 0).length;
 }
 
-const EXPECTED_TITLES = ['Gratitude', 'Presence', 'Honesty', 'Turning', 'Hope'];
+/** The movement names, kept as the title when the model's own title is unusable. */
+const FALLBACK_TITLES = ['Gratitude', 'Presence', 'Honesty', 'Turning', 'Hope'];
+
+/** The prompt asks for two to four words. One more is tolerated, a sentence is not. */
+const MAX_TITLE_WORDS = 5;
+const MAX_TITLE_LENGTH = 40;
+
+/** The model's title for a movement, or the movement's name when it is unusable. */
+function movementTitle(raw: unknown, fallback: string): string {
+  if (typeof raw !== 'string') return fallback;
+  const title = raw
+    .trim()
+    .replace(/^\d+\s*[.):-]\s*/, '')
+    .replace(/[.,;:!]+$/, '')
+    .trim();
+  const words = title.split(/\s+/).filter(Boolean).length;
+  if (!title || words > MAX_TITLE_WORDS || title.length > MAX_TITLE_LENGTH || title.includes('—')) {
+    return fallback;
+  }
+  return title;
+}
+
+/**
+ * The prayer without a closing "Amen" the model wrote anyway: the evening
+ * screen prints the night's own closing line, and two "Amen"s read as a
+ * stutter.
+ */
+function withoutTrailingAmen(prayer: string): string {
+  const stripped = prayer.replace(/[\s,;:]*\bamen\b[.!]*\s*$/i, '').trim();
+  if (!stripped || stripped === prayer.trim()) return prayer.trim();
+  return /[.!?…"'”’]$/.test(stripped) ? stripped : `${stripped}.`;
+}
 
 /**
  * Extract the text payload from the backend response.
@@ -410,12 +541,9 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
     }
 
     const mov = m as Record<string, unknown>;
-    const title =
-      typeof mov.title === 'string' && mov.title.trim().length > 0
-        ? mov.title.trim()
-        : EXPECTED_TITLES[idx];
+    const title = movementTitle(mov.title, FALLBACK_TITLES[idx]);
     const prayer =
-      typeof mov.prayer === 'string' ? mov.prayer.trim() : '';
+      typeof mov.prayer === 'string' ? withoutTrailingAmen(mov.prayer) : '';
 
     if (prayer.length === 0) {
       throw new Error(`Movement ${idx} ("${title}") has empty prayer text`);
@@ -439,7 +567,7 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
 /**
  * Generate a personalized 5-movement Ignatian Examen prayer.
  *
- * Checks MMKV cache first (keyed by devotionalId + dayNumber + date).
+ * Checks MMKV cache first (keyed by devotionalId + dayNumber + local day).
  * Falls back to the backend with a 30-second timeout and URL fallback chain.
  * Backend uses Grok for cost-effective generation.
  *
@@ -452,8 +580,8 @@ export async function generateExamen(
     dayNumber: number;
   }
 ): Promise<ExamenPrayer | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const cacheKey = buildCacheKey(context.devotionalId, context.dayNumber, today);
+  const now = new Date();
+  const cacheKey = buildCacheKey(context.devotionalId, context.dayNumber, localDayKey(now));
 
   // 1. Check cache
   const cached = getCachedExamen(cacheKey);
@@ -472,6 +600,8 @@ export async function generateExamen(
   }
 
   // 3. Call backend with retry on parse failure (backend routes to Grok)
+  const shape = examenShapeFor(copyVariationFor(now));
+  const userMessage = buildExamenUserMessage(input, shape, recentExamenLines());
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -481,7 +611,7 @@ export async function generateExamen(
           (attempt > 1 ? ` (retry ${attempt}/${MAX_ATTEMPTS})` : '')
       );
 
-      const response = await postToBackend(input, 30_000);
+      const response = await postToBackend(userMessage, 30_000);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'unknown');
@@ -521,7 +651,7 @@ export async function generateExamen(
         }
       }
 
-      const prayer = parseExamenResponse(parsed);
+      const prayer: ExamenPrayer = { ...parseExamenResponse(parsed), closingLine: shape.closingLine };
 
       logger.log(
         `[Examen] Generated ${prayer.movements.length} movements, ` +
@@ -563,7 +693,8 @@ export function clearExamenCache(): void {
 }
 
 /**
- * Delete a specific cached examen by its context.
+ * Delete a specific cached examen by its context. `date` is the local day
+ * (`localDayKey`) the examen was written for.
  */
 export function deleteCachedExamen(
   devotionalId: string,

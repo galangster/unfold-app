@@ -5,7 +5,7 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 let mockLayout: object = {};
-const mockExamen = {
+const mockExamen: { movements: { title: string; prayer: string }[]; closingLine?: string | null } = {
   movements: [
     { title: 'Gratitude', prayer: 'Thank you for this day.' },
     { title: 'Rest', prayer: 'Keep me through the night.' },
@@ -194,5 +194,26 @@ describe('Evening wind-down pages', () => {
     // The lower pane runs from the fold gutter to the bottom of the window.
     expect(flatStyle(lower).height).toBe(duoUpright.height / 2 + 20);
     expect(flatStyle(lower).justifyContent).toBe('flex-end');
+  });
+
+  it("prints the night's closing line under the prayer, an older examen's Amen, or no line", () => {
+    mockLayout = phone;
+    const prayerText = () => textOf(render().root.findByProps({ testID: 'evening-wind-down-prayer-page' }));
+    try {
+      // An examen cached before the line varied has no closingLine.
+      expect(prayerText()).toContain('Amen.');
+
+      mockExamen.closingLine = 'Let it be so.';
+      expect(prayerText()).toContain('Let it be so.');
+      expect(prayerText()).not.toContain('Amen.');
+
+      mockExamen.closingLine = null;
+      const withoutLine = prayerText();
+      expect(withoutLine).not.toContain('Amen.');
+      expect(withoutLine).not.toContain('Let it be so.');
+      expect(withoutLine).toContain('Keep me through the night.');
+    } finally {
+      delete mockExamen.closingLine;
+    }
   });
 });

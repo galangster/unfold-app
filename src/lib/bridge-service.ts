@@ -13,12 +13,17 @@
 
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
-import { buildPromptWithPersona, BANNED_PHRASES } from '@/constants/persona';
+import { buildPromptWithPersona } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { firstSentence, isDisplayableBridge, sanitizeBridgeText } from '@/lib/bridge-text';
+import { copyVariationFor } from '@/lib/copy-variation';
+import { localDayKey } from '@/lib/home-devotional-state';
+import { avoidBlock, newestCacheKeys, uniqueLines } from '@/lib/prompt-history';
+import { bridgeShapeFor, type BridgeShape } from '@/lib/prompt-variety';
 
 // ---------------------------------------------------------------------------
 // MMKV cache (dedicated instance — not the Zustand store)
@@ -58,12 +63,21 @@ interface BridgeResponse {
 // Cache helpers
 // ---------------------------------------------------------------------------
 
+const BRIDGE_KEY_PREFIX = 'bridge_';
+/** How many earlier bridges a request sends back as lines not to reuse. */
+const RECENT_BRIDGE_LIMIT = 7;
+
+/**
+ * `day` is the reader's local day (`localDayKey`). Keys carried the UTC date
+ * before 2026-10-16, so a reader in the Americas could get a second bridge
+ * on one local day once UTC rolled over in their evening.
+ */
 function buildCacheKey(
   devotionalId: string,
   dayNumber: number,
-  date: string
+  day: string
 ): string {
-  return `bridge_${devotionalId}_${dayNumber}_${date}`;
+  return `${BRIDGE_KEY_PREFIX}${devotionalId}_${dayNumber}_${day}`;
 }
 
 function getCachedBridge(cacheKey: string): string | null {
@@ -76,68 +90,29 @@ function getCachedBridge(cacheKey: string): string | null {
   return null;
 }
 
-/**
- * Sanitize bridge text: remove em dashes, profanity, and other unwanted patterns.
- * This runs as a safety net after model generation.
- */
-function sanitizeBridgeText(text: string): string {
-  let cleaned = text;
-  // Replace em dashes with comma or period
-  cleaned = cleaned.replace(/\s*—\s*/g, ', ');
-  // Remove profanity / crude intensifiers
-  cleaned = cleaned.replace(/\bas hell\b/gi, '');
-  cleaned = cleaned.replace(/\bdamn\b/gi, '');
-  cleaned = cleaned.replace(/\bfreaking\b/gi, 'really');
-  cleaned = cleaned.replace(/\bhell of a\b/gi, 'a real');
-  // Capitalize "God" — never lowercase in theological context
-  cleaned = sanitizeGodCapitalization(cleaned);
-  // Strip banned phrases (case-insensitive)
-  for (const phrase of BANNED_PHRASES) {
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleaned = cleaned.replace(new RegExp(escaped, 'gi'), '');
-  }
-  // Clean up double spaces or awkward punctuation from replacements
-  cleaned = cleaned.replace(/,\s*,/g, ',');
-  cleaned = cleaned.replace(/\s{2,}/g, ' ');
-  cleaned = cleaned.replace(/,\s*\./g, '.');
-  cleaned = cleaned.trim();
-
-  // If the text was truncated mid-sentence (no terminal punctuation), trim
-  // back to the last complete sentence rather than display a dangling fragment.
-  if (cleaned.length > 20 && !/[.!?…"']$/.test(cleaned)) {
-    const lastTerminal = Math.max(
-      cleaned.lastIndexOf('.'),
-      cleaned.lastIndexOf('!'),
-      cleaned.lastIndexOf('?'),
-      cleaned.lastIndexOf('…'),
-    );
-    if (lastTerminal > 20) {
-      cleaned = cleaned.slice(0, lastTerminal + 1).trim();
-    }
-  }
-
-  return cleaned;
-}
-
-/**
- * Ensure "god" is always capitalized to "God" in theological context.
- * Exported so other services can use the same safety net.
- */
-export function sanitizeGodCapitalization(text: string): string {
-  // Replace standalone lowercase "god" with "God"
-  // Preserves compound words like "godly", "godmother", "demigod"
-  return text.replace(/\bgod\b/g, 'God');
-}
-
 function setCachedBridge(cacheKey: string, text: string): void {
   // Don't cache incomplete bridges (truncated responses, partial text)
-  const trimmed = text.trim();
-  if (trimmed.length < 20 || !/[.!?…"']$/.test(trimmed)) {
-    logger.warn(`${LOG_PREFIX} skipping cache, bridge looks incomplete: "${trimmed.slice(0, 50)}..."`);
+  if (!isDisplayableBridge(text)) {
+    logger.warn(`${LOG_PREFIX} skipping cache, bridge looks incomplete (len=${text.trim().length})`);
     return;
   }
   bridgeCache.set(cacheKey, text);
   logger.log(`${LOG_PREFIX} cache SET, key=${cacheKey}, len=${text.length}`);
+}
+
+/**
+ * The first sentence of each of the reader's newest cached bridges, newest
+ * first. A storage failure costs only the avoid list, never the bridge.
+ */
+function recentBridgeFirstSentences(): string[] {
+  try {
+    return newestCacheKeys(bridgeCache.getAllKeys(), BRIDGE_KEY_PREFIX, RECENT_BRIDGE_LIMIT)
+      .map((key) => firstSentence(bridgeCache.getString(key) ?? ''))
+      .filter(Boolean);
+  } catch (error) {
+    logger.warn(`${LOG_PREFIX} could not read recent bridges`, error instanceof Error ? error.message : error);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -235,27 +210,25 @@ async function postBridgeRequest(
 // Bridge prompt construction
 // ---------------------------------------------------------------------------
 
+// The instructions used to carry worked examples that all opened "Hey Alex,
+// today's reading is about...", and the model copied them every morning. The
+// examples also used "really", which the rules below ban. Today's opening,
+// closing, and name use now come from the bag in the user message instead.
 const BRIDGE_INSTRUCTIONS = `TASK: Write a short text message (2-4 sentences, 40-80 words) introducing today's devotional topic to the reader.
 
 You are a companion who helped craft today's devotional for this specific person. You know what's inside and you're genuinely excited to hand it to them. Your job is to create ANTICIPATION about the content, like handing someone a gift you picked out for them.
 
-ANTICIPATION TECHNIQUES (vary these, don't repeat the same approach):
-1. Content tease — Name the topic plainly and let its weight land. "Today's reading is about God pursuing you when you're running the other direction."
-2. Curiosity question — Ask something today's reading explores. "What does it actually look like when God meets you in the mess?"
-3. Bold hook — Short, punchy statement about the content. "This psalm doesn't hold back."
-4. Surprising angle — Highlight what's unexpected. "Today's reading takes prayer somewhere you might not expect."
-5. Specific moment — Point to a standout part. "There's a moment in today's reading about being still that really stands out."
-
-EXAMPLES (match this tone):
-- "Hey Alex, today's reading is about learning to actually rest. Like real rest, the kind where you stop performing. There's a line in here that really stands out."
-- "Alex! Ok so today's topic is about letting go of control. What happens when you stop white-knuckling everything?"
-- "Hey Alex, today's reading gets into how God shows up in the middle of chaos. This psalm is raw."
+TODAY'S SHAPE:
+- The request names today's opening move, closing move, and whether to use the reader's name. Follow all three.
+- The shape changes every morning so the messages never fall into one pattern. Do not drift back to a favorite opening.
 
 CRITICAL RULES:
-- Be SPECIFIC about the topic. Name it plainly. "It's about learning to actually stop and listen."
+- Be SPECIFIC about the topic. Name it plainly.
 - Get excited about the CONTENT, not about how it applies to the reader. Let the content do its own work.
-- Use their name once, casually.
-- Use contractions (you're, it's, don't). Use filler words naturally (like, honestly, ok so).
+- Never open with a greeting or with the reader's name.
+- Use the reader's name only when the request says to. Then use it once, after the first sentence.
+- Never reuse the wording or the first words of a sentence listed under RECENT FIRST SENTENCES.
+- Use contractions (you're, it's, don't). A casual word now and then is fine. Do not pad with filler words.
 - Short sentences. Fragments ok.
 - NEVER use em dashes. Use commas or periods.
 - NEVER use profanity (as hell, damn, etc). Clean but not stiff.
@@ -274,10 +247,18 @@ CRITICAL RULES:
 
 OUTPUT: Return ONLY the message. No labels, no JSON.`;
 
-function buildBridgeUserMessage(input: BridgeInput): string {
+function buildBridgeUserMessage(
+  input: BridgeInput,
+  shape: BridgeShape,
+  recentFirstSentences: readonly string[]
+): string {
   const parts: string[] = [];
 
-  parts.push(`Reader's name: ${sanitizeForPrompt(input.userName, 50)}`);
+  // The name goes with the request only on a morning the bag picked for it,
+  // so on the other mornings there is no name to slip in.
+  if (shape.useName) {
+    parts.push(`Reader's name: ${sanitizeForPrompt(input.userName, 50)}`);
+  }
 
   if (input.yesterdayCheckIn) {
     const ci = input.yesterdayCheckIn;
@@ -295,6 +276,24 @@ function buildBridgeUserMessage(input: BridgeInput): string {
 
   parts.push(`\nToday's devotional theme: ${sanitizeForPrompt(input.todayTheme, 200)}`);
   parts.push(`Today's scripture: ${sanitizeForPrompt(input.todayScripture, 200)}`);
+
+  parts.push(`\nTODAY'S SHAPE:`);
+  parts.push(`- Opening: ${shape.opening.instruction}`);
+  parts.push(`- Closing: ${shape.closing.instruction}`);
+  parts.push(
+    shape.useName
+      ? '- Name: Use their name once, after the first sentence.'
+      : '- Name: Do not use their name today.'
+  );
+
+  const recent = avoidBlock(
+    'RECENT FIRST SENTENCES (do not reuse their wording or their first words):',
+    uniqueLines(
+      recentFirstSentences.map((sentence) => `"${sanitizeForPrompt(sentence, 300)}"`),
+      RECENT_BRIDGE_LIMIT
+    )
+  );
+  if (recent) parts.push(`\n${recent}`);
 
   parts.push(`\nWrite the bridge.`);
 
@@ -316,15 +315,16 @@ function buildBridgeUserMessage(input: BridgeInput): string {
  * @param input      - User context, check-in data, and today's theme/scripture.
  * @param devotionalId - The devotional series ID (for cache key).
  * @param dayNumber    - The day number within the series (for cache key).
- * @returns The bridge text, or null if generation fails.
+ * @returns The bridge text, or null when generation fails or the sanitizer
+ *          leaves too little to show (Today then shows no bridge).
  */
 export async function generateBridge(
   input: BridgeInput,
   devotionalId: string,
   dayNumber: number
 ): Promise<string | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const cacheKey = buildCacheKey(devotionalId, dayNumber, today);
+  const now = new Date();
+  const cacheKey = buildCacheKey(devotionalId, dayNumber, localDayKey(now));
 
   // 1. Return cached bridge if available (sanitize in case old cache has bad text)
   const cached = getCachedBridge(cacheKey);
@@ -346,7 +346,11 @@ export async function generateBridge(
 
   // 3. Build the prompt and send as Anthropic-format payload to the backend
   const systemPrompt = buildPromptWithPersona('full', BRIDGE_INSTRUCTIONS);
-  const userMessage = buildBridgeUserMessage(input);
+  const userMessage = buildBridgeUserMessage(
+    input,
+    bridgeShapeFor(copyVariationFor(now)),
+    recentBridgeFirstSentences()
+  );
 
   try {
     const result = await postBridgeRequest({
@@ -358,8 +362,13 @@ export async function generateBridge(
     });
 
     const cleanText = sanitizeBridgeText(result.bridgeText);
-    setCachedBridge(cacheKey, cleanText);
+    if (cleanText) setCachedBridge(cacheKey, cleanText);
+    // The generation counts whether or not its text survives the sanitizer.
     await incrementRateLimit('bridge');
+    if (!cleanText) {
+      logger.warn(`${LOG_PREFIX} bridge dropped: too little was left after removing banned phrases`);
+      return null;
+    }
     return cleanText;
   } catch (error) {
     logger.warn(
@@ -379,14 +388,15 @@ export function clearBridgeCache(): void {
 }
 
 /**
- * Check if a bridge is already cached for a given devotional day and date.
+ * Check if a bridge is already cached for a given devotional day and local
+ * day (`localDayKey`). The day defaults to today.
  */
 export function hasCachedBridge(
   devotionalId: string,
   dayNumber: number,
   date?: string
 ): boolean {
-  const d = date ?? new Date().toISOString().slice(0, 10);
+  const d = date ?? localDayKey(new Date());
   const cacheKey = buildCacheKey(devotionalId, dayNumber, d);
   return bridgeCache.contains(cacheKey);
 }

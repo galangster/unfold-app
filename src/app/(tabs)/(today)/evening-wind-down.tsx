@@ -290,6 +290,8 @@ export default function EveningWindDownScreen() {
     retry: 1,
   });
 
+  const examenClosingLine = examen?.closingLine === undefined ? 'Amen.' : examen.closingLine;
+
   const {
     data: scripture,
     isLoading: scriptureLoading,
@@ -653,7 +655,9 @@ export default function EveningWindDownScreen() {
                 />
                 {examen.movements.map((movement, index) => (
                   <MovementCard
-                    key={movement.title}
+                    // The model writes the titles now, so two can match.
+                    // The order of the five movements is fixed.
+                    key={index}
                     movement={movement}
                     index={index}
                     accentColor={colors.accent}
@@ -661,25 +665,29 @@ export default function EveningWindDownScreen() {
                     mutedColor={colors.textMuted}
                   />
                 ))}
-                {/* Closing ornament */}
-                <Animated.View
-                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
-                  style={{
-                    alignItems: 'center',
-                    paddingTop: Spacing['2'],
-                    paddingBottom: Spacing['4'],
-                  }}
-                >
-                  <Text
+                {/* Closing ornament: the night's line from the bag, or none.
+                    An examen cached before the line varied keeps "Amen." */}
+                {examenClosingLine ? (
+                  <Animated.View
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
                     style={{
-                      fontFamily: FontFamily.bodyItalic,
-                      fontSize: 13,
-                      color: colors.textSubtle,
+                      alignItems: 'center',
+                      paddingTop: Spacing['2'],
+                      paddingBottom: Spacing['4'],
                     }}
                   >
-                    Amen.
-                  </Text>
-                </Animated.View>
+                    <Text
+                      testID="evening-wind-down-closing-line"
+                      style={{
+                        fontFamily: FontFamily.bodyItalic,
+                        fontSize: 13,
+                        color: colors.textSubtle,
+                      }}
+                    >
+                      {examenClosingLine}
+                    </Text>
+                  </Animated.View>
+                ) : null}
               </>
             ) : (
               <View style={{ alignItems: 'center', paddingTop: 40, paddingBottom: 20 }}>
