@@ -49,6 +49,7 @@ import {
   resolveEveningWindDownDayNumber,
   resolveEveningWindDownReadiness,
 } from '@/lib/evening-wind-down-state';
+import { localDayKey } from '@/lib/home-devotional-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
 
@@ -211,11 +212,15 @@ export default function EveningWindDownScreen() {
 
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
+  // The prayer belongs to the day this screen opened on. Holding that date
+  // keeps the day, its readiness, the midday check-in, and the query on one
+  // prayer when midnight passes while someone reads.
+  const [openedAt] = useState(() => new Date());
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
   const currentDevotional = devotionals.find((d) => d.id === effectiveDevotionalId);
-  const eveningDayNumber = resolveEveningWindDownDayNumber(currentDevotional, requestedDayNumber);
+  const eveningDayNumber = resolveEveningWindDownDayNumber(currentDevotional, requestedDayNumber, openedAt);
   const currentDay = currentDevotional?.days.find(
     (d) => d.dayNumber === eveningDayNumber
   );
@@ -223,7 +228,7 @@ export default function EveningWindDownScreen() {
   // The evening push notification deep-links straight here and gates nothing,
   // so this screen has to enforce the same rule. See
   // resolveEveningWindDownReadiness for the report behind it.
-  const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber);
+  const readiness = resolveEveningWindDownReadiness(currentDevotional, eveningDayNumber, openedAt);
   const [reflectAnyway, setReflectAnyway] = useState(false);
   // A missing progressive day still belongs to this series. Its reader can
   // recover the content. Only readers with no series need the creation state.
@@ -236,8 +241,8 @@ export default function EveningWindDownScreen() {
     // By date: midday check-ins target the readable day, the evening targets
     // the day completed today, so a day-number lookup drops the afternoon
     // check-in after a morning read.
-    return findTodayMiddayCheckIn(checkIns, currentDevotional.id, currentDay.dayNumber);
-  }, [currentDevotional, currentDay, checkIns]);
+    return findTodayMiddayCheckIn(checkIns, currentDevotional.id, currentDay.dayNumber, openedAt);
+  }, [currentDevotional, currentDay, checkIns, openedAt]);
 
   const middayCheckInInput = useMemo(() => {
     if (!middayCheckIn) return undefined;
@@ -261,7 +266,8 @@ export default function EveningWindDownScreen() {
       currentDevotional?.id,
       currentDay?.dayNumber,
       currentDay?.title,
-      user?.name,
+      user?.currentSituation,
+      localDayKey(openedAt),
       middayCheckInInput,
       middayCheckInInput?.mood,
       middayCheckInInput?.moodLabel,
@@ -271,7 +277,6 @@ export default function EveningWindDownScreen() {
     queryFn: async () => {
       const result = await generateExamen(
         {
-          userName: user!.name,
           todayTheme: currentDay!.title,
           todayScripture: currentDay!.scriptureReference,
           middayCheckIn: middayCheckInInput,
@@ -280,7 +285,8 @@ export default function EveningWindDownScreen() {
         {
           devotionalId: currentDevotional!.id,
           dayNumber: currentDay!.dayNumber,
-        }
+        },
+        openedAt
       );
       if (!result) throw new Error('Failed to generate examen');
       return result;
@@ -653,7 +659,9 @@ export default function EveningWindDownScreen() {
                 />
                 {examen.movements.map((movement, index) => (
                   <MovementCard
-                    key={movement.title}
+                    // The model writes the titles now, so two can match.
+                    // The order of the five movements is fixed.
+                    key={index}
                     movement={movement}
                     index={index}
                     accentColor={colors.accent}
@@ -661,25 +669,28 @@ export default function EveningWindDownScreen() {
                     mutedColor={colors.textMuted}
                   />
                 ))}
-                {/* Closing ornament */}
-                <Animated.View
-                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
-                  style={{
-                    alignItems: 'center',
-                    paddingTop: Spacing['2'],
-                    paddingBottom: Spacing['4'],
-                  }}
-                >
-                  <Text
+                {/* Closing ornament: the night's line from the bag, or none. */}
+                {examen.closingLine ? (
+                  <Animated.View
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(420 + examen.movements.length * 150).easing(Ease.out)}
                     style={{
-                      fontFamily: FontFamily.bodyItalic,
-                      fontSize: 13,
-                      color: colors.textSubtle,
+                      alignItems: 'center',
+                      paddingTop: Spacing['2'],
+                      paddingBottom: Spacing['4'],
                     }}
                   >
-                    Amen.
-                  </Text>
-                </Animated.View>
+                    <Text
+                      testID="evening-wind-down-closing-line"
+                      style={{
+                        fontFamily: FontFamily.bodyItalic,
+                        fontSize: 13,
+                        color: colors.textSubtle,
+                      }}
+                    >
+                      {examen.closingLine}
+                    </Text>
+                  </Animated.View>
+                ) : null}
               </>
             ) : (
               <View style={{ alignItems: 'center', paddingTop: 40, paddingBottom: 20 }}>

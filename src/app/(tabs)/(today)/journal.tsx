@@ -53,9 +53,10 @@ import { JournalSourcePage } from '@/components/journal/JournalSourcePage';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
-import { PERSONA_BRIEF } from '@/constants/persona';
+import { buildGoDeeperRequest } from '@/lib/go-deeper-prompt';
+import { copySeed } from '@/lib/copy-variation';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
@@ -795,32 +796,16 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      const systemPrompt = `${PERSONA_BRIEF}
-
-WHAT YOU'RE DOING: Generate exactly 3 follow-up reflection prompts based on someone's journal entry about their devotional.
-
-QUALITY:
-- Each prompt MUST reference something specific from their entry — never generic
-- Read their words: what emotion is underneath? What are they circling around but haven't named?
-
-STRUCTURE (vary across these 3 approaches):
-1. FEELING — explores the emotion beneath their words ("What does it feel like when..." / "Where do you feel that in your body?")
-2. LIFE — connects the devotional insight to a concrete moment in their daily life
-3. IMAGINATION — invites prayer or "what if" thinking ("If Jesus were sitting with you right now..." / "What would change if you believed this?")
-
-RULES:
-- 1-2 sentences each
-- Never assume you know their situation — ask, don't tell
-- Vary sentence structure and openings
-
-RESPOND WITH ONLY A JSON ARRAY OF EXACTLY 3 STRINGS. No other text, no markdown wrapping.`;
-
-      const userMessage = `Devotional: "${sanitizeForPrompt(currentDevotional?.title ?? 'Devotional', 200)}"
-Day: "${sanitizeForPrompt(currentDay?.title ?? `Day ${dayNumber}`, 200)}"
-Scripture: ${sanitizeForPrompt(currentDay?.scriptureReference ?? 'N/A', 200)}
-
-Their journal entry:
-"${sanitizeForPrompt(content, 2000)}"`;
+      // The request's three angles come from the bag, and the reader's recent
+      // prompts go along so the model does not write them again.
+      const { system: systemPrompt, userMessage } = buildGoDeeperRequest({
+        devotionalTitle: currentDevotional?.title ?? 'Devotional',
+        dayTitle: currentDay?.title ?? `Day ${dayNumber}`,
+        scriptureReference: currentDay?.scriptureReference ?? 'N/A',
+        entryText: content,
+        journalEntries,
+        seed: copySeed(),
+      });
 
       const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {
         method: 'POST',

@@ -7,10 +7,14 @@
  * labels in lists, cards, or navigation.
  */
 
+import { endsSentence } from '@/lib/bridge-text';
+
 /** Append a period unless the title already ends with sentence punctuation.
- * Casing is left untouched. */
+ * Casing is left untouched. Sentence punctuation is the app's one rule
+ * (`endsSentence`): end punctuation, then any closing quotes or brackets, so
+ * a title ending in a curly quote no longer gets a second stop. */
 export function titleWithPeriod(title: string): string {
   const t = title.trim();
   if (!t) return t;
-  return /[.!?…]["')\]]?$/.test(t) ? t : `${t}.`;
+  return endsSentence(t) ? t : `${t}.`;
 }
