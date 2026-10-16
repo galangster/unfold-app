@@ -8,8 +8,8 @@
  * useCheckInNotifications recording such a run as synced.
  */
 
-import { CHECK_IN_TAP_CUES, getMiddayCheckInCopy } from '@/constants/check-in-messages';
-import { dayIndexFor } from '@/lib/variation-bag';
+import { CHECK_IN_TAP_CUES, getEveningWindDownCopy, getMiddayCheckInCopy } from '@/constants/check-in-messages';
+import { dayIndexFor, type CopyVariation } from '@/lib/variation-bag';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios } }));
 jest.mock('expo-notifications', () => ({
@@ -68,7 +68,7 @@ const mockState = {
 // mock while that const is still in the temporal dead zone. The neighbouring
 // notifications-routing.test.ts does the same for the same reason.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { scheduleMiddayCheckIn, PRE_ROLL_DAYS, NOTIFICATION_IDS } = require('../notifications');
+const { scheduleMiddayCheckIn, scheduleEveningWindDown, PRE_ROLL_DAYS, NOTIFICATION_IDS } = require('../notifications');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockScheduleNotificationAsync = require('expo-notifications')
   .scheduleNotificationAsync as jest.Mock;
@@ -138,37 +138,83 @@ describe('scheduleMiddayCheckIn — write completeness', () => {
   });
 });
 
-describe('scheduleMiddayCheckIn — tap cues across fire dates', () => {
+/** What one scheduled banner was written with. */
+type ScheduledRequest = { content: { body: string }; trigger: { date: Date } };
+
+// Both slots carry their tap cues the same way, so both run the same tests.
+const SLOTS = [
+  {
+    name: 'midday',
+    id: NOTIFICATION_IDS.MIDDAY_CHECKIN,
+    schedule: scheduleMiddayCheckIn,
+    copy: (variation: CopyVariation, previousCue?: string) => getMiddayCheckInCopy(null, null, variation, previousCue),
+  },
+  {
+    name: 'evening',
+    id: NOTIFICATION_IDS.EVENING_WINDDOWN,
+    schedule: scheduleEveningWindDown,
+    copy: (variation: CopyVariation, previousCue?: string) => getEveningWindDownCopy(null, variation, previousCue),
+  },
+];
+
+describe.each(SLOTS)('$name check-in: tap cues across fire dates', ({ id, schedule, copy }) => {
+  const now = new Date(2026, 9, 16, 8);
   const cueOf = (body: string) => CHECK_IN_TAP_CUES.find((cue) => body.endsWith(cue));
+  const scheduled = () => mockScheduleNotificationAsync.mock.calls.map((call) => call[0] as ScheduledRequest);
+  const cuesShown = () => scheduled().map(({ content }) => cueOf(content.body));
+  const fireDays = () => scheduled().map(({ trigger }) => dayIndexFor(trigger.date));
+  /** The cue the slot's copy gives a day, stepping past `previousCue`. */
+  const cueFor = (dayIndex: number, previousCue?: string) => copy({ seed: 'test-install', dayIndex }, previousCue).cue;
 
   beforeEach(() => {
     mockScheduleNotificationAsync.mockClear();
     mockScheduleNotificationAsync.mockImplementation(async ({ identifier }: { identifier: string }) => identifier);
     mockState.policy = 'granted';
     mockState.store.middayCheckInByDay = null;
+    mockState.store.eveningWindDownByDay = null;
     for (const key of Object.keys(mockCarriedCues)) delete mockCarriedCues[key];
   });
 
   it('steps the first banner past the cue the last batch wrote for the fire date before it', async () => {
-    const now = new Date(2026, 9, 16, 8);
     const firstDay = dayIndexFor(now);
     // The cue this first banner would carry, stored as the one the day before carried.
-    const natural = getMiddayCheckInCopy(null, null, { seed: 'test-install', dayIndex: firstDay }).cue ?? '';
+    const natural = cueFor(firstDay) ?? '';
     expect(natural).not.toBe('');
-    mockCarriedCues[NOTIFICATION_IDS.MIDDAY_CHECKIN] = { [String(firstDay - 1)]: natural };
+    mockCarriedCues[id] = { [String(firstDay - 1)]: natural };
 
-    await scheduleMiddayCheckIn({ localDate: null, now });
+    await schedule({ localDate: null, now });
 
-    const cues = mockScheduleNotificationAsync.mock.calls.map((c) => cueOf((c[0] as any).content.body));
+    const cues = cuesShown();
+    expect(fireDays()[0]).toBe(firstDay);
     expect(cues[0]).toBeDefined();
     expect(cues[0]).not.toBe(natural);
     // Each fire date carries its cue to the next.
     for (let i = 1; i < cues.length; i += 1) expect(cues[i]).not.toBe(cues[i - 1]);
     // And the batch leaves its cues, in fire-date order, for the next batch.
-    const stored = mockCarriedCues[NOTIFICATION_IDS.MIDDAY_CHECKIN];
-    expect(Object.keys(stored).map(Number)).toEqual(
-      mockScheduleNotificationAsync.mock.calls.map((c) => dayIndexFor((c[0] as any).trigger.date)),
-    );
+    const stored = mockCarriedCues[id];
+    expect(Object.keys(stored).map(Number)).toEqual(fireDays());
     expect(Object.values(stored)).toEqual(cues);
+  });
+
+  it('carries each fire date’s cue to the next inside one batch', async () => {
+    // A first fire date that, stepping past the cue stored for the day before
+    // it, lands on the cue the next fire date would show on its own. Only the
+    // cue the batch carries from one fire date to the next keeps them apart.
+    const base = dayIndexFor(now);
+    const offset = Array.from({ length: 60 }, (_, i) => i)
+      .find((i) => cueFor(base + i, cueFor(base + i)) === cueFor(base + i + 1));
+    expect(offset).toBeDefined();
+    const start = new Date(now);
+    start.setDate(now.getDate() + (offset ?? 0));
+    const firstDay = dayIndexFor(start);
+    mockCarriedCues[id] = { [String(firstDay - 1)]: cueFor(firstDay) ?? '' };
+
+    await schedule({ localDate: null, now: start });
+
+    const cues = cuesShown();
+    expect(fireDays().slice(0, 2)).toEqual([firstDay, firstDay + 1]);
+    expect(cues[0]).toBe(cueFor(firstDay + 1));
+    expect(cues.every((cue) => cue !== undefined)).toBe(true);
+    for (let i = 1; i < cues.length; i += 1) expect(cues[i]).not.toBe(cues[i - 1]);
   });
 });
