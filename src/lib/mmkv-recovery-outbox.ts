@@ -84,7 +84,6 @@ export function mergeRecoveryOutbox(
  * its tombstone has left the outbox.
  */
 export const DELETED_SERIES_KEY = 'deleted-series-v1';
-const MAX_REMEMBERED_DELETES = 100;
 
 /** Delete clocks by series id, read from their stored JSON. */
 export function parseDeletedSeriesClocks(raw: string | null | undefined): Map<string, number> {
@@ -95,13 +94,6 @@ export function parseDeletedSeriesClocks(raw: string | null | undefined): Map<st
   } catch {
     return new Map();
   }
-}
-
-/** Keep only the newest deletes. */
-export function keepNewestDeletes(clocks: Map<string, number>): void {
-  if (clocks.size <= MAX_REMEMBERED_DELETES) return;
-  const oldest = [...clocks].sort((a, b) => b[1] - a[1]).slice(MAX_REMEMBERED_DELETES);
-  for (const [id] of oldest) clocks.delete(id);
 }
 
 /**
@@ -116,7 +108,6 @@ export function mergeRecoveryDeletedSeries(realKV: KVAccessor, recoveryKV: KVAcc
       const known = clocks.get(id);
       if (known === undefined || at > known) clocks.set(id, at);
     }
-    keepNewestDeletes(clocks);
     realKV.set(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(clocks)));
   }
   recoveryKV.delete(DELETED_SERIES_KEY);

@@ -1,4 +1,4 @@
-import { resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
 
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
@@ -1349,13 +1349,16 @@ describe('pulled series lifecycle', () => {
 
   // Round 7 again: a full sync that was out when the delete applied answered
   // with the older live row, and inserted it.
-  it('inserts no row older than a delete applied here, and a newer one again', () => {
+  it.each([0, 100])('rejects stale rows and accepts newer rows after %i later deletes', (laterDeletes) => {
     resetDeletedSeriesForTesting();
     useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
     useUnfoldStore.getState().removeDevotional('series-1');
     const deletedAtMs = Date.parse(peekSyncOutbox().find((change) => change.deleted && change.id === 'series-1')?.clientUpdatedAt ?? '');
     replaceSyncOutbox([]);
     const at = (offsetMs: number) => new Date(deletedAtMs + offsetMs).toISOString();
+    for (let index = 0; index < laterDeletes; index += 1) {
+      rememberDeletedSeries(`series-later-${index}`, at(index + 1));
+    }
     const liveRow = (updatedAt: string) => ({
       id: 'series-1',
       updatedAt,

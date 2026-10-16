@@ -1,4 +1,4 @@
-import { DELETED_SERIES_KEY, keepNewestDeletes, parseDeletedSeriesClocks } from './mmkv-recovery-outbox';
+import { DELETED_SERIES_KEY, parseDeletedSeriesClocks } from './mmkv-recovery-outbox';
 import { mmkvStorage } from './mmkv-storage';
 import { peekSyncOutbox } from './sync-outbox';
 
@@ -14,7 +14,7 @@ export { DELETED_SERIES_KEY };
  *
  * The clocks are kept on disk, so a finished generation job that lands after
  * a restart cannot bring a deleted series back once its tombstone has left
- * the outbox. Only the newest deletes are kept. A normal boot merges the
+ * the outbox. The clocks stay until a full reset. A normal boot merges the
  * clocks a recovery session wrote into the real store (`mmkv-storage.ts`).
  * `full-reset.ts` wipes the key with the account's other data.
  */
@@ -32,7 +32,6 @@ export function rememberDeletedSeries(devotionalId: string, deletedAt: string): 
   const known = clocks.get(devotionalId);
   if (known !== undefined && known >= at) return;
   clocks.set(devotionalId, at);
-  keepNewestDeletes(clocks);
   try {
     mmkvStorage.setItem(DELETED_SERIES_KEY, JSON.stringify(Object.fromEntries(clocks)));
   } catch {

@@ -10,7 +10,7 @@ signed build, which a simulator cannot run.
 
 | The smoke proves | The IPA check proves |
 |---|---|
-| The release commit builds in Release with the production environment, launches and passes `verify:release` | The signed IPA has the JS bundle, the bundle ID, the version, the build number and the profile stamp |
+| The release commit builds in Release with the production environment, launches and matches the simulator-artifact check | The signed IPA has the JS bundle, the bundle ID, the version, the build number and the profile stamp |
 | Onboarding through a real first devotional, reading, tabs and profile | App Store signing, the production push entitlement, and the widget with its bundle ID and App Group |
 | The QA routes stay closed, and the paywall shows the right prices | Sentry holds the source map and the dSYM for this build |
 
@@ -21,8 +21,9 @@ Step 3 runs the `verify:release` gate that `QUALITY.md` requires for a release.
 That gate reads the evidence record from the capture in
 [`scripts/RELEASE-PROOF.md`](../scripts/RELEASE-PROOF.md). By design it always
 ends on "FAIL incomplete", because it reports the IPA, signing, upload and
-device gates as open. Its `simulator-artifact MATCH` line is the pass. Step 7
-covers the IPA and signing gates.
+device gates as open. Its `simulator-artifact MATCH` line passes only that
+simulator check. It is not a complete release pass. Step 7 covers the IPA
+and signing checks. Step 8 also binds the reviewed native source to the build.
 
 ## Rules
 
@@ -30,11 +31,14 @@ covers the IPA and signing gates.
   Clear its app data only at the start of a new release, in step 2. Ask Nick
   before you use another simulator or a physical device.
 - **QA Smoke reader.** Create one production reader per release, named
-  "QA Smoke". Record its Support ID in the release receipt. On a rerun for the
-  same release, keep that reader. Ask Nick before you create a second one.
+  "QA Smoke", only after Nick explicitly approves the production smoke.
+  Never copy, print, log, or record its Support ID or its writing. On a rerun
+  for the same release, keep that reader. Ask Nick before you create a second one.
 - **Production writes.** Each launch registers the device with production.
-  Onboarding creates the reader and its first devotional. Make no other
-  production writes.
+  Onboarding creates the reader and its first devotional. Obtain explicit
+  approval for those writes and generation spend before launch. Candidate
+  preparation and local test approval do not grant that permission. Make no
+  other production writes.
 - **Paywall and prompts.** Leave the paywall with "I'll decide later". Answer
   notification prompts with "Don't Allow". Close any Apple ID prompt.
 - **Code.** Keep the smoke worktree detached. Keep its app code as committed.
@@ -79,14 +83,22 @@ covers the IPA and signing gates.
    `SENTRY_AUTH_TOKEN="$(cat <token file>)" scripts/verify-release-ipa.sh <ipa> <build number>`.
    On Nick's Mac, the token file is `~/.config/unfold/sentry-build-token-*.txt`.
    Local release builds use the same file.
-   Done when the check ends on `PASS`.
+   Done when the check ends on `PASS IPA artifact checks`. This establishes
+   the checks listed above, not the source provenance in step 8.
 8. **Report.** Write the report into the release receipt. Compare
    `bundleSha256` from step 3 with the `main.jsbundle sha256` from step 7.
-   Equal hashes mean the smoke ran the JavaScript that ships. Unequal hashes
-   mean the smoke built something else. Identify the cause before you submit.
-   Done when the receipt holds the check table and the hash comparison. It
-   also holds the `verify:release` output, the Support ID, the findings and
-   the IPA check output.
+   Equal hashes bind the JavaScript only. Unequal hashes mean the smoke built
+   different JavaScript. Identify the cause before you submit.
+   Also retain the immutable reviewed commit and tree, a hash manifest of the
+   tracked native inputs and dependency locks, and the actual build's source
+   record or submitted-source archive. Match those inputs to the reviewed
+   candidate and bind the resulting IPA hash to that build. Record intentional
+   build-time transforms, such as the production profile stamp. A JavaScript
+   hash match or an IPA check alone cannot prove the native source identity.
+   If that evidence is absent or differs, source provenance remains blocked.
+   Done when the receipt holds that source/build association, the check table,
+   the hash comparison, the `verify:release` output, the findings and the IPA
+   check output. Include no reader identifiers or writing.
 
 Driving the UI costs the most time. Read the FlowDeck traps in
 [DEVICE-VERIFICATION.md §4](DEVICE-VERIFICATION.md#things-that-will-otherwise-cost-you-an-hour)
@@ -104,7 +116,7 @@ before step 4. Add each new trap you hit.
 | B1 | Onboarding | Onboarding completes, and the first devotional generates. `src/app/onboarding.tsx` holds the step order. Type "QA Smoke" at the `name` step. Continue on the `aspiration` step starts the generation. The onboarding paywall comes after it. |
 | B2 | Reading | The first reading shows its title, scripture, body, reflection questions and completion area. |
 | B3 | Tabs | Today, Bible, Companion and Journal open. Send no Companion message. |
-| B4 | Profile | Settings has no "QA Tools" section. "Copy Support ID" copies the reader's ID, which the screen does not show. |
+| B4 | Profile | Settings has no "QA Tools" section. Inspect the Support ID control without activating it or collecting its value. |
 | B5 | Reader relaunch | After a cold relaunch, Today shows the QA Smoke reader's devotional. |
 | B6 | This release | One check for each user-visible change the simulator can reach. List the changes with `git log --oneline <previous release commit>..<release commit>`. The previous release commit is in its release receipt. |
 
@@ -113,5 +125,6 @@ before step 4. Add each new trap you hit.
 - The check table: ID, PASS, FAIL or SKIPPED, one line of evidence and the
   screenshot path.
 - The design findings, ranked by severity, in the §8 format.
-- The QA Smoke Support ID.
+- The QA Smoke run's result, without its Support ID or writing.
+- The reviewed native source, actual build source, and signed-artifact association.
 - Each deviation from these steps, and the reason for it.

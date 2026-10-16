@@ -64,6 +64,7 @@ import type { Devotional, UserProfile } from '../store';
 
 type BootedModules = {
   arc: typeof import('../initial-arc-result');
+  deleted: typeof import('../deleted-series');
   outbox: typeof import('../sync-outbox');
   session: typeof import('../generation-session');
   storage: typeof import('../mmkv-storage');
@@ -77,6 +78,7 @@ function boot(keychainUp: boolean, run: (modules: BootedModules) => void): void 
       /* eslint-disable @typescript-eslint/no-require-imports */
       storage: require('../mmkv-storage'),
       arc: require('../initial-arc-result'),
+      deleted: require('../deleted-series'),
       outbox: require('../sync-outbox'),
       session: require('../generation-session'),
       store: require('../store'),
@@ -124,11 +126,15 @@ beforeEach(() => {
 });
 
 describe('a series deleted during a storage-recovery boot', () => {
-  it('stays deleted on the real store when its finished generation job lands', () => {
-    boot(false, ({ outbox, storage, store }) => {
+  it.each([0, 100])('rejects its finished job after %i later deletes and a normal boot', (laterDeletes) => {
+    boot(false, ({ deleted, outbox, storage, store }) => {
       expect(storage.isRecoverySession()).toBe(true);
       store.useUnfoldStore.setState({ devotionals: [series], currentDevotionalId: series.id });
       store.useUnfoldStore.getState().removeDevotional(series.id);
+      const deletedAt = Date.now();
+      for (let index = 0; index < laterDeletes; index += 1) {
+        deleted.rememberDeletedSeries(`series-later-${index}`, new Date(deletedAt + index + 1).toISOString());
+      }
       // The server accepted the delete, so the outbox no longer holds it.
       outbox.replaceSyncOutbox([]);
       store.flushUnfoldStorePersist();
