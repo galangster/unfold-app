@@ -1,7 +1,8 @@
 /**
  * The act reminder's "I did it" button marks the act on this device. Like
- * the reader, it first takes an order for a day finished on another device,
- * so the note under that act steps past this device's last one.
+ * the reader, it first keeps an order for a day finished on another device:
+ * its place in the history, or the next order when another day holds that
+ * place, so the note under that act differs from its neighbours'.
  */
 import { actOutcomeNote, completionVariation } from '@/constants/daily-copy';
 import { actNoteOrdinal, takeCompletionOrdinal } from '../copy-variation';
@@ -62,7 +63,6 @@ jest.mock('../api-config', () => ({
 jest.mock('../store', () => ({
   useUnfoldStore: {
     getState: () => ({ devotionals: mockShelf.devotionals, setActOutcome: mockSetActOutcome }),
-    setState: jest.fn(),
   },
 }));
 jest.mock('../logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));

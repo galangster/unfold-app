@@ -177,8 +177,45 @@ describe('an act first marked on this device', () => {
     holdActNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 3 });
 
     expect(actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 3, readAt: at(3).toISOString() })).toBe(2);
-    // Keeping a place takes no overlay order.
-    expect(takeCompletionOrdinal(0)).toBe(0);
+    // Keeping a place raises the floor to it, so the next overlay steps past it.
+    expect(takeCompletionOrdinal(0)).toBe(3);
+  });
+
+  it('keeps the next overlay off a kept place when a series is deleted after the keep', () => {
+    // A one-reading series, then Days 1 to 3 finished here (orders 1 to 3).
+    const at = (day: number) => new Date(2026, 9, 10 + day, 9);
+    const oneReading = { id: 'one-reading', days: [read(1, at(0))] };
+    const series = { id: 'series', days: [1, 2, 3, 4].map((day) => read(day, at(day))) };
+    for (const day of [1, 2, 3]) takeCompletionOrdinal(day, { devotionalId: 'series', dayNumber: day });
+    // Day 4 is finished on another device; its act is marked here, keeping place 4.
+    holdActNoteOrdinal([oneReading, series], { devotionalId: 'series', dayNumber: 4 });
+
+    // The one-reading series is deleted, and Day 5 is finished here.
+    const shelf = [{ ...series, days: [...series.days, read(5, at(5))] }];
+    const fifth = takeCompletionOrdinal(countReadsBefore(shelf, at(5)), { devotionalId: 'series', dayNumber: 5 });
+
+    const fourth = actNoteOrdinal(shelf, { devotionalId: 'series', dayNumber: 4, readAt: at(4).toISOString() });
+    expect([fourth, fifth]).toEqual([4, 5]);
+    for (const outcome of ACT_OUTCOMES) {
+      expect(actOutcomeNote(outcome, completionVariation('install-a', fifth)))
+        .not.toBe(actOutcomeNote(outcome, completionVariation('install-a', fourth)));
+    }
+  });
+
+  it('takes the next order when a day of another series holds the place', () => {
+    // Series A Days 1 to 4 are finished here after a one-reading series (orders 1 to 4).
+    const at = (day: number) => new Date(2026, 9, 10 + day, 9);
+    for (const day of [1, 2, 3, 4]) takeCompletionOrdinal(day, { devotionalId: 'series-a', dayNumber: day });
+    // That series is deleted, and Series B Day 1 is finished on another device after A's Day 4.
+    const shelf = [
+      { id: 'series-a', days: [1, 2, 3, 4].map((day) => read(day, at(day))) },
+      { id: 'series-b', days: [read(1, at(5))] },
+    ];
+    expect(countReadsBefore(shelf, at(5))).toBe(4);
+
+    holdActNoteOrdinal(shelf, { devotionalId: 'series-b', dayNumber: 1 });
+
+    expect(actNoteOrdinal(shelf, { devotionalId: 'series-b', dayNumber: 1, readAt: at(5).toISOString() })).toBe(5);
   });
 
   it('looks the day up in its own series', () => {

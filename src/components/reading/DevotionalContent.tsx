@@ -185,8 +185,9 @@ export function DevotionalContent({
   // one it kept when its act was first marked here (its place in the history,
   // or the next order when another day holds that place). Two days one after
   // the other get different notes, on one day, across midnight, or with a
-  // series deleted between them. Worked out only once the act is marked, and
-  // again only when the day or the history changes.
+  // series deleted between them, unless their orders end up two or more apart
+  // and meet across a lap of the bag. Worked out only once the act is marked,
+  // and again only when the day or the history changes.
   const { readAt } = day;
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const actNote = useMemo(() => {
