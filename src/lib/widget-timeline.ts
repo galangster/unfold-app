@@ -94,7 +94,6 @@ function timelineEntries(now: Date): { date: Date; entry: WidgetTimelineEntry }[
  * <line>. Day N of M." Each midnight draws one line from a seeded bag.
  */
 export const WIDGET_DAY_READY_LINES: readonly ((dayNumber: number) => string)[] = [
-  (day) => `Today is Day ${day}`,
   (day) => `Time for Day ${day}`,
   (day) => `Day ${day} is up next`,
   (day) => `On to Day ${day}`,
@@ -171,8 +170,9 @@ type TodayReadingProps = Pick<
  * `currentDay` alone is tomorrow's locked day. A day whose content is not on
  * the device yet is named by its number: the midnight entry names it as the
  * day ahead, and the entry for now says it is not here yet. The timeline and
- * the sync fingerprint both use this, so a change the widget shows always
- * triggers a push.
+ * the sync fingerprint both use this, so a change the widget shows triggers a
+ * push. The one exception is the midnight line's text: the fingerprint holds
+ * only whether it shows (getWidgetSeriesFields).
  */
 export function getTodayReadingProps(
   devotional: Devotional | null | undefined,
@@ -207,7 +207,8 @@ export function getTodayReadingProps(
  * widget shows triggers a push. Writing on a day does not change them.
  *
  * The midnight line turns over each day, so the fields keep only whether it
- * shows, not its text (dayTitle carries the text too). A reader whose day
+ * shows (readyLineShows), not its text, and blank the dayTitle that carries
+ * it. They are a sync key, not the pushed props. A reader whose day
  * stays off the device gets no extra push each day, and the widget keeps the
  * line of its last push.
  */
@@ -219,8 +220,9 @@ export function getWidgetSeriesFields(
   return {
     reading: timelineEntries(now).map(({ date, entry }) => {
       const props = getTodayReadingProps(devotional, date, entry);
-      const readyLineShows = props.dayReadyLine !== '';
-      return { ...props, dayTitle: readyLineShows ? '' : props.dayTitle, dayReadyLine: readyLineShows };
+      const { dayReadyLine: readyLine, ...rest } = props;
+      const readyLineShows = readyLine !== '';
+      return { ...rest, dayTitle: readyLineShows ? '' : props.dayTitle, readyLineShows };
     }),
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     weeklyProgress: getWeeklyProgress(devotionals, now),

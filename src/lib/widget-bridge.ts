@@ -40,10 +40,12 @@ let activeReadingSession: LiveActivity<{
 //   1. streakCurrent — badge count + streak display
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
 //   3. current day id — the series and the day it is on
-//   4. the series fields (getWidgetSeriesFields), built exactly as the
-//      timeline builds them and shared with Today's sync key: the reading of
-//      BOTH entries, the day total, the M-Su "read" dots, and the Lock Screen
-//      fields
+//   4. the series fields (getWidgetSeriesFields), built as the timeline
+//      builds them and shared with Today's sync key: the reading of BOTH
+//      entries, the day total, the M-Su "read" dots, and the Lock Screen
+//      fields. One exception: the midnight line counts only as shown or not
+//      (readyLineShows), and its text and the dayTitle that carries it stay
+//      out, so a day that stays off the device does not push each morning
 //   5. readingMinutes — the reader's reading length
 //
 // The fingerprint is a JSON-stringified plain object of these values. It is

@@ -63,24 +63,49 @@ const REACH = String.raw`\b(?:call|text|dial|phone|chat|contact)\w*`;
  * chips under a reply that did not need it costs little, and a chip under a
  * crisis answer is the harm this module exists to stop.
  *
- * - 988 or 911 with a way to reach it on either side: "call or text 988",
- *   "calling or texting 988", "contact 988", "988 by call or text",
- *   "988 (call or text)". A bare 988, such as the year 988 AD, does not count.
- * - A lifeline, hotline, helpline or crisis line by name: the 988 Lifeline,
- *   the Crisis Text Line, the domestic violence hotline. The metaphor counts
- *   too.
+ * - Every 988, in any wording ("reach out to 988", "988 is still there",
+ *   988lifeline.org), unless a year cue sits next to it: in, of, year,
+ *   since, around or circa before it, or AD, CE or BC after it. A 988 near
+ *   "suicide" or "crisis" counts even then.
+ * - 911 with a way to reach it on either side: "call 911", "911, by phone".
+ * - A lifeline, hotline, helpline or crisis line by name, plural too, and
+ *   inside an address (thehotline.org). The metaphor counts too.
  * - The numbers: 741741 for the Crisis Text Line; 799-7233, 799-SAFE and
  *   88788 for the domestic violence hotline; 273-8255 and 273-TALK, the old
- *   Lifeline number.
+ *   Lifeline number. Any dash or a space may sit inside them.
  */
 const CRISIS_LINES: readonly RegExp[] = [
-  new RegExp(String.raw`${REACH}\b[^.\n]{0,40}\b(?:988|911)\b`, 'i'),
-  new RegExp(String.raw`\b(?:988|911)\b[^.\n]{0,40}${REACH}`, 'i'),
-  /\b(?:life|hot|help)line\b|\bcrisis (?:text )?line\b/i,
-  /\b741741\b|\b88788\b/,
-  /\b799[-. ]?(?:7233|safe)\b/i,
-  /\b273[-. ]?(?:8255|talk)\b/i,
+  /\b988\b[^.!?]{0,40}\b(?:suicid|crisis)|\b(?:suicid\w*|crisis)\b[^.!?]{0,40}\b988\b/i,
+  new RegExp(String.raw`${REACH}\b[^.!?]{0,60}\b911\b`, 'i'),
+  new RegExp(String.raw`\b911\b[^.!?]{0,60}${REACH}`, 'i'),
+  /(?:life|hot|help)lines?\b|\bcrisis (?:text )?lines?\b/i,
+  /\b741[- ]?741\b|\b88788\b/,
+  /\b799[- .]?(?:7233|safe)\b/i,
+  /\b273[- .]?(?:8255|talk)\b/i,
 ];
+
+/** Every 988 that is not part of a longer number: "1988", "988,000" and "9.88" do not count. */
+const NINE_EIGHT_EIGHT = /(^|\D)988(?!\d|[.,]\d)/g;
+/** The word right before a year: "in 988", "the year 988", "circa 988". */
+const YEAR_BEFORE = /\b(?:in|of|year|since|around|circa|c\.)\s+$/i;
+/** An era right after a year: "988 AD", "988 CE", "988 B.C." */
+const YEAR_AFTER = /^\s*(?:A\.?D|C\.?E|B\.?C\.?E?)\b/;
+
+/**
+ * The reply as the patterns read it: every dash as "-", "U.S." without its
+ * periods, and line breaks as spaces, so none of them breaks a match.
+ */
+function crisisReadable(text: string): string {
+  return text.replace(/[‐-―−]/g, '-').replace(/\bU\.S\./g, 'US').replace(/\s+/g, ' ');
+}
+
+function namesNineEightEight(text: string): boolean {
+  for (const match of text.matchAll(NINE_EIGHT_EIGHT)) {
+    const at = (match.index ?? 0) + match[1].length;
+    if (!YEAR_BEFORE.test(text.slice(0, at)) && !YEAR_AFTER.test(text.slice(at + 3))) return true;
+  }
+  return false;
+}
 
 /**
  * Whether a reply gives the reader a crisis line. The server sends no chips
@@ -88,7 +113,8 @@ const CRISIS_LINES: readonly RegExp[] = [
  * carry them. No chip belongs under a reply that sends the reader to 988.
  */
 export function sharesCrisisLine(text: string): boolean {
-  return CRISIS_LINES.some((pattern) => pattern.test(text));
+  const readable = crisisReadable(text);
+  return namesNineEightEight(readable) || CRISIS_LINES.some((pattern) => pattern.test(readable));
 }
 
 /**

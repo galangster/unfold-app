@@ -327,14 +327,14 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     const entries = buildWidgetTimelineEntries(slice({ currentDevotional: d, allDevotionals: [d] }), now);
     const { reading, totalDays, weeklyProgress, lock } = getWidgetSeriesFields(d, [d], now);
     expect(reading).toHaveLength(entries.length);
-    reading.forEach(({ dayTitle, dayReadyLine, ...props }, i) => {
+    reading.forEach(({ dayTitle, readyLineShows, ...props }, i) => {
       const pushed = entries[i].props;
       expect(pushed).toMatchObject(props);
       // The ready line counts only as shown or not shown: its text stays out of the key.
-      expect(dayReadyLine).toBe(pushed.dayReadyLine !== '');
-      expect(dayTitle).toBe(dayReadyLine ? '' : pushed.dayTitle);
+      expect(readyLineShows).toBe(pushed.dayReadyLine !== '');
+      expect(dayTitle).toBe(readyLineShows ? '' : pushed.dayTitle);
     });
-    expect(reading.map(({ dayReadyLine }) => dayReadyLine)).toEqual([false, true]);
+    expect(reading.map(({ readyLineShows }) => readyLineShows)).toEqual([false, true]);
     expect(entries[0].props).toMatchObject({ ...lock, totalDays, weeklyProgress });
   });
 
@@ -403,6 +403,9 @@ describe('the midnight ready lines', () => {
   it.each(lines)('repeat nothing the Today and Dashboard labels around them say: %s', (line) => {
     // UnfoldToday reads "Today's reading: <line>." UnfoldDashboard reads
     // "Unfold dashboard. <line>. Day 6 of 7. 3 day streak, ...".
-    expect(line).not.toMatch(/today['’]s|\breading\b|dashboard|\bof\s+\d|streak|minute/i);
+    // Every line names the day once, so the only Day N allowed is that one,
+    // never the Dashboard's "Day N of M" readout.
+    expect(line).not.toMatch(/\btoday|\breading\b|dashboard|\bday\s+\d+\s+of\b|\bof\s+\d|streak|minute/i);
+    expect(line.match(/\bDay \d+/g)).toHaveLength(1);
   });
 });
