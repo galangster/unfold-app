@@ -49,7 +49,7 @@ describe('sanitizeBridgeText', () => {
   });
 
   it('never leaves part of a word behind', () => {
-    for (const word of ['journeyed', 'boyfriend,', 'seasoned', 'powerfully', 'unpacked']) {
+    for (const word of ['journeyed', 'boyfriend,', 'seasons', 'seasoned', 'powerfully', 'unpacked']) {
       const text = `Today's reading has one word worth a look: ${word} sits in the middle of it. The rest is plain and short and easy to read.`;
       expect(sanitizeBridgeText(text)).toBe(text);
     }
