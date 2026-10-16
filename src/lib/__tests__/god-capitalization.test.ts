@@ -1,8 +1,8 @@
 /**
  * The app's lowercase "god" repair and em dash spacing, held to every case in
- * the backend's tests (unfold-backend fef122a,
+ * the backend's tests (unfold-backend 20a206b,
  * src/lib/__tests__/validator-non-body-prose.test.ts) so the two safety nets
- * agree. A lowercase "god" is capitalized only where it can only be God.
+ * agree. A lowercase "god" is capitalized only where it is nearly always God.
  */
 
 import { spaceEmDashes } from '../bridge-text';
@@ -65,6 +65,16 @@ describe('capitalizeGodSlips', () => {
     'Know that god is near.',
     'Our god is near.',
     "Rest in god's love.",
+    'Lord, god of my fathers, hear me.',
+    'The god of heaven and earth made you.',
+    "Baal, the god of Israel's neighbors, never sent rain.",
+    'Dagon, the god of Israel’s enemies, fell.',
+    'Rome hailed Caesar as Lord, god, and savior.',
+    'Is money your… god?',
+    'Is money your... god?',
+    'Babylon hailed Marduk as the god of heaven and earth.',
+    'Is this god worth it?',
+    'Ahab made Baal god of Israel.',
   ])('leaves a lowercase god outside a name position as written: %s', (text) => {
     expect(capitalizeGodSlips(text)).toBe(text);
   });
@@ -75,6 +85,12 @@ describe('capitalizeGodSlips', () => {
     '“Be still.” god is near.',
     "She called it 'rest.' god is near.",
     'Read Psalm 4. (Read it slowly.) god is near.',
+    '[Read it again.] god is near.',
+    'Rest in this\ngod is near.',
+    'Rest! god is near.',
+    'Why wait? god is near.',
+    'Rest. “god is near.”',
+    'Rest. (god is near.)',
     'Holy is the Lord god Almighty.',
     'Amos calls Him the LORD god of hosts.',
     'Love the Lord your god with all your heart.',
@@ -85,7 +101,6 @@ describe('capitalizeGodSlips', () => {
     'The god of Israel keeps watch.',
     'Rest in the god of all comfort.',
     'Walk with the god of love and peace.',
-    'The god of heaven and earth made you.',
     'Use a god-given gift today.',
     'She was a god-fearing woman.',
     'There is a god-shaped hole.',
@@ -98,7 +113,7 @@ describe('capitalizeGodSlips', () => {
     'She was a god-sent friend.',
     'Do a god-glorifying act.',
     'Write a god-inspired idea.',
-  ])('capitalizes a lowercase god that can only be God: %s', (text) => {
+  ])('capitalizes a lowercase god where it is nearly always God: %s', (text) => {
     expect(capitalizeGodSlips(text)).toBe(text.replace(/\bgod\b/, 'God'));
   });
 
