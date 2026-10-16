@@ -11,9 +11,9 @@
  */
 import type { Devotional } from '@/lib/store';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { getDaysReadToday, getTodayDay, hasReadTodayGlobal } from './home-devotional-state';
+import { getDaysReadToday, getTodayDay, getTodayDayNumber, hasReadTodayGlobal } from './home-devotional-state';
 import { countReadDaysWithinBoundary } from './series-path';
-import { dayIndexFor, pickFromBag } from './variation-bag';
+import { copyVariationAt, drawCopy } from './variation-bag';
 import { deriveLockLine } from './widget-lock-line';
 
 export type WidgetSharedProps = {
@@ -100,10 +100,7 @@ export const WIDGET_DAY_READY_LINES: readonly ((dayNumber: number) => string)[] 
 ];
 
 function dayReadyLine(devotional: Devotional, dayNumber: number, forDate: Date): string {
-  const line =
-    pickFromBag(WIDGET_DAY_READY_LINES, `${devotional.id}|widget-day-ready`, dayIndexFor(forDate)) ??
-    WIDGET_DAY_READY_LINES[0];
-  return line(dayNumber);
+  return drawCopy(WIDGET_DAY_READY_LINES, copyVariationAt(devotional.id, forDate), 'widget-day-ready')(dayNumber);
 }
 
 /**
@@ -149,7 +146,7 @@ export function getLockScreenProps(
   return {
     lockLine: deriveLockLine(todayDay?.scriptureText ?? ''),
     lockReference: todayDay?.scriptureReference ?? '',
-    lockDayNumber: todayDay?.dayNumber ?? devotional?.currentDay ?? 0,
+    lockDayNumber: getTodayDayNumber(devotional, forDate) ?? 0,
     lockDaysRead: devotional ? countReadDaysWithinBoundary(devotional) : 0,
     lockReadToday: getDaysReadToday(devotional, forDate).length > 0,
   };
@@ -178,10 +175,10 @@ type TodayReadingProps = Pick<
 export function getTodayReadingProps(
   devotional: Devotional | null | undefined,
   forDate: Date,
-  entry: WidgetTimelineEntry = 'now'
+  entry: WidgetTimelineEntry
 ): TodayReadingProps {
   const todayDay = getTodayDay(devotional, forDate);
-  const dayNumber = todayDay?.dayNumber ?? devotional?.currentDay ?? 0;
+  const dayNumber = getTodayDayNumber(devotional, forDate) ?? 0;
   const nextDay = devotional?.days?.find((d) => d.dayNumber === dayNumber + 1);
   const readyLine =
     devotional && !todayDay && entry === 'midnight' ? dayReadyLine(devotional, dayNumber, forDate) : '';
@@ -200,21 +197,31 @@ export function getTodayReadingProps(
 }
 
 /**
- * The reading fields of every timeline entry, built as the timeline builds
- * them. The sync fingerprint and Today's sync key compare these.
+ * The series fields the widgets show, built as the timeline builds them: the
+ * reading of both entries (the day Today shows, its verse and quote, the next
+ * day, and the midnight line for a day not on the device), the day total,
+ * the weekly checks and the Lock Screen fields. The sync fingerprint and
+ * Today's sync key both compare these, so a change the widget shows always
+ * triggers a push. Writing on a day does not change them.
  */
-export function getTimelineReadingProps(
+export function getWidgetSeriesFields(
   devotional: Devotional | null | undefined,
+  devotionals: Devotional[],
   now: Date
-): TodayReadingProps[] {
-  return timelineEntries(now).map(({ date, entry }) => getTodayReadingProps(devotional, date, entry));
+) {
+  return {
+    reading: timelineEntries(now).map(({ date, entry }) => getTodayReadingProps(devotional, date, entry)),
+    totalDays: getServerOwnedSeriesTotalDays(devotional),
+    weeklyProgress: getWeeklyProgress(devotionals, now),
+    lock: getLockScreenProps(devotional, now),
+  };
 }
 
-/** Snapshot of widget props as they should appear AT forDate. */
+/** Snapshot of widget props as they should appear AT forDate, for the timeline entry it builds. */
 export function buildWidgetSharedProps(
   slice: WidgetStateSlice,
   forDate: Date,
-  entry: WidgetTimelineEntry = 'now'
+  entry: WidgetTimelineEntry
 ): WidgetSharedProps {
   const devotional = slice.currentDevotional;
 

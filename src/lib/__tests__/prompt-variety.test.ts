@@ -4,7 +4,7 @@
  * and two readers should not be on the same sequence.
  */
 
-import { findBannedPhrase } from '../bridge-text';
+import { copyRuleBreaks } from './fixtures/copy-rules';
 import {
   BRIDGE_CLOSINGS,
   BRIDGE_OPENINGS,
@@ -17,7 +17,7 @@ import {
   goDeeperAnglesFor,
   legacyDevotionalDayShape,
 } from '../prompt-variety';
-import { dayIndexFor, type CopyVariation } from '../variation-bag';
+import { dayIndexFor, drawsStayApart, type CopyVariation } from '../variation-bag';
 
 const SEEDS = ['install-a', 'install-b', '9f3c2a7e-0d41-4b8e-a1f2-6c0e5d7b9a13', 'ephemeral-1', 'unfold'];
 const START_DAY = dayIndexFor(new Date(2026, 9, 16));
@@ -118,24 +118,11 @@ describe('prompt variety', () => {
 
   it('holds the pool sizes the guarantees rest on', () => {
     expect(BRIDGE_OPENINGS.length).toBeGreaterThanOrEqual(5);
-    // Three angles a day stay apart across days only at twelve or more, in threes.
-    expect(GO_DEEPER_ANGLES.length).toBeGreaterThanOrEqual(12);
-    expect(GO_DEEPER_ANGLES.length % GO_DEEPER_ANGLES_PER_REQUEST).toBe(0);
+    expect(drawsStayApart(GO_DEEPER_ANGLES.length, GO_DEEPER_ANGLES_PER_REQUEST)).toBe(true);
   });
 });
 
 describe('prompt variety copy', () => {
-  const STOCK_EMPATHY = [
-    'good question',
-    'great question',
-    'this is a safe place',
-    'this is a safe space',
-    "it's okay to feel",
-    "there's no judgment",
-    'i hear you',
-    "i'm here for you",
-    'thank you for sharing',
-  ];
   const lines = [
     ...BRIDGE_OPENINGS,
     ...BRIDGE_CLOSINGS,
@@ -144,13 +131,6 @@ describe('prompt variety copy', () => {
   ].map((move) => move.instruction).concat(EXAMEN_CLOSING_LINES.filter((line): line is string => line !== null));
 
   it.each(lines)('follows the copy rules: %s', (line) => {
-    const lower = line.toLowerCase().replace(/’/g, "'");
-    expect(findBannedPhrase(line)).toBeNull();
-    for (const phrase of [...STOCK_EMPATHY, 'sitting with', 'wrestling with']) {
-      expect(lower).not.toContain(phrase);
-    }
-    expect(line).not.toContain('—');
-    expect(line).not.toMatch(/\bAI\b/);
-    expect(line).not.toMatch(/artificial intelligence|language model|chatbot/i);
+    expect(copyRuleBreaks(line)).toEqual([]);
   });
 });

@@ -17,7 +17,7 @@
  */
 
 import type { ClosingStyle } from '@/constants/devotional-personas-v2';
-import { drawCopy, type CopyVariation } from '@/lib/variation-bag';
+import { drawConsecutive, drawCopy, type CopyVariation } from '@/lib/variation-bag';
 
 /** One move a prompt can make, as the instruction the model reads. */
 export interface PromptMove {
@@ -121,11 +121,9 @@ export function examenShapeFor(draw: CopyVariation): ExamenShape {
  * It used to be the same three every time (feeling, life, imagination), each
  * with a quoted opener the model copied.
  *
- * The draw counts requests, not days (lib/go-deeper-prompt.ts). Twelve angles
- * at three a request make one lap of the bag four requests long. The bag holds
- * the last quarter of one lap (three entries, one request's worth) apart from
- * the first quarter of the next, so no angle comes back in the very next
- * request. Keep the length a multiple of three and at least twelve.
+ * The draw counts requests, not days (lib/go-deeper-prompt.ts). Keep the
+ * length one that drawsStayApart accepts at three a request (twelve or more,
+ * in threes), so no angle comes back in the very next request.
  */
 export const GO_DEEPER_ANGLES: readonly PromptMove[] = [
   { id: 'feeling', instruction: 'The feeling under their words: ask about the emotion they came close to naming.' },
@@ -152,10 +150,7 @@ export const GO_DEEPER_ANGLES_PER_REQUEST = 3;
  * within it. `draw.dayIndex` carries the request's number, not a day.
  */
 export function goDeeperAnglesFor(draw: CopyVariation): PromptMove[] {
-  const first = draw.dayIndex * GO_DEEPER_ANGLES_PER_REQUEST;
-  return Array.from({ length: GO_DEEPER_ANGLES_PER_REQUEST }, (_, offset) =>
-    drawCopy(GO_DEEPER_ANGLES, draw, 'go-deeper-angle', first + offset),
-  );
+  return drawConsecutive(GO_DEEPER_ANGLES, draw, 'go-deeper-angle', GO_DEEPER_ANGLES_PER_REQUEST);
 }
 
 // ---------------------------------------------------------------------------

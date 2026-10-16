@@ -6,9 +6,11 @@ import {
   readSuggestionList,
   replySuggestions,
   sharesCrisisLine,
+  type FallbackChipDraw,
 } from '../companion-suggestions';
+import { drawsStayApart } from '../variation-bag';
 
-const SEED = 'test-install|companion-chips|conversation-1';
+const DRAW: FallbackChipDraw = { seed: 'test-install', conversationId: 'conversation-1', replyIndex: 0 };
 const OLD_TRIO = ['Tell me more', 'How do I apply this?', 'Help me with a prayer'];
 
 describe('readSuggestionList', () => {
@@ -51,7 +53,7 @@ describe('sharesCrisisLine', () => {
 });
 
 describe('replySuggestions', () => {
-  const fallback = { seed: SEED, draw: 0 };
+  const fallback = DRAW;
 
   it('shows no chips when the server sends an explicit empty list', () => {
     expect(replySuggestions([], 'Here is a short answer about Romans 8.', fallback)).toEqual([]);
@@ -78,28 +80,32 @@ describe('replySuggestions', () => {
 
 describe('fallbackSuggestions', () => {
   it('holds the pool size the no-repeat guarantee rests on', () => {
-    expect(FALLBACK_SUGGESTIONS.length).toBeGreaterThanOrEqual(12);
-    expect(FALLBACK_SUGGESTIONS.length % FALLBACK_SUGGESTIONS_PER_REPLY).toBe(0);
+    expect(drawsStayApart(FALLBACK_SUGGESTIONS.length, FALLBACK_SUGGESTIONS_PER_REPLY)).toBe(true);
     expect(new Set(FALLBACK_SUGGESTIONS).size).toBe(FALLBACK_SUGGESTIONS.length);
   });
 
-  it('never repeats a chip on two consecutive draws for one install', () => {
-    for (const seed of [SEED, 'other-install|companion-chips|conversation-1', 'x|companion-chips|y']) {
-      for (let draw = 0; draw < 200; draw += 1) {
-        const current = fallbackSuggestions(seed, draw);
-        const next = fallbackSuggestions(seed, draw + 1);
+  it('never repeats a chip on two consecutive replies for one install', () => {
+    const conversations: Omit<FallbackChipDraw, 'replyIndex'>[] = [
+      DRAW,
+      { seed: 'other-install', conversationId: 'conversation-1' },
+      { seed: 'x', conversationId: 'y' },
+    ];
+    for (const conversation of conversations) {
+      for (let replyIndex = 0; replyIndex < 200; replyIndex += 1) {
+        const current = fallbackSuggestions({ ...conversation, replyIndex });
+        const next = fallbackSuggestions({ ...conversation, replyIndex: replyIndex + 1 });
         expect(new Set(current).size).toBe(FALLBACK_SUGGESTIONS_PER_REPLY);
         expect(next.filter((chip) => current.includes(chip))).toEqual([]);
       }
     }
   });
 
-  it('is never the old fixed trio, and the same draw always shows the same chips', () => {
-    for (let draw = 0; draw < 40; draw += 1) {
-      const chips = fallbackSuggestions(SEED, draw);
+  it('is never the old fixed trio, and the same reply always shows the same chips', () => {
+    for (let replyIndex = 0; replyIndex < 40; replyIndex += 1) {
+      const chips = fallbackSuggestions({ ...DRAW, replyIndex });
       expect(chips).not.toEqual(OLD_TRIO);
       expect(chips).not.toContain('How do I apply this?');
-      expect(fallbackSuggestions(SEED, draw)).toEqual(chips);
+      expect(fallbackSuggestions({ ...DRAW, replyIndex })).toEqual(chips);
     }
   });
 });
@@ -112,6 +118,12 @@ describe('fallback chip copy', () => {
   it('catches a broken rule', () => {
     expect(copyRuleBreaks('Let that sink in — truly!')).toEqual(
       expect.arrayContaining(['Let that sink in', 'truly', 'em dash', 'exclamation mark']),
+    );
+    expect(copyRuleBreaks('That’s valid – I\u00A0hear you ')).toEqual(
+      expect.arrayContaining(["that's valid", 'i hear you', 'en dash', 'stray spaces']),
+    );
+    expect(copyRuleBreaks('What a damn good question from the AI')).toEqual(
+      expect.arrayContaining(['damn', 'good question', 'AI mention']),
     );
     expect(copyRuleBreaks('Go a little deeper')).toEqual([]);
   });

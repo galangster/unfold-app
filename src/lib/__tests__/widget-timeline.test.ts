@@ -3,8 +3,8 @@ import {
   getWeeklyProgress,
   buildWidgetSharedProps,
   buildWidgetTimelineEntries,
-  getTimelineReadingProps,
   getTodayReadingProps,
+  getWidgetSeriesFields,
   WIDGET_DAY_READY_LINES,
   type WidgetStateSlice,
 } from '@/lib/widget-timeline';
@@ -105,12 +105,12 @@ describe('getWeeklyProgress (M-Su bits)', () => {
 describe('buildWidgetSharedProps', () => {
   it('hasReadToday compares streakLastReadDate against forDate (not wall clock)', () => {
     const s = slice({ streakLastReadDate: new Date(2026, 5, 10, 9, 0).toISOString() });
-    expect(buildWidgetSharedProps(s, new Date(2026, 5, 10, 14, 0)).hasReadToday).toBe(true);
-    expect(buildWidgetSharedProps(s, new Date(2026, 5, 11, 0, 0)).hasReadToday).toBe(false);
+    expect(buildWidgetSharedProps(s, new Date(2026, 5, 10, 14, 0), 'now').hasReadToday).toBe(true);
+    expect(buildWidgetSharedProps(s, new Date(2026, 5, 11, 0, 0), 'now').hasReadToday).toBe(false);
   });
 
   it('fills safe defaults with no devotional', () => {
-    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.devotionalTitle).toBe('Unfold');
     expect(p.dayTitle).toBe('Start your series');
     expect(p.dayNumber).toBe(0);
@@ -122,7 +122,7 @@ describe('buildWidgetSharedProps', () => {
   });
 
   it('weekTodayIndex maps Sunday to the last slot', () => {
-    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0)); // Sun Jun 14
+    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0), 'now'); // Sun Jun 14
     expect(p.weekTodayIndex).toBe(6);
   });
 
@@ -131,7 +131,7 @@ describe('buildWidgetSharedProps', () => {
       totalDays: 7,
       seriesArc: { totalDaysPlanned: 3 },
     });
-    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.totalDays).toBe(3);
   });
 });
@@ -221,7 +221,8 @@ describe('buildWidgetTimelineEntries', () => {
     );
     const p = buildWidgetSharedProps(
       slice({ currentDevotional: d, streakLastReadDate: new Date(2026, 5, 10, 8, 0).toISOString() }),
-      new Date(2026, 5, 10, 14, 0)
+      new Date(2026, 5, 10, 14, 0),
+      'now'
     );
     expect(p).toMatchObject({ hasReadToday: true, lockReadToday: false });
   });
@@ -236,7 +237,7 @@ describe('buildWidgetTimelineEntries', () => {
       ],
       { totalDays: 7, currentDay: 2, seriesArc: { totalDaysPlanned: 3 } }
     );
-    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.lockDaysRead).toBe(1);
   });
 
@@ -321,12 +322,13 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     expect(new Set(lines).size).toBe(WIDGET_DAY_READY_LINES.length);
   });
 
-  it('builds the sync key reading from the same entries the timeline pushes', () => {
+  it('builds the sync key fields from the same entries the timeline pushes', () => {
     const d = devo(readDays(readThisMorning), { totalDays: 7, currentDay: 6 });
     const entries = buildWidgetTimelineEntries(slice({ currentDevotional: d, allDevotionals: [d] }), now);
-    const reading = getTimelineReadingProps(d, now);
+    const { reading, totalDays, weeklyProgress, lock } = getWidgetSeriesFields(d, [d], now);
     expect(reading).toHaveLength(entries.length);
     reading.forEach((props, i) => expect(entries[i].props).toMatchObject(props));
+    expect(entries[0].props).toMatchObject({ ...lock, totalDays, weeklyProgress });
   });
 
   it('keeps a behind reader on the day read today though the next day is on the device', () => {

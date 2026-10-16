@@ -30,7 +30,7 @@ import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
 import { copySeed } from '@/lib/copy-variation';
-import { getTodayDay } from '@/lib/home-devotional-state';
+import { getTodayDayNumber } from '@/lib/home-devotional-state';
 import type { Devotional } from '@/lib/store';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
 import { readSuggestionList, replySuggestions } from './companion-suggestions';
@@ -128,11 +128,7 @@ function buildCompanionContext(
     companionName: companionName ?? undefined,
     companionPersonality,
     devotionalTitle: devotional?.title ?? undefined,
-    // The day the reader is on today, as the check-in copy names it.
-    // Finishing a reading moves currentDay to tomorrow, so currentDay alone
-    // names a day the reader has not read. It still answers when today's day
-    // is not on the device yet, because then nothing was read today.
-    devotionalDay: getTodayDay(devotional)?.dayNumber ?? devotional?.currentDay,
+    devotionalDay: getTodayDayNumber(devotional),
     devotionalTotal: devotional?.totalDays ?? undefined,
     streakDays: streakDays ?? 0,
     timeOfDay: getTimeOfDay(),
@@ -606,21 +602,32 @@ export function useCompanionChat() {
       const isStreamConversationVisible = () =>
         useCompanionChatStore.getState().activeConversationId === streamConversationId;
 
-      // A reply with no list draws fallback chips by its place among this
-      // conversation's replies, so consecutive replies never share a chip.
-      const chipsFor = (sent: string[] | undefined, replyText: string) => {
-        const conversation = useCompanionChatStore.getState().conversations
-          .find((candidate) => candidate.id === streamConversationId);
-        const replies = (conversation?.messages ?? []).filter((message) => message.role === 'companion');
-        return replySuggestions(sent, replyText, {
-          seed: `${copySeed()}|companion-chips|${streamConversationId}`,
-          draw: Math.max(0, replies.findIndex((message) => message.id === companionId)),
-        });
-      };
-
       try {
         const streamConversation = useCompanionChatStore.getState().conversations
           .find((conversation) => conversation.id === streamConversationId);
+        // A reply with no list draws fallback chips by its place among this
+        // conversation's replies, so consecutive replies never share a chip.
+        const chipDraw = {
+          seed: copySeed(),
+          conversationId: streamConversationId,
+          replyIndex: Math.max(0, (streamConversation?.messages ?? [])
+            .filter((message) => message.role === 'companion')
+            .findIndex((message) => message.id === companionId)),
+        };
+        // The finish both reply paths share: the deep links out of the text,
+        // the chips, the stored reply, the visible chips and the announcement.
+        const completeReply = (rawText: string, sent: string[] | undefined) => {
+          const { cleanContent, deepLinks } = parseDeepLinks(rawText);
+          const suggestions = replySuggestions(sent, cleanContent, chipDraw);
+          updateMessage(companionId, {
+            content: cleanContent,
+            deepLinks,
+            status: 'complete',
+            suggestions,
+          }, streamConversationId);
+          if (isStreamConversationVisible()) setSuggestions(suggestions);
+          announceCompanionReply(cleanContent);
+        };
         const chatMessages = buildCompanionRequestMessages(streamConversation?.messages ?? [], {
           userText: trimmedText,
           rewriteCompanionId: regenerate ? companionId : undefined,
@@ -683,20 +690,7 @@ export function useCompanionChat() {
               onDone: (sug, cleanText) => {
                 cancelThrottle();
                 if (isStreamConversationVisible()) setIsSearching(false);
-                const rawText = cleanText || accumulatedText;
-
-                // Extract deep links from response
-                const { cleanContent, deepLinks } = parseDeepLinks(rawText);
-                const finalSuggestions = chipsFor(sug, cleanContent);
-
-                updateMessage(companionId, {
-                  content: cleanContent,
-                  deepLinks,
-                  status: 'complete',
-                  suggestions: finalSuggestions,
-                }, streamConversationId);
-                if (isStreamConversationVisible()) setSuggestions(finalSuggestions);
-                announceCompanionReply(cleanContent);
+                completeReply(cleanText || accumulatedText, sug);
               },
               onError: (msg) => {
                 serverErrorMessage = companionFacingError(msg);
@@ -785,19 +779,7 @@ export function useCompanionChat() {
             abortController.signal,
           );
           cancelThrottle();
-
-          // Extract deep links from fallback response
-          const { cleanContent: fallbackClean, deepLinks: fallbackLinks } = parseDeepLinks(result.responseText);
-          const fallbackSuggestions = chipsFor(result.suggestions, fallbackClean);
-
-          updateMessage(companionId, {
-            content: fallbackClean,
-            deepLinks: fallbackLinks,
-            status: 'complete',
-            suggestions: fallbackSuggestions,
-          }, streamConversationId);
-          if (isStreamConversationVisible()) setSuggestions(fallbackSuggestions);
-          announceCompanionReply(fallbackClean);
+          completeReply(result.responseText, result.suggestions);
         }
 
         // Generate title after first exchange (user + companion) — scoped to

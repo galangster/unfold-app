@@ -32,33 +32,11 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 }));
 
 // ── Mock widget-timeline ───────────────────────────────────────────────────────
-// getWeeklyProgress is re-implemented minimally so fingerprint detects
-// devotional readAt changes without depending on the real module.
+// The fingerprint runs on the real series fields, so it sees devotional readAt
+// changes. Only the timeline the bridge pushes is stubbed.
 jest.mock('@/lib/widget-timeline', () => ({
-  getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
-  getTodayReadingProps: jest.requireActual('@/lib/widget-timeline').getTodayReadingProps,
-  getTimelineReadingProps: jest.requireActual('@/lib/widget-timeline').getTimelineReadingProps,
-  getNextMidnight: jest.requireActual('@/lib/widget-timeline').getNextMidnight,
+  ...jest.requireActual('@/lib/widget-timeline'),
   buildWidgetTimelineEntries: jest.fn(() => [{ date: new Date(), props: {} }]),
-  getWeeklyProgress: (
-    devotionals: { days?: { readAt?: string }[] }[],
-    forDate: Date
-  ): string => {
-    const dayOfWeek = forDate.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(forDate);
-      d.setDate(d.getDate() + mondayOffset + i);
-      const dateStr = d.toDateString();
-      return devotionals.some((devo) =>
-        (devo.days ?? []).some(
-          (day) => day.readAt && new Date(day.readAt).toDateString() === dateStr
-        )
-      )
-        ? '1'
-        : '0';
-    }).join(',');
-  },
 }));
 
 // ── Logger no-op ──────────────────────────────────────────────────────────────
@@ -94,6 +72,7 @@ jest.mock('@/lib/store', () => ({
 
 // ── Imports AFTER all mocks ───────────────────────────────────────────────────
 import { syncWidgets, clearWidgets, resetWidgetSyncFingerprintForTesting } from '@/lib/widget-bridge';
+import { WIDGET_DAY_READY_LINES } from '@/lib/widget-timeline';
 import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
@@ -360,9 +339,6 @@ describe('syncWidgets follows the day Today shows', () => {
       syncWidgets();
       expect(todayWidget).toHaveBeenCalledTimes(1);
       // At midnight Day 6 is still not on the device: the entry names it as ready.
-      const { WIDGET_DAY_READY_LINES } = jest.requireActual('@/lib/widget-timeline') as {
-        WIDGET_DAY_READY_LINES: ((day: number) => string)[];
-      };
       const [nowTitle, midnightTitle] = titles(0);
       expect(nowTitle).toBe('Title 5');
       expect(WIDGET_DAY_READY_LINES.map((line) => line(6))).toContain(midnightTitle);

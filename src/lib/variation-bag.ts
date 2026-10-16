@@ -174,6 +174,26 @@ export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field:
 }
 
 /**
+ * Whether consecutive `drawConsecutive` draws of `count` from a pool of
+ * `poolLength` share no entry. Two things must hold: a draw never straddles
+ * two laps (the length is a multiple of the count), and the guard band holds
+ * a whole draw apart across a lap boundary.
+ */
+export function drawsStayApart(poolLength: number, count: number): boolean {
+  return poolLength % count === 0 && minimumGapFor(poolLength) > count;
+}
+
+/**
+ * `count` entries for one draw: consecutive picks from the bag, so no entry
+ * repeats within the draw. `variation.dayIndex` numbers the draw, which need
+ * not be a day. When `drawsStayApart(pool.length, count)` holds, two
+ * consecutive draws share no entry either.
+ */
+export function drawConsecutive<T>(pool: readonly T[], variation: CopyVariation, field: string, count: number): T[] {
+  return Array.from({ length: count }, (_, k) => drawCopy(pool, variation, field, variation.dayIndex * count + k));
+}
+
+/**
  * The pool from the day's draw onward, wrapping round: the drawn entry
  * first, then each entry after it. For a caller that steps past entries it
  * cannot use, so the step starts where the bag put the day.

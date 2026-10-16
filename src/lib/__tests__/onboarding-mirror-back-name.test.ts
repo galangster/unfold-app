@@ -1,83 +1,61 @@
 /**
- * The onboarding mirror-back fallback names the reader as they entered their
+ * The onboarding mirror-back fallback names the reader as they typed their
  * name. Two of its lines used to lowercase it mid-sentence, so "Anna Lee"
- * read as "anna lee". The onboarding screen's own fallback had the same line.
+ * read as "anna lee". The onboarding screen's own line set had the same line.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { generateMirrorBackText } from '@/lib/devotional-service';
+import {
+  buildFallbackMirrorBack,
+  onboardingMirrorBackReflection,
+  type MirrorBackAnswers,
+} from '@/lib/mirror-back-fallback';
 
-jest.mock('@/lib/api-config', () => ({
-  getBackendCandidates: () => ['https://backend.test'],
-  getAuthHeaders: async () => ({ 'Content-Type': 'application/json' }),
-  PRIMARY_BACKEND_URL: 'https://backend.test',
-  sanitizeForPrompt: (s: string | undefined, max: number) => (s ?? '').slice(0, max),
-}));
+const NAME = 'Anna Lee';
+const SITUATION_AND_HOPE: MirrorBackAnswers = { currentSituation: 'Starting a new job', spiritualSeeking: 'peace' };
+const SITUATION_ONLY: MirrorBackAnswers = { currentSituation: 'Starting a new job' };
 
-jest.mock('@/lib/device-credential');
+/** A pick that takes line `index` of a set, or its last line when the set is shorter. */
+const lineAt = (index: number) => (lines: string[]) => lines[Math.min(index, lines.length - 1)];
 
-jest.mock('@/lib/logger', () => ({
-  logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-jest.mock('@/lib/bug-logger', () => ({
-  logBugEvent: jest.fn(),
-  logBugError: jest.fn(),
-}));
-
-jest.mock('@/lib/report-error', () => ({ reportError: jest.fn() }));
-
-jest.mock('@/lib/mmkv-storage', () => ({
-  mmkvStorage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },
-}));
-
-// A spent rate limit sends the request straight to the local fallback.
-jest.mock('@/lib/rate-limit', () => ({
-  checkRateLimit: jest.fn(async () => ({ allowed: false, remaining: 0, resetTime: Date.now() + 3_600_000 })),
-  incrementRateLimit: jest.fn(async () => undefined),
-  getTimeUntilReset: jest.fn(() => '1 hour'),
-}));
-
-jest.mock('@/lib/story-service', () => ({
-  fetchStoriesForGeneration: jest.fn(async () => []),
-  formatStoriesForPrompt: jest.fn(() => ''),
-}));
-
-describe('the mirror-back fallback keeps the name as entered (APP-35)', () => {
-  // The fallback picks between two lines; the second holds the name mid-sentence.
-  beforeEach(() => jest.spyOn(Math, 'random').mockReturnValue(0.99));
-  afterEach(() => jest.restoreAllMocks());
+describe('the mirror-back fallback keeps the name as typed (APP-35)', () => {
+  it.each([
+    ['a situation and a hope', SITUATION_AND_HOPE],
+    ['a situation only', SITUATION_ONLY],
+    ['no answers', {}],
+  ])('names the reader as typed in every line after %s', (_label, answers) => {
+    for (const index of [0, 1, 2]) {
+      const named = { ...answers, name: NAME };
+      expect(buildFallbackMirrorBack(named, lineAt(index)).reflection).toContain(NAME);
+      expect(onboardingMirrorBackReflection(named, lineAt(index))).toContain(NAME);
+    }
+  });
 
   it.each([
     [
       'a situation and a hope',
-      { currentSituation: 'Starting a new job', spiritualSeeking: 'peace' },
+      SITUATION_AND_HOPE,
       "Between where you are and where you're reaching, Anna Lee, God is already at work.",
     ],
     [
       'a situation only',
-      { currentSituation: 'Starting a new job' },
+      SITUATION_ONLY,
       "What you shared took courage, Anna Lee, and it's exactly the right place to begin.",
     ],
-  ])('names the reader as entered after %s', async (_label, answers, reflection) => {
-    const { content, source } = await generateMirrorBackText({ ...answers, name: 'Anna Lee' });
-    expect(source).toBe('fallback');
-    expect(content.reflection).toBe(reflection);
+  ])('keeps the name mid-sentence in the service line after %s', (_label, answers, reflection) => {
+    expect(buildFallbackMirrorBack({ ...answers, name: NAME }, lineAt(1)).reflection).toBe(reflection);
   });
 
-  it('reads cleanly without a name', async () => {
-    const { content } = await generateMirrorBackText({
-      currentSituation: 'Starting a new job',
-      spiritualSeeking: 'peace',
-    });
-    expect(content.reflection).toBe(
-      "Between where you are and where you're reaching, God is already at work.",
+  it('keeps the name mid-sentence in the screen line', () => {
+    expect(onboardingMirrorBackReflection({ ...SITUATION_AND_HOPE, name: NAME }, lineAt(1))).toBe(
+      "Between where you are and where you're reaching, Anna Lee, God is already at work.",
     );
   });
 
-  it('keeps the name as entered in the onboarding screen fallback too', () => {
-    const screen = readFileSync(join(__dirname, '../../app/onboarding.tsx'), 'utf8');
-    expect(screen).not.toMatch(/nameClause\.toLowerCase\(\)/);
-    expect(screen).toContain("where you're reaching, ${nameClause}God is already at");
+  it('reads cleanly without a name', () => {
+    expect(buildFallbackMirrorBack(SITUATION_AND_HOPE, lineAt(1)).reflection).toBe(
+      "Between where you are and where you're reaching, God is already at work.",
+    );
+    expect(onboardingMirrorBackReflection(SITUATION_AND_HOPE, lineAt(1))).toBe(
+      "Between where you are and where you're reaching, God is already at work.",
+    );
   });
 });

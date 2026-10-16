@@ -5,7 +5,7 @@
  * each surface actually draws through it, salted per field.
  */
 
-import { BANNED_PHRASES } from '../persona';
+import { expectCopyRules } from '@/lib/__tests__/fixtures/copy-rules';
 import {
   ACT_OUTCOME_NOTES,
   COMPANION_GREETINGS,
@@ -79,25 +79,6 @@ const START = dayIndexFor(new Date(2026, 0, 1));
 const LONG_RANGE = 1500;
 const day = (dayIndex: number, seed = 'install-a'): CopyVariation => ({ seed, dayIndex });
 
-/** Extra tells from the companion's and the bridge's lists, and variants of banned phrases. */
-const EXTRA_BANNED = [
-  'I hear you', 'That’s valid', "That's valid", 'It’s okay to feel', "It's okay to feel",
-  'I want you to know', 'sitting with', 'wrestling with',
-];
-
-/** Fails with the offending line, so a new entry that breaks a rule names itself. */
-function expectHouseStyle(line: string) {
-  // A no-break space still separates words, so a banned phrase cannot hide behind one.
-  const lower = line.replace(/\u00A0/g, ' ').toLowerCase();
-  for (const phrase of [...BANNED_PHRASES, ...EXTRA_BANNED]) {
-    if (lower.includes(phrase.toLowerCase())) throw new Error(`"${line}" uses "${phrase}"`);
-  }
-  if (/[—–]/.test(line)) throw new Error(`"${line}" uses a dash`);
-  if (line.includes('!')) throw new Error(`"${line}" uses an exclamation mark`);
-  if (/\p{Extended_Pictographic}/u.test(line)) throw new Error(`"${line}" uses an emoji`);
-  if (line !== line.trim() || / {2}/.test(line)) throw new Error(`"${line}" has stray spaces`);
-}
-
 const TIME_OF_DAY = /\b(morning|afternoon|evening|night|tonight|noon|midday|bed|bedtime|sleep|dawn|sunrise|sunset|breakfast|lunch|dinner)\b/i;
 
 function expectNoTimeOfDay(line: string) {
@@ -169,7 +150,7 @@ const NEW_LINES: Record<string, readonly string[]> = {
 
 describe('rotating copy — house style', () => {
   it.each(Object.entries(NEW_LINES))('%s passes the banned-phrase list and house rules', (_name, lines) => {
-    for (const line of lines) expectHouseStyle(line);
+    for (const line of lines) expectCopyRules(line);
   });
 
   it.each(Object.entries(NEW_LINES))('%s has no duplicate entry', (_name, lines) => {

@@ -56,8 +56,10 @@ import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, flushUnfoldStorePersistAsync, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
+import { onboardingMirrorBackReflection } from '@/lib/mirror-back-fallback';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
+  pickRandomFromArray,
   pickRandomVariation,
   getRandomDurationSubtext,
   getRandomReadingSubtext,
@@ -257,7 +259,6 @@ const DEFAULT_SCRIPTURES = [
   { text: 'The Lord is my shepherd; I shall not want.', ref: 'Psalm 23:1' },
   { text: 'I am with you always, to the end of the age.', ref: 'Matthew 28:20' },
 ];
-const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 // One selection-state vocabulary: selected option controls share accent border +
 // accent-tinted fill (this surface) + accent text. Keep the default tint aligned
 // with the chip/pill controls (alpha 0.18) so every selected control matches.
@@ -785,33 +786,17 @@ export default function OnboardingScreen() {
   // Mirror-back content — structured for the redesigned screen
   const mirrorBackContent = useMemo<MirrorBackContent>(() => {
     const themeId = (data?.selectedThemes?.length ?? 0) > 0 ? data.selectedThemes[0] : null;
-    const hasEmotional = !!data?.currentSituation;
-    const hasSeeking = !!data?.spiritualSeeking;
-    const nameClause = data?.name ? `${data.name}, ` : '';
 
     // Pick scripture based on selected theme
     const scripture = themeId && THEME_SCRIPTURE[themeId]
       ? THEME_SCRIPTURE[themeId]
-      : pickRandom(DEFAULT_SCRIPTURES);
+      : pickRandomFromArray(DEFAULT_SCRIPTURES);
 
-    let reflection: string;
-    if (hasEmotional && hasSeeking) {
-      reflection = pickRandom([
-        `${nameClause}something real brought you here\u00A0\u2014 a weight you've been carrying, and a hope you haven't let go\u00A0of.`,
-        `Between where you are and where you're reaching, ${nameClause}God is already at\u00A0work.`,
-        `${nameClause}you named what many people never pause long enough to say out\u00A0loud.`,
-      ]);
-    } else if (hasEmotional) {
-      reflection = pickRandom([
-        `${nameClause}you named something that matters. That kind of honesty is where God meets\u00A0us.`,
-        `What you shared took courage${data?.name ? `, ${data.name}` : ''}. It's exactly the right place to\u00A0begin.`,
-      ]);
-    } else {
-      reflection = pickRandom([
-        `${nameClause}something drew you here today. Whatever the reason\u00A0\u2014 you're in the right\u00A0place.`,
-        `You showed up${data?.name ? `, ${data.name}` : ''}. That's the beginning of\u00A0everything.`,
-      ]);
-    }
+    const reflection = onboardingMirrorBackReflection({
+      currentSituation: data?.currentSituation,
+      spiritualSeeking: data?.spiritualSeeking,
+      name: data?.name,
+    });
 
     const anticipation = 'Something is being written for you right now\u00A0\u2014 crafted for exactly where you\u00A0are.';
 

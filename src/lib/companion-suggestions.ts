@@ -10,17 +10,14 @@
  * frame) borrows chips, and those come from a seeded bag, so the same three
  * do not follow every such reply.
  */
-import { pickFromBag } from '@/lib/variation-bag';
+import { drawConsecutive } from '@/lib/variation-bag';
 
 /**
  * Chips for a reply that arrived without a list. They are the reader's own
  * words when tapped, and they have to fit under any reply.
  *
- * Twelve in threes: a draw never straddles two laps of the bag, and the
- * bag's guard band (a quarter of the pool, so three) keeps the first draw of
- * a lap clear of the last draw of the lap before. Two consecutive draws
- * therefore never share a chip. Keep the length a multiple of three, and at
- * least twelve.
+ * Keep the length one that drawsStayApart accepts at three a reply (twelve
+ * or more, in threes), so two consecutive replies never share a chip.
  */
 export const FALLBACK_SUGGESTIONS = [
   'Tell me more',
@@ -71,16 +68,27 @@ export function sharesCrisisLine(text: string): boolean {
 }
 
 /**
- * Three fallback chips for one draw. Deterministic in (seed, draw): the same
- * reply always shows the same chips, and consecutive draws share none.
+ * Where a reply without a list draws its chips: the install seed, the
+ * conversation (each one is its own sequence), and the reply's place among
+ * that conversation's replies.
  */
-export function fallbackSuggestions(seed: string, draw: number): string[] {
-  const chips: string[] = [];
-  for (let slot = 0; slot < FALLBACK_SUGGESTIONS_PER_REPLY; slot += 1) {
-    const chip = pickFromBag(FALLBACK_SUGGESTIONS, seed, draw * FALLBACK_SUGGESTIONS_PER_REPLY + slot);
-    if (chip) chips.push(chip);
-  }
-  return chips;
+export interface FallbackChipDraw {
+  seed: string;
+  conversationId: string;
+  replyIndex: number;
+}
+
+/**
+ * Three fallback chips for one reply. Deterministic in the draw: the same
+ * reply always shows the same chips, and consecutive replies share none.
+ */
+export function fallbackSuggestions({ seed, conversationId, replyIndex }: FallbackChipDraw): string[] {
+  return drawConsecutive(
+    FALLBACK_SUGGESTIONS,
+    { seed, dayIndex: replyIndex },
+    `companion-chips|${conversationId}`,
+    FALLBACK_SUGGESTIONS_PER_REPLY,
+  );
 }
 
 /**
@@ -93,9 +101,9 @@ export function fallbackSuggestions(seed: string, draw: number): string[] {
 export function replySuggestions(
   sent: readonly string[] | undefined,
   replyText: string,
-  fallback: { seed: string; draw: number },
+  fallback: FallbackChipDraw,
 ): string[] {
   if (sharesCrisisLine(replyText)) return [];
   if (sent) return [...sent];
-  return fallbackSuggestions(fallback.seed, fallback.draw);
+  return fallbackSuggestions(fallback);
 }

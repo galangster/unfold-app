@@ -21,7 +21,7 @@ import { capitalizeGodSlips } from '@/lib/god-capitalization';
  * and "freaking" was swapped for "really", which is itself banned. A bridge
  * that holds one is now dropped whole, like a bridge with a banned phrase.
  */
-const CRUDE_PHRASES = ['as hell', 'hell of a', 'damn', 'freaking'];
+export const CRUDE_PHRASES = ['as hell', 'hell of a', 'damn', 'freaking'];
 
 // ---------------------------------------------------------------------------
 // Shared text rules
@@ -167,6 +167,17 @@ function quotedSpans(text: string): [number, number][] {
 }
 
 /**
+ * One phrase as a whole-words pattern, built as findBannedPhrase builds it:
+ * the first group is the character before the phrase. The app's copy-rule
+ * checks build their patterns here too, so they and this safety net agree on
+ * what counts as a phrase. The default flags suit one test of a line.
+ * findBannedPhrase adds 'g' to find every place a phrase occurs.
+ */
+export function bannedPhrasePattern(phrase: string, flags = 'iu'): RegExp {
+  return new RegExp(`(${WORD_START})${phraseBody(phrase)}${LETTER_OR_DIGIT_END.test(phrase) ? WORD_END : ''}`, flags);
+}
+
+/**
  * Built on the first call: each phrase as a pattern that finds every place
  * it occurs. The first group is the character before the phrase, so the
  * phrase starts at the end of that group.
@@ -182,10 +193,7 @@ export function findBannedPhrase(text: string): string | null {
   if (holdsBannedPhrase(text)) {
     const spans = quotedSpans(text);
     if (!phrasePatterns) {
-      phrasePatterns = BANNED.map((phrase) => ({
-        phrase,
-        pattern: new RegExp(`(${WORD_START})${phraseBody(phrase)}${LETTER_OR_DIGIT_END.test(phrase) ? WORD_END : ''}`, 'giu'),
-      }));
+      phrasePatterns = BANNED.map((phrase) => ({ phrase, pattern: bannedPhrasePattern(phrase, 'giu') }));
     }
     for (const { phrase, pattern } of phrasePatterns) {
       for (const match of text.matchAll(pattern)) {

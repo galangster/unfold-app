@@ -156,6 +156,21 @@ export function getTodayDay(
 }
 
 /**
+ * The number of the day the reader is on today (getTodayDay), or
+ * `currentDay` when that day is not on the device yet: then nothing was read
+ * today, so `currentDay` has not moved past it. The widgets and the companion
+ * request name today's day with this, so they cannot drift apart (APP-24).
+ * Unlike getTodayReaderDayNumber, which picks the day the reading pane opens,
+ * a day read today always comes first.
+ */
+export function getTodayDayNumber(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): number | undefined {
+  return getTodayDay(devotional, now)?.dayNumber ?? devotional?.currentDay;
+}
+
+/**
  * The day the check-in copy should talk about.
  *
  * The day READ TODAY wins over whatever `currentDay` now points at. Finishing

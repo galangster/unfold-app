@@ -14,13 +14,8 @@ import UnfoldVerseWidget from '@/widgets/ios/UnfoldVerse';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
-import { getServerOwnedSeriesTotalDays, getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
-import {
-  buildWidgetTimelineEntries,
-  getLockScreenProps,
-  getTimelineReadingProps,
-  getWeeklyProgress,
-} from '@/lib/widget-timeline';
+import { getWidgetSeriesTotalDays } from '@/lib/devotional-series-boundary';
+import { buildWidgetTimelineEntries, getWidgetSeriesFields } from '@/lib/widget-timeline';
 import { hasReadTodayGlobal } from './home-devotional-state';
 
 // Track active reading session
@@ -45,13 +40,11 @@ let activeReadingSession: LiveActivity<{
 //   1. streakCurrent — badge count + streak display
 //   2. streakLastReadDate — determines hasReadToday (self-expires at midnight)
 //   3. current day id — the series and the day it is on
-//   4. weeklyProgress — the M-Su "read" indicator dots
-//   5. the Today and Dashboard reading fields (getTimelineReadingProps) for
-//      BOTH entries, built exactly as the timeline builds them: the day Today
-//      shows, its verse and quote, the next day, which can land after
-//      today's reading, and the midnight line for a day not on the device
-//   6. the Lock Screen fields (getLockScreenProps), built exactly as the
-//      timeline builds them: the day read today, its verse, and the ring
+//   4. the series fields (getWidgetSeriesFields), built exactly as the
+//      timeline builds them and shared with Today's sync key: the reading of
+//      BOTH entries, the day total, the M-Su "read" dots, and the Lock Screen
+//      fields
+//   5. readingMinutes — the reader's reading length
 //
 // The fingerprint is a JSON-stringified plain object of these values. It is
 // intentionally NOT a hash — the string compare is cheap and human-readable
@@ -84,14 +77,11 @@ function buildSyncFingerprint(now: Date): string {
     streakLastReadDate: state.streakLastReadDate,
     hasReadToday,
     dayId: devotional ? `${devotional.id}:${devotional.currentDay}` : null,
-    reading: getTimelineReadingProps(devotional, now),
-    totalDays: getServerOwnedSeriesTotalDays(devotional),
-    weeklyProgress: getWeeklyProgress(state.devotionals ?? [], now),
+    ...getWidgetSeriesFields(devotional, state.devotionals ?? [], now),
     // FAP-LIB-4: readingDuration is rendered by widgets (totalMinutes field) but was
     // omitted from the fingerprint, so changing reading duration in settings never
     // triggered a widget sync.
     readingMinutes: state.user?.readingDuration ?? 5,
-    lock: getLockScreenProps(devotional, now),
   });
 }
 
