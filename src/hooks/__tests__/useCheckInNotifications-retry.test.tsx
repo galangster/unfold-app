@@ -45,6 +45,7 @@ jest.mock('@/lib/premium-state', () => ({
 
 jest.mock('@/lib/home-devotional-state', () => ({
   getTodayCarryLine: () => '',
+  getTodayCompanionNudge: () => null,
 }));
 
 jest.mock('@/lib/device-timezone', () => ({

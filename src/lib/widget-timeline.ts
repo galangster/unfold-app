@@ -11,8 +11,9 @@
  */
 import type { Devotional } from '@/lib/store';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { getDaysReadToday, getTodayDay, hasReadTodayGlobal } from './home-devotional-state';
+import { getDaysReadToday, getTodayDay, getTodayDayNumber, hasReadTodayGlobal } from './home-devotional-state';
 import { countReadDaysWithinBoundary } from './series-path';
+import { copyVariationAt, drawCopy } from './variation-bag';
 import { deriveLockLine } from './widget-lock-line';
 
 export type WidgetSharedProps = {
@@ -21,6 +22,12 @@ export type WidgetSharedProps = {
   hasReadToday: boolean;
   devotionalTitle: string;
   dayTitle: string;
+  /**
+   * The midnight entry's line for a day that is not on the device yet, and
+   * '' otherwise. dayTitle carries it for Today and Dashboard; UnfoldVerse
+   * shows it in place of its empty text.
+   */
+  dayReadyLine: string;
   dayNumber: number;
   totalDays: number;
   scriptureReference: string;
@@ -59,6 +66,42 @@ export function getNextMidnight(now: Date): Date {
   next.setHours(0, 0, 0, 0);
   next.setDate(next.getDate() + 1);
   return next;
+}
+
+/**
+ * Which timeline entry props are for. The app pushes the entry for `now`
+ * while it runs. WidgetKit shows the `midnight` entry until the app opens
+ * again, and a progressive series brings its next day to the device only
+ * then.
+ */
+export type WidgetTimelineEntry = 'now' | 'midnight';
+
+/** The timeline's entries, in order. Every builder below maps over this. */
+function timelineEntries(now: Date): { date: Date; entry: WidgetTimelineEntry }[] {
+  return [
+    { date: now, entry: 'now' },
+    { date: getNextMidnight(now), entry: 'midnight' },
+  ];
+}
+
+/**
+ * What the midnight entry says for a day that is not on the device yet: the
+ * day the reader is on, named as the day ahead instead of as missing. No line
+ * promises that the day is ready or comes when the app opens, because for
+ * some readers it does not (a lapsed subscription, a paused series). Each
+ * line also reads cleanly inside the widget labels: UnfoldToday reads
+ * "Today's reading: <line>." and UnfoldDashboard reads "Unfold dashboard.
+ * <line>. Day N of M." Each midnight draws one line from a seeded bag.
+ */
+export const WIDGET_DAY_READY_LINES: readonly ((dayNumber: number) => string)[] = [
+  (day) => `Time for Day ${day}`,
+  (day) => `Day ${day} is up next`,
+  (day) => `On to Day ${day}`,
+  (day) => `You’re on Day ${day}`,
+];
+
+function dayReadyLine(devotional: Devotional, dayNumber: number, forDate: Date): string {
+  return drawCopy(WIDGET_DAY_READY_LINES, copyVariationAt(devotional.id, forDate), 'widget-day-ready')(dayNumber);
 }
 
 /**
@@ -104,7 +147,7 @@ export function getLockScreenProps(
   return {
     lockLine: deriveLockLine(todayDay?.scriptureText ?? ''),
     lockReference: todayDay?.scriptureReference ?? '',
-    lockDayNumber: todayDay?.dayNumber ?? devotional?.currentDay ?? 0,
+    lockDayNumber: getTodayDayNumber(devotional, forDate) ?? 0,
     lockDaysRead: devotional ? countReadDaysWithinBoundary(devotional) : 0,
     lockReadToday: getDaysReadToday(devotional, forDate).length > 0,
   };
@@ -112,27 +155,41 @@ export function getLockScreenProps(
 
 type TodayReadingProps = Pick<
   WidgetSharedProps,
-  'dayTitle' | 'dayNumber' | 'scriptureReference' | 'scriptureText' | 'quotableLine' | 'nextDayTitle'
+  | 'dayTitle'
+  | 'dayReadyLine'
+  | 'dayNumber'
+  | 'scriptureReference'
+  | 'scriptureText'
+  | 'quotableLine'
+  | 'nextDayTitle'
 >;
 
 /**
  * The UnfoldToday and UnfoldDashboard reading fields. Like the Lock Screen,
  * they name the day Today shows: finishing a reading calls `advanceDay`, so
  * `currentDay` alone is tomorrow's locked day. A day whose content is not on
- * the device yet is named by its number. The timeline and the sync
- * fingerprint both use this, so a change the widget shows always triggers a
- * push.
+ * the device yet is named by its number: the midnight entry names it as the
+ * day ahead, and the entry for now says it is not here yet. The timeline and
+ * the sync fingerprint both use this, so a change the widget shows triggers a
+ * push. The one exception is the midnight line's text: the fingerprint holds
+ * only whether it shows (getWidgetSeriesFields).
  */
 export function getTodayReadingProps(
   devotional: Devotional | null | undefined,
-  forDate: Date
+  forDate: Date,
+  entry: WidgetTimelineEntry
 ): TodayReadingProps {
   const todayDay = getTodayDay(devotional, forDate);
-  const dayNumber = todayDay?.dayNumber ?? devotional?.currentDay ?? 0;
+  const dayNumber = getTodayDayNumber(devotional, forDate) ?? 0;
   const nextDay = devotional?.days?.find((d) => d.dayNumber === dayNumber + 1);
-  const missingDayTitle = devotional ? `Day ${dayNumber} isn’t available yet` : 'Start your series';
+  const readyLine =
+    devotional && !todayDay && entry === 'midnight' ? dayReadyLine(devotional, dayNumber, forDate) : '';
+  const missingDayTitle = devotional
+    ? readyLine || `Day ${dayNumber} isn’t available yet`
+    : 'Start your series';
   return {
     dayTitle: todayDay?.title ?? missingDayTitle,
+    dayReadyLine: readyLine,
     dayNumber,
     scriptureReference: todayDay?.scriptureReference ?? '',
     scriptureText: todayDay?.scriptureText ?? '',
@@ -141,8 +198,44 @@ export function getTodayReadingProps(
   };
 }
 
-/** Snapshot of widget props as they should appear AT forDate. */
-export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): WidgetSharedProps {
+/**
+ * The series fields the widgets show, built as the timeline builds them: the
+ * reading of both entries (the day Today shows, its verse and quote, the next
+ * day, and whether the midnight line for a day not on the device shows), the
+ * day total, the weekly checks and the Lock Screen fields. The sync
+ * fingerprint and Today's sync key both compare these, so a change the
+ * widget shows triggers a push. Writing on a day does not change them.
+ *
+ * The midnight line turns over each day, so the fields keep only whether it
+ * shows (readyLineShows), not its text, and blank the dayTitle that carries
+ * it. They are a sync key, not the pushed props. A reader whose day
+ * stays off the device gets no extra push each day, and the widget keeps the
+ * line of its last push.
+ */
+export function getWidgetSeriesFields(
+  devotional: Devotional | null | undefined,
+  devotionals: Devotional[],
+  now: Date
+) {
+  return {
+    reading: timelineEntries(now).map(({ date, entry }) => {
+      const props = getTodayReadingProps(devotional, date, entry);
+      const { dayReadyLine: readyLine, ...rest } = props;
+      const readyLineShows = readyLine !== '';
+      return { ...rest, dayTitle: readyLineShows ? '' : props.dayTitle, readyLineShows };
+    }),
+    totalDays: getServerOwnedSeriesTotalDays(devotional),
+    weeklyProgress: getWeeklyProgress(devotionals, now),
+    lock: getLockScreenProps(devotional, now),
+  };
+}
+
+/** Snapshot of widget props as they should appear AT forDate, for the timeline entry it builds. */
+export function buildWidgetSharedProps(
+  slice: WidgetStateSlice,
+  forDate: Date,
+  entry: WidgetTimelineEntry
+): WidgetSharedProps {
   const devotional = slice.currentDevotional;
 
   const hasReadToday = hasReadTodayGlobal({
@@ -150,13 +243,14 @@ export function buildWidgetSharedProps(slice: WidgetStateSlice, forDate: Date): 
     now: forDate,
   });
 
-  const reading = getTodayReadingProps(devotional, forDate);
+  const reading = getTodayReadingProps(devotional, forDate, entry);
   return {
     streakCount: slice.streakCurrent,
     streakLongest: slice.streakLongest,
     hasReadToday,
     devotionalTitle: devotional?.title ?? 'Unfold',
     dayTitle: reading.dayTitle,
+    dayReadyLine: reading.dayReadyLine,
     dayNumber: reading.dayNumber,
     totalDays: getServerOwnedSeriesTotalDays(devotional),
     scriptureReference: reading.scriptureReference,
@@ -180,9 +274,8 @@ export function buildWidgetTimelineEntries(
   slice: WidgetStateSlice,
   now: Date
 ): { date: Date; props: WidgetSharedProps }[] {
-  const midnight = getNextMidnight(now);
-  return [
-    { date: now, props: buildWidgetSharedProps(slice, now) },
-    { date: midnight, props: buildWidgetSharedProps(slice, midnight) },
-  ];
+  return timelineEntries(now).map(({ date, entry }) => ({
+    date,
+    props: buildWidgetSharedProps(slice, date, entry),
+  }));
 }

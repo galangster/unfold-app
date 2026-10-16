@@ -46,6 +46,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
 import { legacyDevotionalDayShape } from '@/lib/prompt-variety';
+import { buildFallbackMirrorBack, type MirrorBackContent } from '@/lib/mirror-back-fallback';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -2516,16 +2517,9 @@ export async function generateDiagnosticQuestions(data: {
   }
 }
 
-// Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
-export interface MirrorBackContent {
-  reflection: string;
-  verse: string;
-  verseRef: string;
-  anticipation: string;
-  /** Plain-language read of what seems underneath — shown for ratification. */
-  workingRead?: string;
-}
+export type { MirrorBackContent };
 
+// Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
 export async function generateMirrorBackText(
   onboardingData: {
     selectedThemes?: string[];
@@ -2709,39 +2703,6 @@ RULES:
     logger.warn('[MirrorBack] Error generating mirror-back:', err);
     return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
   }
-}
-
-// Fallback mirror-back content when AI generation fails
-function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; faithImpact?: string; spiritualSeeking?: string; name?: string }): MirrorBackContent {
-  const hasEmotional = !!(data.emotionalState || data.currentSituation);
-  const hasSeeking = !!data.spiritualSeeking;
-  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-  const nameClause = data.name ? `${data.name}, ` : '';
-
-  let reflection: string;
-  if (hasEmotional && hasSeeking) {
-    reflection = pick([
-      `${nameClause}something real brought you here — a weight you've been carrying, and a hope you haven't let go of.`,
-      `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at work.`,
-    ]);
-  } else if (hasEmotional) {
-    reflection = pick([
-      `${nameClause}you named something that matters. That kind of honesty is where God meets us.`,
-      `What you shared took courage, ${nameClause.toLowerCase() || ''}and it's exactly the right place to begin.`,
-    ]);
-  } else {
-    reflection = pick([
-      `${nameClause}something drew you here today. Whatever the reason — you're in the right place.`,
-      `You showed up${data.name ? `, ${data.name}` : ''}. That's the beginning of everything.`,
-    ]);
-  }
-
-  return {
-    reflection,
-    verse: 'Be still, and know that I am God.',
-    verseRef: 'Psalm 46:10',
-    anticipation: 'Something is being written for you right now — crafted for exactly where you are.',
-  };
 }
 
 // Extract the most shareable quotes from a devotional day using AI

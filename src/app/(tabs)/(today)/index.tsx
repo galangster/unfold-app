@@ -32,7 +32,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
-import { getLockScreenProps, getNextMidnight, getTodayReadingProps, getWeeklyProgress } from '@/lib/widget-timeline';
+import { getWidgetSeriesFields } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { isDisplayableBridge } from '@/lib/bridge-text';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -882,16 +882,14 @@ export default function HomeScreen() {
   // restores a day, and the day watch below lands one while Today stays
   // open. Sync the widgets again when what they show changes. A replaced day
   // keeps the day count, and an earlier day restored or marked read keeps the
-  // reading too, so the key is the series fields of the sync fingerprint,
-  // built as it builds them: the reading of both timeline entries, the day
-  // total, the weekly checks and the Lock Screen ring. Writing on a day does
-  // not change them, so it does not re-sync.
-  const widgetSyncKey = useMemo(() => JSON.stringify({
-    reading: [clockNow, getNextMidnight(clockNow)].map((forDate) => getTodayReadingProps(currentDevotional, forDate)),
-    totalDays: getServerOwnedSeriesTotalDays(currentDevotional),
-    weeklyProgress: getWeeklyProgress(devotionals, clockNow),
-    lock: getLockScreenProps(currentDevotional, clockNow),
-  }), [currentDevotional, devotionals, clockNow]);
+  // reading too, so the key is the series fields the sync fingerprint
+  // compares (getWidgetSeriesFields). Writing on a day does not change them,
+  // so it does not re-sync. They change only with the local day, so the key
+  // follows calendarNow, not the minute clock.
+  const widgetSyncKey = useMemo(
+    () => JSON.stringify(getWidgetSeriesFields(currentDevotional, devotionals, calendarNow)),
+    [currentDevotional, devotionals, calendarNow],
+  );
   useEffect(() => {
     syncWidgets();
   }, [currentDevotionalId, widgetSyncKey]);

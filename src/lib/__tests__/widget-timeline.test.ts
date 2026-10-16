@@ -3,8 +3,12 @@ import {
   getWeeklyProgress,
   buildWidgetSharedProps,
   buildWidgetTimelineEntries,
+  getTodayReadingProps,
+  getWidgetSeriesFields,
+  WIDGET_DAY_READY_LINES,
   type WidgetStateSlice,
 } from '@/lib/widget-timeline';
+import { copyRuleBreaks } from './fixtures/copy-rules';
 
 const day = (over: Record<string, unknown> = {}) => ({
   dayNumber: 1,
@@ -101,12 +105,12 @@ describe('getWeeklyProgress (M-Su bits)', () => {
 describe('buildWidgetSharedProps', () => {
   it('hasReadToday compares streakLastReadDate against forDate (not wall clock)', () => {
     const s = slice({ streakLastReadDate: new Date(2026, 5, 10, 9, 0).toISOString() });
-    expect(buildWidgetSharedProps(s, new Date(2026, 5, 10, 14, 0)).hasReadToday).toBe(true);
-    expect(buildWidgetSharedProps(s, new Date(2026, 5, 11, 0, 0)).hasReadToday).toBe(false);
+    expect(buildWidgetSharedProps(s, new Date(2026, 5, 10, 14, 0), 'now').hasReadToday).toBe(true);
+    expect(buildWidgetSharedProps(s, new Date(2026, 5, 11, 0, 0), 'now').hasReadToday).toBe(false);
   });
 
   it('fills safe defaults with no devotional', () => {
-    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.devotionalTitle).toBe('Unfold');
     expect(p.dayTitle).toBe('Start your series');
     expect(p.dayNumber).toBe(0);
@@ -118,7 +122,7 @@ describe('buildWidgetSharedProps', () => {
   });
 
   it('weekTodayIndex maps Sunday to the last slot', () => {
-    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0)); // Sun Jun 14
+    const p = buildWidgetSharedProps(slice(), new Date(2026, 5, 14, 14, 0), 'now'); // Sun Jun 14
     expect(p.weekTodayIndex).toBe(6);
   });
 
@@ -127,7 +131,7 @@ describe('buildWidgetSharedProps', () => {
       totalDays: 7,
       seriesArc: { totalDaysPlanned: 3 },
     });
-    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.totalDays).toBe(3);
   });
 });
@@ -217,7 +221,8 @@ describe('buildWidgetTimelineEntries', () => {
     );
     const p = buildWidgetSharedProps(
       slice({ currentDevotional: d, streakLastReadDate: new Date(2026, 5, 10, 8, 0).toISOString() }),
-      new Date(2026, 5, 10, 14, 0)
+      new Date(2026, 5, 10, 14, 0),
+      'now'
     );
     expect(p).toMatchObject({ hasReadToday: true, lockReadToday: false });
   });
@@ -232,7 +237,7 @@ describe('buildWidgetTimelineEntries', () => {
       ],
       { totalDays: 7, currentDay: 2, seriesArc: { totalDaysPlanned: 3 } }
     );
-    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0));
+    const p = buildWidgetSharedProps(slice({ currentDevotional: d }), new Date(2026, 5, 10, 14, 0), 'now');
     expect(p.lockDaysRead).toBe(1);
   });
 
@@ -291,16 +296,60 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     });
   });
 
-  it('says the next day is not on the device yet at midnight, never "Start your series"', () => {
-    const [, midnight] = entriesFor(readDays(readThisMorning));
+  it('names the next day at midnight, never "isn’t available" or "Start your series"', () => {
+    const [today, midnight] = entriesFor(readDays(readThisMorning));
+    const readyLines = WIDGET_DAY_READY_LINES.map((line) => line(6));
+    expect(readyLines).toContain(midnight.props.dayTitle);
+    expect(midnight.props.dayTitle).not.toContain('available');
     expect(midnight.props).toMatchObject({
-      dayTitle: 'Day 6 isn’t available yet',
+      dayReadyLine: midnight.props.dayTitle,
       dayNumber: 6,
       scriptureReference: '',
       scriptureText: '',
       quotableLine: '',
       lockDayNumber: 6,
+      lockLine: '',
     });
+    expect(today.props.dayReadyLine).toBe('');
+  });
+
+  it('draws a different ready line on consecutive mornings for one series', () => {
+    const d = devo(readDays(readThisMorning), { totalDays: 7, currentDay: 6 });
+    const lines = Array.from({ length: 60 }, (_, offset) =>
+      getTodayReadingProps(d, new Date(2026, 9, 8 + offset), 'midnight').dayTitle
+    );
+    for (let i = 1; i < lines.length; i += 1) expect(lines[i]).not.toBe(lines[i - 1]);
+    expect(new Set(lines).size).toBe(WIDGET_DAY_READY_LINES.length);
+  });
+
+  it('builds the sync key fields from the same entries the timeline pushes', () => {
+    const d = devo(readDays(readThisMorning), { totalDays: 7, currentDay: 6 });
+    const entries = buildWidgetTimelineEntries(slice({ currentDevotional: d, allDevotionals: [d] }), now);
+    const { reading, totalDays, weeklyProgress, lock } = getWidgetSeriesFields(d, [d], now);
+    expect(reading).toHaveLength(entries.length);
+    reading.forEach(({ dayTitle, readyLineShows, ...props }, i) => {
+      const pushed = entries[i].props;
+      expect(pushed).toMatchObject(props);
+      // The ready line counts only as shown or not shown: its text stays out of the key.
+      expect(readyLineShows).toBe(pushed.dayReadyLine !== '');
+      expect(dayTitle).toBe(readyLineShows ? '' : pushed.dayTitle);
+    });
+    expect(reading.map(({ readyLineShows }) => readyLineShows)).toEqual([false, true]);
+    expect(entries[0].props).toMatchObject({ ...lock, totalDays, weeklyProgress });
+  });
+
+  it('keeps the sync key fields the same each day while the next day stays off the device', () => {
+    // Day 5 was read the week before; Day 6 never reached the device. Tuesday to Thursday of one week.
+    const d = devo(
+      [1, 2, 3, 4, 5].map((n) => seriesDay(n, { isRead: true, readAt: new Date(2026, 9, 1 + n, 8, 0).toISOString() })),
+      { totalDays: 7, currentDay: 6 }
+    );
+    const days = [13, 14, 15].map((date) => new Date(2026, 9, date, 14, 0));
+    const keys = days.map((date) => JSON.stringify(getWidgetSeriesFields(d, [d], date)));
+    expect(new Set(keys).size).toBe(1);
+    // The line each midnight entry pushes still turns over. Only the key leaves its text out.
+    const pushed = days.map((date) => getTodayReadingProps(d, getNextMidnight(date), 'midnight').dayTitle);
+    expect(new Set(pushed).size).toBeGreaterThan(1);
   });
 
   it('keeps a behind reader on the day read today though the next day is on the device', () => {
@@ -329,10 +378,34 @@ describe('the Today and Dashboard widgets name the day Today shows', () => {
     const [today] = entriesFor(readDays(readYesterday), readYesterday);
     expect(today.props).toMatchObject({
       dayTitle: 'Day 6 isn’t available yet',
+      dayReadyLine: '',
       dayNumber: 6,
       scriptureReference: '',
       quotableLine: '',
       lockDayNumber: 6,
     });
+  });
+});
+
+describe('the midnight ready lines', () => {
+  const lines = WIDGET_DAY_READY_LINES.map((line) => line(6));
+
+  it.each(lines)('follow the copy rules: %s', (line) => {
+    expect(copyRuleBreaks(line)).toEqual([]);
+    expect(line).toContain('Day 6');
+  });
+
+  it.each(lines)('promise nothing about when the day comes: %s', (line) => {
+    // Some readers never get the day: a lapsed subscription, a paused series.
+    expect(line).not.toMatch(/\b(?:ready|available|open|opens|start|starts|wait|waits|waiting|arrive|arrives|unlock|unlocks|here)\b/i);
+  });
+
+  it.each(lines)('repeat nothing the Today and Dashboard labels around them say: %s', (line) => {
+    // UnfoldToday reads "Today's reading: <line>." UnfoldDashboard reads
+    // "Unfold dashboard. <line>. Day 6 of 7. 3 day streak, ...".
+    // Every line names the day once, so the only Day N allowed is that one,
+    // never the Dashboard's "Day N of M" readout.
+    expect(line).not.toMatch(/\btoday|\breading\b|dashboard|\bday\s+\d+\s+of\b|\bof\s+\d|streak|minute/i);
+    expect(line.match(/\bDay \d+/g)).toHaveLength(1);
   });
 });

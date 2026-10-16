@@ -61,6 +61,7 @@ const baseline: CheckInFingerprintInputs = {
   eveningByDay: null,
   hasCompletedOnboarding: true,
   todayCarryLine: '',
+  todayCompanionNudge: '',
   notificationPermissionEpoch: 0,
   trialNoticeEpoch: 0,
   deviceTimezone: 'Pacific/Honolulu',
@@ -182,6 +183,13 @@ describe('useCheckInFingerprint — invariants', () => {
     it('changes when todayCarryLine changes', () => {
       const a = buildFingerprint(baseline);
       const b = buildFingerprint({ ...baseline, todayCarryLine: 'Carry this: you are already home.' });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayCompanionNudge changes', () => {
+      // A read brings the nudge into today's banner (V-03), with or without a carry line.
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayCompanionNudge: 'Before Thursday’s interview, remember whose name you carry.' });
       expect(a).not.toBe(b);
     });
 

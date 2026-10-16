@@ -49,7 +49,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
-import { getTodayCarryLine } from '@/lib/home-devotional-state';
+import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUIState } from '@/lib/ui-state';
 import { getDeviceTimezone } from '@/lib/device-timezone';
@@ -96,6 +96,13 @@ function useCheckInFingerprint(): string {
   const todayCarryLine = useUnfoldStore(
     (s) => getTodayCarryLine(s.devotionals, s.currentDevotionalId) ?? '',
   );
+  // INCLUDED: today's companion nudge, for the same reason. The midday banner
+  // carries it only once the reader finishes a day today (V-03), so a read on
+  // a day with no carry line must still rewrite today's banner. Only the copy
+  // changes; the fire times do not.
+  const todayCompanionNudge = useUnfoldStore(
+    (s) => getTodayCompanionNudge(s.devotionals, s.currentDevotionalId) ?? '',
+  );
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
   // INCLUDED: the device timezone. Occurrences are written as absolute
@@ -117,6 +124,7 @@ function useCheckInFingerprint(): string {
     eveningByDay,
     hasCompletedOnboarding,
     todayCarryLine,
+    todayCompanionNudge,
     notificationPermissionEpoch,
     trialNoticeEpoch,
     deviceTimezone,

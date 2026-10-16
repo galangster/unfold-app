@@ -156,6 +156,21 @@ export function getTodayDay(
 }
 
 /**
+ * The number of the day the reader is on today (getTodayDay), or
+ * `currentDay` when that day is not on the device yet: then nothing was read
+ * today, so `currentDay` has not moved past it. The widgets and the companion
+ * request name today's day with this, so they cannot drift apart (APP-24).
+ * Unlike getTodayReaderDayNumber, which picks the day the reading pane opens,
+ * a day read today always comes first.
+ */
+export function getTodayDayNumber(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): number | undefined {
+  return getTodayDay(devotional, now)?.dayNumber ?? devotional?.currentDay;
+}
+
+/**
  * The day the check-in copy should talk about.
  *
  * The day READ TODAY wins over whatever `currentDay` now points at. Finishing
@@ -168,6 +183,11 @@ export function getTodayDay(
  * here, so "same copy, same day" holds for the context as well as the body.
  * Do not substitute the screen's own `currentDayData`: that deliberately
  * points at the next day for the rest of the home UI.
+ *
+ * The companion nudge is written for a banner some hours after the reading.
+ * Before the reader finishes a day today, the context leaves it out, so the
+ * midday card and the midday banner fall through to the day's other copy
+ * instead of the closing words of a reading not yet read (V-03).
  */
 export function getTodayDayContext(
   devotional: Devotional | null | undefined,
@@ -182,6 +202,21 @@ export function getTodayDayContext(
     checkInQuestion: day.checkInQuestion,
     act: day.act,
     eveningScriptureRef: day.eveningScriptureRef,
-    companionNudge: day.companionNudge,
+    companionNudge: getDaysReadToday(devotional, now).length > 0 ? day.companionNudge : undefined,
   };
+}
+
+/**
+ * Today's companion nudge as the midday check-in copy carries it: the nudge
+ * of the day finished today, or null before a read (getTodayDayContext). The
+ * check-in fingerprint holds it next to the carry line, so a read that
+ * brings the nudge rewrites today's banner even on a day with no carry line.
+ */
+export function getTodayCompanionNudge(
+  devotionals: readonly Devotional[],
+  currentDevotionalId: string | null | undefined,
+  now = new Date(),
+): string | null {
+  const devotional = getCurrentDevotional(devotionals, currentDevotionalId);
+  return getTodayDayContext(devotional, now)?.companionNudge?.trim() || null;
 }

@@ -32,32 +32,11 @@ jest.mock('@/widgets/ios/UnfoldReadingSession', () => ({
 }));
 
 // ── Mock widget-timeline ───────────────────────────────────────────────────────
-// getWeeklyProgress is re-implemented minimally so fingerprint detects
-// devotional readAt changes without depending on the real module.
+// The fingerprint runs on the real series fields, so it sees devotional readAt
+// changes. Only the timeline the bridge pushes is stubbed.
 jest.mock('@/lib/widget-timeline', () => ({
-  getLockScreenProps: jest.requireActual('@/lib/widget-timeline').getLockScreenProps,
-  getTodayReadingProps: jest.requireActual('@/lib/widget-timeline').getTodayReadingProps,
-  getNextMidnight: jest.requireActual('@/lib/widget-timeline').getNextMidnight,
+  ...jest.requireActual('@/lib/widget-timeline'),
   buildWidgetTimelineEntries: jest.fn(() => [{ date: new Date(), props: {} }]),
-  getWeeklyProgress: (
-    devotionals: { days?: { readAt?: string }[] }[],
-    forDate: Date
-  ): string => {
-    const dayOfWeek = forDate.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(forDate);
-      d.setDate(d.getDate() + mondayOffset + i);
-      const dateStr = d.toDateString();
-      return devotionals.some((devo) =>
-        (devo.days ?? []).some(
-          (day) => day.readAt && new Date(day.readAt).toDateString() === dateStr
-        )
-      )
-        ? '1'
-        : '0';
-    }).join(',');
-  },
 }));
 
 // ── Logger no-op ──────────────────────────────────────────────────────────────
@@ -93,6 +72,7 @@ jest.mock('@/lib/store', () => ({
 
 // ── Imports AFTER all mocks ───────────────────────────────────────────────────
 import { syncWidgets, clearWidgets, resetWidgetSyncFingerprintForTesting } from '@/lib/widget-bridge';
+import { WIDGET_DAY_READY_LINES } from '@/lib/widget-timeline';
 import UnfoldStreakDefault from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayDefault from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardDefault from '@/widgets/ios/UnfoldDashboard';
@@ -342,6 +322,32 @@ describe('syncWidgets follows the day Today shows', () => {
   beforeEach(() => jest.useFakeTimers({ now: new Date(2026, 9, 7, 14, 0) }));
   afterEach(() => jest.useRealTimers());
 
+  it('pushes no extra timeline each day while the next day stays off the device', () => {
+    const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
+      buildWidgetTimelineEntries: jest.Mock;
+    };
+    buildWidgetTimelineEntries.mockImplementation(
+      jest.requireActual('@/lib/widget-timeline').buildWidgetTimelineEntries
+    );
+    try {
+      const todayWidget = (UnfoldTodayDefault as unknown as { updateTimeline: jest.Mock }).updateTimeline;
+      showSeries(series());
+      syncWidgets();
+      // Thursday: the read moved to yesterday, so what the widget shows changes once.
+      jest.setSystemTime(new Date(2026, 9, 8, 14, 0));
+      syncWidgets();
+      expect(todayWidget).toHaveBeenCalledTimes(2);
+      // Friday and Saturday of the same week: only the midnight line would turn over.
+      for (const date of [9, 10]) {
+        jest.setSystemTime(new Date(2026, 9, date, 14, 0));
+        syncWidgets();
+      }
+      expect(todayWidget).toHaveBeenCalledTimes(2);
+    } finally {
+      buildWidgetTimelineEntries.mockImplementation(() => [{ date: new Date(), props: {} }]);
+    }
+  });
+
   it('pushes the day read today, then pushes once more when the next day lands', () => {
     const { buildWidgetTimelineEntries } = jest.requireMock('@/lib/widget-timeline') as {
       buildWidgetTimelineEntries: jest.Mock;
@@ -358,7 +364,10 @@ describe('syncWidgets follows the day Today shows', () => {
       syncWidgets();
       syncWidgets();
       expect(todayWidget).toHaveBeenCalledTimes(1);
-      expect(titles(0)).toEqual(['Title 5', 'Day 6 isn’t available yet']);
+      // At midnight Day 6 is still not on the device: the entry names it as ready.
+      const [nowTitle, midnightTitle] = titles(0);
+      expect(nowTitle).toBe('Title 5');
+      expect(WIDGET_DAY_READY_LINES.map((line) => line(6))).toContain(midnightTitle);
 
       // The focus pull or the day watch lands Day 6 on the device.
       showSeries(series({ withDay6: true }));
