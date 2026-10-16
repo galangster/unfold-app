@@ -8,6 +8,8 @@ import {
   shouldPrepareCurrentDevotionalDay,
 } from '../home-devotional-state';
 import type { Devotional, DevotionalDay } from '../store';
+import { dayIndexFor } from '../variation-bag';
+import { getEveningWindDownCopy, getMiddayCheckInBody, getMiddayCheckInCopy } from '@/constants/check-in-messages';
 
 const today = new Date(2026, 3, 25, 12, 0, 0);
 
@@ -291,5 +293,55 @@ describe('getTodayDayContext', () => {
 
   it('is null without a devotional', () => {
     expect(getTodayDayContext(null, today)).toBeNull();
+  });
+
+  describe('the companion nudge before the reading (V-03)', () => {
+    // Written for a banner some hours after the reading, so it waits for the read.
+    const NUDGE = 'Before Thursday’s interview, remember whose name you carry.';
+    const variation = { seed: 'install-a', dayIndex: dayIndexFor(today) };
+    const unread = () => devotional({
+      currentDay: 1,
+      days: [day({ dayNumber: 1, title: 'Waiting', companionNudge: NUDGE })],
+    });
+
+    it('leaves out the nudge of a day not read yet', () => {
+      const context = getTodayDayContext(unread(), today);
+      expect(context?.title).toBe('Waiting');
+      expect(context?.companionNudge).toBeUndefined();
+    });
+
+    it('keeps the nudge off the midday card and both banners until the read', () => {
+      const context = getTodayDayContext(unread(), today);
+      expect(getMiddayCheckInBody(context, null, variation)).not.toContain('whose name you carry');
+      expect(getMiddayCheckInCopy(context, null, variation).body).not.toContain('whose name you carry');
+      expect(getEveningWindDownCopy(context, variation).body).not.toContain('whose name you carry');
+    });
+
+    it('brings the nudge back once the day is read today', () => {
+      const read = devotional({
+        currentDay: 2,
+        days: [
+          day({ dayNumber: 1, title: 'Read this morning', isRead: true, readAt: today.toISOString(), companionNudge: NUDGE }),
+          day({ id: 'day-2', dayNumber: 2, title: 'Not read yet' }),
+        ],
+      });
+      const context = getTodayDayContext(read, today);
+      expect(context?.companionNudge).toBe(NUDGE);
+      expect(getMiddayCheckInBody(context, null, variation)).toBe(NUDGE);
+    });
+
+    it('leaves out the nudge of a day read on an earlier date', () => {
+      const finished = devotional({
+        currentDay: 7,
+        days: [day({
+          dayNumber: 7,
+          title: 'Last day',
+          isRead: true,
+          readAt: new Date(2026, 3, 24, 9, 0, 0).toISOString(),
+          companionNudge: NUDGE,
+        })],
+      });
+      expect(getTodayDayContext(finished, today)?.companionNudge).toBeUndefined();
+    });
   });
 });

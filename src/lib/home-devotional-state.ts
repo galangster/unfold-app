@@ -183,6 +183,11 @@ export function getTodayDayNumber(
  * here, so "same copy, same day" holds for the context as well as the body.
  * Do not substitute the screen's own `currentDayData`: that deliberately
  * points at the next day for the rest of the home UI.
+ *
+ * The companion nudge is written for a banner some hours after the reading.
+ * Before the reader finishes a day today, the context leaves it out, so the
+ * midday card and the midday banner fall through to the day's other copy
+ * instead of the closing words of a reading not yet read (V-03).
  */
 export function getTodayDayContext(
   devotional: Devotional | null | undefined,
@@ -197,6 +202,6 @@ export function getTodayDayContext(
     checkInQuestion: day.checkInQuestion,
     act: day.act,
     eveningScriptureRef: day.eveningScriptureRef,
-    companionNudge: day.companionNudge,
+    companionNudge: getDaysReadToday(devotional, now).length > 0 ? day.companionNudge : undefined,
   };
 }
