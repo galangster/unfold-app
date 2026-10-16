@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import React, { useMemo, type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
@@ -8,14 +8,13 @@ import { useTheme } from '@/lib/theme';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { todayGreeting } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
 
-export function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 5) return 'Still awake?';
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  if (hour < 21) return 'Good evening';
-  return 'Wind down';
+/** Chosen by the hour, worded by the bag: each part of the day has its own small pool. */
+export function getGreeting(hour: number, dayIndex: number): string {
+  return todayGreeting(hour, { seed: copySeed(), dayIndex });
 }
 
 interface Props {
@@ -29,6 +28,11 @@ interface Props {
 export function GreetingRow({ userName, onAvatarPress, avatarTestID, headerActions }: Props) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
+  // Drawn once per hour and local day, not on every render.
+  const now = new Date();
+  const hour = now.getHours();
+  const dayIndex = dayIndexFor(now);
+  const greeting = useMemo(() => getGreeting(hour, dayIndex), [hour, dayIndex]);
 
   return (
     <View
@@ -51,7 +55,7 @@ export function GreetingRow({ userName, onAvatarPress, avatarTestID, headerActio
             marginBottom: 6,
           }}
         >
-          {getGreeting()}
+          {greeting}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
           <Text

@@ -10,9 +10,8 @@
  * draw rather than two independent ones.
  */
 
-import type { CopyVariation } from '@/constants/check-in-messages';
 import { getDeviceId } from '@/lib/mmkv-storage';
-import { dayIndexFor } from '@/lib/variation-bag';
+import { copyVariationAt, type CopyVariation } from '@/lib/variation-bag';
 
 /**
  * Seed for the copy shuffle bags. The install id is Keychain-backed, so it is
@@ -49,5 +48,5 @@ export function copySeed(): string {
 
 /** The draw for the local calendar day of `date`. */
 export function copyVariationFor(date: Date): CopyVariation {
-  return { seed: copySeed(), dayIndex: dayIndexFor(date) };
+  return copyVariationAt(copySeed(), date);
 }

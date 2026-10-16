@@ -8,6 +8,8 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { createAutosaveController } from '@/lib/autosave-controller';
+import { reflectionComposerPlaceholder } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
@@ -58,6 +60,8 @@ export function InlineReflectComposer({
   const [text, setText] = useState(initialDraft);
   const [inputHeight, setInputHeight] = useState(MIN_HEIGHT);
   const [isFocused, setIsFocused] = useState(false);
+  // A different prompt each day, stable while the card is on screen.
+  const [placeholder] = useState(() => reflectionComposerPlaceholder(copyVariationFor(new Date())));
 
   const textRef = useRef(text);
   textRef.current = text;
@@ -124,7 +128,7 @@ export function InlineReflectComposer({
             setInputHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, e.nativeEvent.contentSize.height + 28)))
           }
           multiline
-          placeholder="What stayed with you today?"
+          placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           keyboardAppearance={isDark ? 'dark' : 'light'}
           testID="home-reflect-composer"

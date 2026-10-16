@@ -52,7 +52,7 @@ it('presents explicit next steps and accepts only one navigation per celebration
 it('keeps onboarding continuation available without reader next steps', () => {
   const dismiss = jest.fn();
   const screen = render(<CompletionCelebration visible type="day" message="A beginning" onDismiss={dismiss} />);
-  fireEvent.press(screen.getByRole('button', { name: 'Day Complete. A beginning. Continue' }));
+  fireEvent.press(screen.getByRole('button', { name: /\. A beginning\. Continue$/ }));
   expect(dismiss).toHaveBeenCalledTimes(1);
 });
 

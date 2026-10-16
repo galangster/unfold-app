@@ -1,5 +1,6 @@
 import type { BibleHighlight, Devotional, Highlight } from '@/lib/store';
 import { formatScriptureReference } from '@/lib/bible-constants';
+import { drawCopy, type CopyVariation } from '@/lib/variation-bag';
 
 export type RememberThisPick =
   | { kind: 'devotional'; highlight: Highlight }
@@ -9,11 +10,16 @@ export type RememberThisPick =
  * One saved line for today's "A line worth carrying" card, drawn from both
  * devotional and Bible highlights. Deterministic per calendar day so the card
  * does not change on every render or focus.
+ *
+ * The draw is the seeded bag over the pool sorted by id, so every highlight
+ * comes up once before any repeats. The old seed summed the date's character
+ * codes, which gave 19 values a year and never reached most of a long list.
+ * `variation` is today's draw: the install's copy seed and the local day.
  */
 export function pickRememberThis(
   highlights: Highlight[],
   bibleHighlights: BibleHighlight[],
-  dateKey: string,
+  variation: CopyVariation,
 ): RememberThisPick | null {
   const pool: RememberThisPick[] = [
     ...highlights
@@ -24,8 +30,11 @@ export function pickRememberThis(
       .map((highlight) => ({ kind: 'bible' as const, highlight })),
   ];
   if (pool.length === 0) return null;
-  const seed = dateKey.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return pool[seed % pool.length];
+  // Store order changes with edits and sync; id order does not. Each key is
+  // built once, not on every comparison.
+  const keyed = pool.map((pick) => ({ pick, key: `${pick.highlight.id}|${pick.kind}` }));
+  keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return drawCopy(keyed.map((entry) => entry.pick), variation, 'remember-this');
 }
 
 export function rememberThisQuote(pick: RememberThisPick): string {

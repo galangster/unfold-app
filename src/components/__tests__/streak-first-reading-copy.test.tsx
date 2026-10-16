@@ -112,9 +112,13 @@ import StreakSettingsScreen from '../../app/streak-settings';
 import { hasReadDevotionalToday } from '@/lib/home-devotional-state';
 import { persistOnboardingFirstReading } from '@/lib/onboarding-first-reading';
 import { flushUnfoldStorePersist, useUnfoldStore, type DevotionalDay } from '@/lib/store';
+import { RHYTHM_LINES } from '@/constants/daily-copy';
 
 const SAMPLE_ID = 'onboarding-sample-streak-copy';
 const STARTS_TOMORROW = 'Your streak starts with tomorrow’s reading.';
+/** The rhythm lines for a streak of zero with nothing read today; the bag picks one per day. */
+const BEGIN_LINES: readonly string[] = RHYTHM_LINES.begin;
+const showsBeginLine = (texts: string[]) => texts.some((text) => BEGIN_LINES.includes(text));
 
 const firstDay: DevotionalDay = {
   dayNumber: 1,
@@ -191,7 +195,7 @@ describe('streak copy after the onboarding devotional', () => {
     for (const today of [todayBefore, todayAfter]) {
       expect(today.texts).toContain(STARTS_TOMORROW);
       expect(today.texts).toContain('0');
-      expect(today.texts).not.toContain('Begin with today’s reading.');
+      expect(showsBeginLine(today.texts)).toBe(false);
       expect(today.label).toContain(STARTS_TOMORROW);
       expect(today.label).not.toContain('Today is complete.');
     }
@@ -230,7 +234,7 @@ describe('streak copy after the onboarding devotional', () => {
 
   it('keeps the begin-today copy for a reader with nothing read today', () => {
     const today = renderTodayRhythm();
-    expect(today.texts).toContain('Begin with today’s reading.');
+    expect(showsBeginLine(today.texts)).toBe(true);
     expect(today.label).toContain('Today is not complete yet.');
     expect(renderStreakSettings()).toContain('Start your streak by completing a devotional');
   });

@@ -188,6 +188,8 @@ import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordR
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
+import { generatingStatusLines } from '@/constants/daily-copy';
+import { copyVariationFor } from '../copy-variation';
 
 const GO_HOME_LABEL = 'Go to Today';
 const EXPO_LOST_CONNECTION = 'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)';
@@ -1278,17 +1280,28 @@ describe('honest wait line on /generating', () => {
     expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
   });
 
-  it('keeps one wait line while the waiting messages cycle', async () => {
+  it('keeps one wait line while the waiting messages step forward, then holds the last', async () => {
+    // The screen draws the same lines for today's date and this install.
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
     const tree = await renderWaiting(7);
-    expect(textNodes(tree, 'Reading your story')).toHaveLength(1);
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
 
     await act(async () => {
       jest.advanceTimersByTime(3800);
     });
     await flush();
 
-    expect(textNodes(tree, 'Choosing scripture')).toHaveLength(1);
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
     expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+
+    // No loop back to the first line: the last one holds.
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    expect(textNodes(tree, lines[0])).toHaveLength(0);
   });
 
   it.each([

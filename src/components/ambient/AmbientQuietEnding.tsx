@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   Modal,
@@ -22,6 +22,8 @@ import { useTheme } from '@/lib/theme';
 import { useAmbientAudioState } from '@/lib/ambient-audio-state';
 import { getAmbientTrack } from '@/lib/ambient-audio-catalog';
 import { setAmbientTimer, stopAmbientSound } from '@/lib/ambient-audio';
+import { quietEndingCopy } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 import {
   AmbientSoundSheet,
   ambientStatusText,
@@ -47,6 +49,9 @@ export function AmbientQuietEnding({
   const toggle = useAmbientSoundActions();
   const track = getAmbientTrack(selectedTrackId);
   const playback = { status, pauseReason, volume };
+  // Tonight's heading and lines, drawn when the ending opens.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const copy = useMemo(() => quietEndingCopy(copyVariationFor(new Date())), [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -99,7 +104,7 @@ export function AmbientQuietEnding({
             accessibilityRole="header"
             style={[styles.heading, { color: colors.text }]}
           >
-            {quiet ? 'A little longer\nin the quiet.' : 'Let that be enough\nfor tonight.'}
+            {quiet ? copy.quietHeading : copy.heading}
           </AmbientText>
           {quiet ? (
             <>
@@ -110,7 +115,7 @@ export function AmbientQuietEnding({
                 PSALM 4:8 · KJV
               </AmbientText>
               <AmbientText style={[styles.body, { color: colors.textMuted }]}>
-                Nothing more to finish.{'\n'}Stay here with God for a moment.
+                {copy.quietBody}
               </AmbientText>
               <Pressable
                 onPress={() => toggle()}
@@ -154,7 +159,7 @@ export function AmbientQuietEnding({
           ) : (
             <>
               <AmbientText style={[styles.body, { color: colors.textMuted }]}>
-                Your reflection has a place here.{'\n'}Return whenever you need.
+                {copy.body}
               </AmbientText>
               <Pressable
                 onPress={() => setQuiet(true)}

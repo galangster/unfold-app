@@ -94,6 +94,7 @@ import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
 import { getCompletionNextStep } from '@/lib/completion-next-step';
+import { copySeed } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -1575,7 +1576,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets]);
 
-  const completionNextStep = getCompletionNextStep(currentDevotional, viewingDay, celebrationType);
+  // Only the open overlay reads the step, so a hidden render skips the draw.
+  const completionNextStep = showCelebration
+    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed())
+    : null;
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
     ? 'Return to Study'
@@ -3260,7 +3264,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <CompletionCelebration
         visible={showCelebration}
         onDismiss={() => dismissCelebration()}
-        nextStep={{
+        nextStep={completionNextStep ? {
           ...completionNextStep,
           primaryLabel: celebrationType === 'series'
             ? 'Choose next study'
@@ -3279,7 +3283,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           },
           secondaryLabel: completionNextStep.nextDay ? completionReturnLabel : 'Keep reflecting',
           onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
-        }}
+        } : undefined}
         type={celebrationType}
         seriesReflectionSummary={
           celebrationType === 'series'

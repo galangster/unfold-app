@@ -1,12 +1,25 @@
+import {
+  IDLE_BODIES,
+  IDLE_TITLES,
+  NEXT_DAY_BODIES,
+  NEXT_DAY_TITLES,
+  OVERDUE_BODIES,
+  OVERDUE_TITLES,
+  PAUSED_BODIES,
+  PAUSED_TITLES,
+} from '@/constants/reading-reminder-messages';
 import { getReadingDayLabel } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
+import { copyVariationAt, drawCopy, type CopyVariation } from './variation-bag';
 
 export interface DailyReminderContentInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   now?: Date;
+  /** The install's copy seed (copySeed()), so two readers draw different lines. */
+  seed: string;
 }
 
 export interface DailyReminderFingerprintInput {
@@ -157,25 +170,34 @@ function truncateBody(text: string, maxLength = 100): string {
   return truncateNotificationBody(text, maxLength);
 }
 
+/** Bible reading and a renewal invitation, with no claim that anything is being written. */
+function pausedContent(variation: CopyVariation): DailyReminderContent {
+  return {
+    title: drawCopy(PAUSED_TITLES, variation, 'reminder-paused-title'),
+    body: drawCopy(PAUSED_BODIES, variation, 'reminder-paused-body'),
+  };
+}
+
+/**
+ * Copy for the reminder that fires at `now`. Each pre-rolled occurrence
+ * passes its own fire date, so it draws that day's lines from the bag.
+ */
 export function getDailyReminderContent({
   currentDevotional,
   premiumPolicy,
   now = new Date(),
+  seed,
 }: DailyReminderContentInput): DailyReminderContent {
   const currentDay = getCurrentReminderDay(currentDevotional);
+  const variation = copyVariationAt(seed, now);
 
   // No active devotional
   if (!currentDevotional) {
-    if (premiumPolicy === 'denied') {
-      return {
-        title: 'Your Bible rhythm is still here',
-        body: 'Open scripture today, or renew Premium when you’re ready for another personal reading.',
-      };
-    }
+    if (premiumPolicy === 'denied') return pausedContent(variation);
 
     return {
-      title: 'Ready for something new?',
-      body: 'Start your next study when you\'re ready.',
+      title: drawCopy(IDLE_TITLES, variation, 'reminder-idle-title'),
+      body: drawCopy(IDLE_BODIES, variation, 'reminder-idle-body'),
     };
   }
 
@@ -187,8 +209,8 @@ export function getDailyReminderContent({
 
     if (isOverdue) {
       return {
-        title: 'Pick up where you left off',
-        body: `Day ${currentDay.dayNumber} of ${currentDevotional.title} is waiting for you.`,
+        title: drawCopy(OVERDUE_TITLES, variation, 'reminder-overdue-title'),
+        body: drawCopy(OVERDUE_BODIES, variation, 'reminder-overdue-body')(currentDay.dayNumber, currentDevotional.title),
       };
     }
 
@@ -211,12 +233,7 @@ export function getDailyReminderContent({
 
   // Premium-denied users should never see generation or "next day is being
   // prepared" copy. That implies work is happening when the series is paused.
-  if (premiumPolicy === 'denied') {
-    return {
-      title: 'Your Bible rhythm is still here',
-      body: 'Read scripture today, or renew Premium when you’re ready for the next personal reading.',
-    };
-  }
+  if (premiumPolicy === 'denied') return pausedContent(variation);
 
   // The next day is not on device yet. This is the NORMAL state at bedtime:
   // today's reading is done, tomorrow's is generated overnight and only
@@ -227,8 +244,10 @@ export function getDailyReminderContent({
   const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
   const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
   return {
-    title: inSeries ? `Day ${nextDayNumber} of ${currentDevotional.title}` : currentDevotional.title,
-    body: 'Your next reading is waiting for you.',
+    title: inSeries
+      ? drawCopy(NEXT_DAY_TITLES, variation, 'reminder-next-title')(nextDayNumber, currentDevotional.title)
+      : currentDevotional.title,
+    body: drawCopy(NEXT_DAY_BODIES, variation, 'reminder-next-body'),
   };
 }
 

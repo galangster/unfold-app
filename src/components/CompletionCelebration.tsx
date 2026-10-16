@@ -18,82 +18,8 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberSystem } from '@/components/EmberSystem';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
 import { Button } from '@/components/ui/Button';
-
-// ─── Pre-baked completion messages ───────────────────────────────────────────
-// God/Jesus-focused: glory goes to Him, not to the reader.
-const DAY_MESSAGES = [
-  'He is faithful, even when you’re not sure you are.',
-  'The word that went out will not return empty.',
-  'His mercies are new every morning.',
-  'God is closer than your next breath.',
-  'Jesus intercedes for you right now.',
-  'He who began a good work will finish it.',
-  'His grace was here before you were.',
-  'The Good Shepherd knows your name.',
-  'God does not waste a single word.',
-  'Christ in you. The hope of glory.',
-  'He is the same yesterday, today, and forever.',
-  'The Father sees what is done in secret.',
-  'His love is not earned. It just is.',
-  'God is doing something you cannot see yet.',
-  'Jesus sat with sinners. He sits with you.',
-  'The Spirit helps when you don’t have the words.',
-  'His faithfulness reaches to the clouds.',
-  'God is not distant. He is here.',
-  'The cross says everything about His love.',
-  'He gives strength to the weary.',
-  'Jesus is the author and the finisher.',
-  'God’s kindness leads to real change.',
-  'His promises do not expire.',
-  'The Lord is near to the brokenhearted.',
-  'He makes all things new. Including you.',
-  'God speaks. Even in the quiet.',
-  'His plans for you are not fragile.',
-  'Jesus carried the weight so you don’t have to.',
-  'The Father’s love is not performance-based.',
-  'God is patient with you. Endlessly so.',
-  'His word is a lamp. Not a floodlight. A lamp.',
-  'Christ died while you were still figuring it out.',
-  'The Spirit is moving, even now.',
-  'He does not grow tired or weary.',
-  'God knows the end of the story. Rest in that.',
-  'Jesus is not ashamed to call you His.',
-  'His compassion does not run out.',
-  'God is working all things together.',
-  'The risen Christ holds everything.',
-  'He heals the brokenhearted and binds up wounds.',
-  'God is not surprised by where you are.',
-  'Jesus is the way. Not a suggestion.',
-  'His peace passes understanding for a reason.',
-  'The Lord fights for you. Be still.',
-  'God remembers His covenant. Always.',
-  'Jesus is enough. That’s the whole gospel.',
-  'His love endures forever. That word means forever.',
-  'God delights in you. Not in your output.',
-  'The grace that saved you sustains you too.',
-  'He is the vine. You are connected.',
-];
-
-const SERIES_MESSAGES = [
-  'He who began this work in you\nwill carry it to completion.',
-  'God was faithful through every day of this.',
-  'His word accomplished what He sent it to do.',
-  'From start to finish, He was with you.',
-  'God doesn’t start things He won’t finish.',
-  'Every day of this series, His grace showed up.',
-  'The Lord sustained you through all of it.',
-  'His faithfulness carried you here.',
-  'God gave you this word, day by day.',
-  'Christ was in every page of this.',
-  'He walked with you through the whole thing.',
-  'God’s promises held. Every single day.',
-  'The Spirit guided you through it all.',
-  'His word will keep working in you\nlong after today.',
-];
-
-function pickRandom(arr: string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)]!;
-}
+import { completionCopy } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
 // ─── Main component ─────────────────────────────────────────────────────────
 interface CompletionCelebrationProps {
@@ -133,13 +59,14 @@ export function CompletionCelebration({
     action();
   };
 
-  // Pick a random message on each render when visible
-  const subtitle = useMemo(() => {
-    if (message) return message;
-    if (type === 'series') return pickRandom(SERIES_MESSAGES);
-    return pickRandom(DAY_MESSAGES);
+  // Drawn by local day each time the overlay opens, so it does not repeat
+  // yesterday's title or line.
+  const copy = useMemo(
+    () => completionCopy(type, copyVariationFor(new Date())),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, type, message]);
+    [visible, type],
+  );
+  const subtitle = message || copy.message;
 
   // Overlay + content animation values
   const overlayOpacity = useSharedValue(0);
@@ -222,7 +149,7 @@ export function CompletionCelebration({
 
   if (!visible) return null;
 
-  const title = type === 'series' ? 'Series Complete' : 'Day Complete';
+  const { title } = copy;
   const seriesSummaryExcerpt = formatSeriesCompletionSummary(seriesReflectionSummary);
 
   return (

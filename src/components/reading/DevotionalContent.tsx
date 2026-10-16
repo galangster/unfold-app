@@ -22,6 +22,9 @@ import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark, useUnfoldStore } from '@/lib/store';
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
+import { actOutcomeNote } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ScriptureVerseBlock } from './ScriptureVerseBlock';
@@ -176,6 +179,14 @@ export function DevotionalContent({
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
+
+  // The act note is drawn for the date the day was read, so a past day's note
+  // stays put. The draw reruns only when the outcome or that day changes.
+  const actNoteDayIndex = dayIndexFor(day.readAt ? new Date(day.readAt) : new Date());
+  const actNote = useMemo(
+    () => (day.actOutcome ? actOutcomeNote(day.actOutcome, { seed: copySeed(), dayIndex: actNoteDayIndex }) : null),
+    [day.actOutcome, actNoteDayIndex],
+  );
 
   // Fetch scripture with verse numbers from local DB, fallback to remote API.
   // The local result carries a per-verse `passage`, which makes the block
@@ -646,7 +657,7 @@ export function DevotionalContent({
           {day.isRead && onActOutcome && (
             day.actOutcome ? (
               <Text style={[dcStyles.actOutcomeNote, { color: colors.textMuted }]}>
-                {day.actOutcome === 'done' ? 'Done. Well held.' : 'Set aside for now.'}
+                {actNote}
               </Text>
             ) : (
               <View style={dcStyles.actOutcomeRow}>
