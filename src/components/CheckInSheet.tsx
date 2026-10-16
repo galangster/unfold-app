@@ -50,12 +50,13 @@ import { Duration, Ease } from '@/constants/animations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, resolveAdaptiveLayout } from '@/lib/adaptive-layout';
 import {
-  CHECKIN_CELEBRATION_MESSAGES,
   CHECKIN_CLOSE_WITHOUT_WORDS,
   CHECKIN_NOT_SAVED_REASON,
   CHECKIN_NOT_SAVED_TITLE,
   CHECKIN_NOT_SAVED_WORDS_HINT,
+  getCheckInCelebrationMessage,
 } from '@/constants/check-in-messages';
+import { copyVariationFor } from '@/lib/copy-variation';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { SheetHandle } from '@/components/ui/SheetHandle';
@@ -578,10 +579,7 @@ function MagicChar({ char, delay, colors }: { char: string; delay: number; color
 /** Gentle celebration shown within the sheet after completing check-in */
 function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof useTheme>['colors']; onDismiss: () => void }) {
   const reducedMotion = useReducedMotion();
-  const message = useMemo(
-    () => CHECKIN_CELEBRATION_MESSAGES[Math.floor(Math.random() * CHECKIN_CELEBRATION_MESSAGES.length)],
-    []
-  );
+  const message = useMemo(() => getCheckInCelebrationMessage(copyVariationFor(new Date())), []);
 
   // Generate staggered delays with slight randomness for a sparkle feel
   const charDelays = useMemo(() => {

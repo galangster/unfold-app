@@ -967,11 +967,10 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
       : null;
   const showInlineComposer = composer !== null && composer.status !== 'complete';
 
-  const accessibilityLabel = hasCompletedToday
-    ? `Read ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays} again`
-    : isTomorrowLocked
-      ? `Tomorrow's reading is locked. Return to ${seriesTitle}, day ${continueDayNumber} of ${totalDays}`
-      : `Continue ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`;
+  // The visible label leads the spoken one (WCAG 2.5.3), so the words on the
+  // button, drawn or fixed, are also the words that activate it by voice.
+  const lockedNote = isTomorrowLocked ? ' Tomorrow’s reading is locked.' : '';
+  const accessibilityLabel = `${ctaText}. ${seriesTitle}, day ${continueDayNumber} of ${totalDays}.${lockedNote}`;
 
   return (
     <Animated.View style={[scaleStyle, readyFadeStyle]}>

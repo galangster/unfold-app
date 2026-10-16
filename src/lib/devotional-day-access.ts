@@ -16,6 +16,23 @@ function isSameLocalDate(value: string | undefined, now: Date): boolean {
   return parsed.toDateString() === now.toDateString();
 }
 
+/**
+ * How many readings were finished before `at`, across every series, from
+ * their read timestamps. It is a reading's place in the reader's history:
+ * the completion overlay and the act note start from it
+ * (takeCompletionOrdinal, actNoteOrdinal), so they step once per completion.
+ * A day marked read with no timestamp is never counted, so it cannot move a
+ * later reading's place.
+ */
+export function countReadsBefore(
+  devotionals: readonly Pick<DevotionalReadingProgress, 'days'>[],
+  at: Date,
+): number {
+  return devotionals.reduce((count, devotional) => count + (devotional.days ?? []).filter((day) => (
+    day.isRead && Date.parse(day.readAt ?? '') < at.getTime()
+  )).length, 0);
+}
+
 function isDevotionalDayRead(devotional: Devotional, dayNumber: number): boolean {
   return devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
 }

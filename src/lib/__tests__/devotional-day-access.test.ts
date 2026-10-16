@@ -1,5 +1,6 @@
 import {
   canOpenDevotionalDay,
+  countReadsBefore,
   getCalendarDayNumber,
   getReadingDayLabel,
   getDayMenuPresentation,
@@ -678,5 +679,21 @@ describe('resolveBlockedForwardReason', () => {
 
     expect(getSelectableDayLimit(series, now)).toBe(4);
     expect(blockedForwardMessage(series, 4, 7, false, now)).toBe('Finish Day 2 to open the next day');
+  });
+});
+
+describe('countReadsBefore', () => {
+  it('counts the readings finished before a moment, across every series and every day', () => {
+    const read = (dayNumber: number, readAt?: Date) => ({ dayNumber, isRead: Boolean(readAt), readAt: readAt?.toISOString() });
+    const series = [
+      { days: [read(1, new Date(2026, 9, 15, 8)), read(2, new Date(2026, 9, 16, 8)), read(3, new Date(2026, 9, 16, 20)), read(4)] },
+      { days: [read(1, new Date(2026, 9, 16, 7)), read(2, new Date(2026, 9, 16, 22)), { dayNumber: 3, isRead: true }] },
+    ];
+    expect(countReadsBefore(series, new Date(2026, 9, 16, 21))).toBe(4);
+    // Only readings before the moment count, so the one finished at it is not one.
+    expect(countReadsBefore(series, new Date(2026, 9, 16, 8))).toBe(2);
+    // Midnight does not reset the count.
+    expect(countReadsBefore(series, new Date(2026, 9, 17, 0, 5))).toBe(5);
+    expect(countReadsBefore([], new Date(2026, 9, 16, 21))).toBe(0);
   });
 });

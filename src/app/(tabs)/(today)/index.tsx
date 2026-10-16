@@ -47,6 +47,7 @@ import {
   getContentAwareEveningMessage,
   getMiddayCheckInBody,
 } from '@/constants/check-in-messages';
+import { heroCtaLabel, todayCardCopy } from '@/constants/daily-copy';
 import { copySeed } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -1263,6 +1264,7 @@ export default function HomeScreen() {
   const currentHour = clockNow.getHours();
   const currentMinute = clockNow.getMinutes();
   const todayDate = clockNow.toLocaleDateString('en-CA');
+  const todayDayIndex = dayIndexFor(clockNow);
   const hasDismissedMiddayCardToday = dismissedMiddayCardDate === todayDate;
   const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
   const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
@@ -1270,8 +1272,8 @@ export default function HomeScreen() {
   // Item 12 (highlights audit H9): the card draws from Bible highlights too.
   const rememberedPick = useMemo(() => {
     if (dismissedRememberThisCardDate === todayDate) return null;
-    return pickRememberThis(highlights, bibleHighlights, todayDate);
-  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate]);
+    return pickRememberThis(highlights, bibleHighlights, { seed: copySeed(), dayIndex: todayDayIndex });
+  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate, todayDayIndex]);
 
   const rememberedSource = useMemo(
     () => (rememberedPick ? rememberThisSource(rememberedPick, devotionals) : ''),
@@ -1420,6 +1422,9 @@ export default function HomeScreen() {
     [dayCopyContext, variation],
   );
 
+  // The card stack's titles, one bag draw per card kind.
+  const cardCopy = useMemo(() => todayCardCopy(variation), [variation]);
+
   // --- Derived state for zone components ---
 
   const isJourneyComplete = isCurrentDevotionalComplete;
@@ -1441,14 +1446,13 @@ export default function HomeScreen() {
     return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
   }, [isTomorrow, currentDayData?.bodyText]);
 
+  // Drawn once per streak and day, not on every render.
+  const heroCta = useMemo(() => heroCtaLabel(streakCurrent, variation), [streakCurrent, variation]);
   const getCtaText = () => {
     if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
     if (isFirstDay) return "Start Today's Reading";
     if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
-    if (streakCurrent >= 7) return 'Deepen Your Practice';
-    if (streakCurrent >= 3) return 'Stay Rooted';
-    if (streakCurrent >= 1) return 'Keep Going';
-    return 'Continue Reading';
+    return heroCta;
   };
 
   const handleReveal = useCallback(() => {
@@ -1661,14 +1665,14 @@ export default function HomeScreen() {
         id: 'today-stack-evening',
         kind: 'evening',
         priority: 400,
-        title: 'How has your day been?',
+        title: cardCopy.evening,
         body: eveningMessage,
         actions: [
           { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
           { label: 'Wind down', onPress: handleEveningWindDown, accessibilityLabel: 'Wind down with today’s reading', accessibilityHint: 'Opens the evening reflection', tone: 'secondary' },
         ],
         onDismiss: handleDismissEveningCard,
-        accessibilityLabel: `How has your day been? ${eveningMessage}`,
+        accessibilityLabel: `${cardCopy.evening} ${eveningMessage}`,
         accessibilityHint: 'Share a life update or open the evening reflection',
         dismissAccessibilityLabel: 'Dismiss evening stack card',
         dismissAccessibilityHint: 'Hides this evening check-in card for today',
@@ -1681,14 +1685,14 @@ export default function HomeScreen() {
         id: 'today-stack-midday',
         kind: 'midday',
         priority: 300,
-        title: 'What’s happening in your life?',
+        title: cardCopy.midday,
         body: middayMessage,
         actions: [
           { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
           { label: 'Reflect', onPress: handleCheckIn, accessibilityLabel: 'Reflect on today’s reading', accessibilityHint: 'Opens the midday reflection', tone: 'secondary' },
         ],
         onDismiss: handleDismissMiddayCard,
-        accessibilityLabel: `What’s happening in your life? ${middayMessage}`,
+        accessibilityLabel: `${cardCopy.midday} ${middayMessage}`,
         accessibilityHint: 'Share a life update or reflect on today’s reading',
         dismissAccessibilityLabel: 'Dismiss midday stack card',
         dismissAccessibilityHint: 'Hides this midday check-in card for today',
@@ -1701,10 +1705,11 @@ export default function HomeScreen() {
         id: 'today-stack-bridge',
         kind: 'bridge',
         priority: 200,
-        title: 'A thread from yesterday to today',
+        title: cardCopy.bridge,
         body: validBridgeText,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: validBridgeText,
+        // The spoken label carries the drawn title the card shows, then the text.
+        accessibilityLabel: `${cardCopy.bridge}. ${validBridgeText}`,
         accessibilityHint: 'A personal bridge into today’s reading',
         dismissAccessibilityLabel: 'Dismiss bridge stack card',
         dismissAccessibilityHint: 'Hides this bridge text for today',
@@ -1717,10 +1722,10 @@ export default function HomeScreen() {
         id: 'today-stack-bridge-loading',
         kind: 'bridge-loading',
         priority: 100,
-        title: 'Preparing today’s thread…',
-        body: 'A quiet bridge from yesterday to today will appear here when it is ready.',
+        title: cardCopy.bridgeLoading,
+        body: cardCopy.bridgeLoadingBody,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: 'Preparing today’s thread',
+        accessibilityLabel: `${cardCopy.bridgeLoading} ${cardCopy.bridgeLoadingBody}`,
         accessibilityHint: 'A personal bridge into today’s reading is loading',
         dismissAccessibilityLabel: 'Dismiss bridge loading stack card',
         dismissAccessibilityHint: 'Hides this bridge card for today',
@@ -1734,7 +1739,7 @@ export default function HomeScreen() {
         id: `today-stack-remember-this-${rememberedPick.highlight.id}`,
         kind: 'remember-this',
         priority: 80,
-        title: 'A line worth carrying',
+        title: cardCopy.rememberThis,
         // Quoted highlight is genuinely variable-length — keep a real-overflow
         // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
         bodyQuote: { text: quote, color: rememberedPick.highlight.color ?? null },
@@ -1743,7 +1748,7 @@ export default function HomeScreen() {
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
-        accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
+        accessibilityLabel: `${cardCopy.rememberThis}. Saved highlight from ${rememberedSource}: ${quote}`,
         accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
         dismissAccessibilityLabel: 'Dismiss saved highlight stack card',
         dismissAccessibilityHint: 'Hides this saved highlight card for today without deleting the highlight',
@@ -1829,6 +1834,7 @@ export default function HomeScreen() {
 
     return cards;
   }, [
+    cardCopy,
     handleLifeUpdate,
     eveningMessage,
     handleCheckIn,
@@ -1956,6 +1962,7 @@ export default function HomeScreen() {
           {/* Zone 1: Greeting */}
           <GreetingRow
             userName={user?.name}
+            now={clockNow}
             avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
             headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}

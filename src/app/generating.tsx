@@ -95,6 +95,8 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
 import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
+import { generatingStatusLines } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
 // Soft copy once a job outlives its long-running threshold, which follows the
 // series length (resolveLongRunningAfterMs). Time alone is never a
@@ -118,15 +120,6 @@ const SAMPLE_PREVIEW = {
 
 // Delay before showing the sample preview card (ms)
 const SAMPLE_PREVIEW_DELAY_MS = 5000;
-
-// Contemplative messages shown while generating
-const WAITING_MESSAGES = [
-  'Reading your story',
-  'Choosing scripture',
-  'Finding the right words',
-  'Weaving your\u00A0narrative',
-  'Crafting something\u00A0personal',
-];
 
 const MESSAGE_CYCLE_MS = 3800;
 
@@ -402,17 +395,32 @@ export default function GeneratingScreen() {
   // Sample preview state -- shows after a short delay to give users something to read
   const [showSamplePreview, setShowSamplePreview] = useState(false);
 
-  // Rotating message state
+  // Contemplative status lines: this local day's draw, each shown once from
+  // a start the bag picks, then the last one held instead of looping. A wait
+  // on another day opens on a different line.
+  const waitingMessages = useMemo(() => generatingStatusLines(copyVariationFor(new Date())), []);
   const [messageIndex, setMessageIndex] = useState(0);
+  // A new attempt on this screen (Try again) starts the lines over in the
+  // render that starts it, before anything commits, so a retry's first frame
+  // is the first line and never the held one that says the work is nearly done.
+  const [prevIsGenerating, setPrevIsGenerating] = useState(isGenerating);
+  if (prevIsGenerating !== isGenerating) {
+    setPrevIsGenerating(isGenerating);
+    if (isGenerating) setMessageIndex(0);
+  }
+  const lastMessageIndex = waitingMessages.length - 1;
+  const holdingLastMessage = messageIndex >= lastMessageIndex;
 
-  // Rotate through waiting messages
+  // Step through the waiting messages, and stop once the last one holds.
+  // The steps pause while 'Reconnecting…' covers the line, so the reader
+  // does not miss lines nobody could see.
   useEffect(() => {
-    if (!isGenerating || isComplete) return;
+    if (!isGenerating || isComplete || isReconnecting || holdingLastMessage) return;
     const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % WAITING_MESSAGES.length);
+      setMessageIndex((prev) => Math.min(prev + 1, lastMessageIndex));
     }, MESSAGE_CYCLE_MS);
     return () => clearInterval(interval);
-  }, [isGenerating, isComplete]);
+  }, [isGenerating, isComplete, isReconnecting, holdingLastMessage, lastMessageIndex]);
 
   // Show sample preview after a delay (only during initial loading, before complete)
   useEffect(() => {
@@ -1400,7 +1408,7 @@ export default function GeneratingScreen() {
                   textAlign: 'center',
                 }}
               >
-                {WAITING_MESSAGES[messageIndex]}
+                {waitingMessages[messageIndex]}
               </Animated.Text>
             )}
           </View>

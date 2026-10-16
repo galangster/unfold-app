@@ -37,7 +37,8 @@ import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { generateExamen } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
-import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
+import { getEveningCelebrationMessage } from '@/constants/check-in-messages';
+import { copyVariationFor } from '@/lib/copy-variation';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
@@ -346,8 +347,7 @@ export default function EveningWindDownScreen() {
       markEveningWindDownCompleted(clock.localYmd);
       store.clearRitualSession('evening');
     }
-    const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
-    setCelebrationMessage(msg);
+    setCelebrationMessage(getEveningCelebrationMessage(copyVariationFor(new Date())));
     setShowCelebration(true);
   }, [currentDevotional, currentDay, addCheckIn, gate, markEveningWindDownCompleted]);
 

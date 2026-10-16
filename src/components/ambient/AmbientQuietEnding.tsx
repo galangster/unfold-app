@@ -22,6 +22,8 @@ import { useTheme } from '@/lib/theme';
 import { useAmbientAudioState } from '@/lib/ambient-audio-state';
 import { getAmbientTrack } from '@/lib/ambient-audio-catalog';
 import { setAmbientTimer, stopAmbientSound } from '@/lib/ambient-audio';
+import { quietEndingCopy } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 import {
   AmbientSoundSheet,
   ambientStatusText,
@@ -47,11 +49,14 @@ export function AmbientQuietEnding({
   const toggle = useAmbientSoundActions();
   const track = getAmbientTrack(selectedTrackId);
   const playback = { status, pauseReason, volume };
+  // Tonight's heading and lines, drawn again each time the ending opens.
+  const [copy, setCopy] = useState(() => quietEndingCopy(copyVariationFor(new Date())));
 
   useEffect(() => {
     if (visible) {
       setQuiet(false);
       setSettings(false);
+      setCopy(quietEndingCopy(copyVariationFor(new Date())));
     }
   }, [visible]);
 
@@ -99,7 +104,7 @@ export function AmbientQuietEnding({
             accessibilityRole="header"
             style={[styles.heading, { color: colors.text }]}
           >
-            {quiet ? 'A little longer\nin the quiet.' : 'Let that be enough\nfor tonight.'}
+            {quiet ? copy.quietHeading : copy.heading}
           </AmbientText>
           {quiet ? (
             <>
@@ -110,7 +115,7 @@ export function AmbientQuietEnding({
                 PSALM 4:8 · KJV
               </AmbientText>
               <AmbientText style={[styles.body, { color: colors.textMuted }]}>
-                Nothing more to finish.{'\n'}Stay here with God for a moment.
+                {copy.quietBody}
               </AmbientText>
               <Pressable
                 onPress={() => toggle()}
@@ -154,7 +159,7 @@ export function AmbientQuietEnding({
           ) : (
             <>
               <AmbientText style={[styles.body, { color: colors.textMuted }]}>
-                Your reflection has a place here.{'\n'}Return whenever you need.
+                {copy.body}
               </AmbientText>
               <Pressable
                 onPress={() => setQuiet(true)}

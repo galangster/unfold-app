@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import type { ColorTheme } from '@/constants/colors';
+import { takeCompletionOrdinal } from '@/lib/copy-variation';
 import {
   ONBOARDING_FIRST_READING_COMPLETE_MESSAGE,
   ONBOARDING_FIRST_READING_SAVED_MESSAGE,
@@ -36,6 +37,11 @@ export function OnboardingCelebration({
   firstReadingDay,
   userContext,
 }: Props) {
+  // The first reading is the first completion, so no reading comes before it.
+  // Its order is still taken through the device's mark, once, as the overlay
+  // opens, so the reader's first overlay steps past it even when this reading
+  // is deleted before then.
+  const [ordinal] = useState(() => takeCompletionOrdinal(0));
   const [savedId, setSavedId] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
@@ -55,6 +61,7 @@ export function OnboardingCelebration({
       visible={true}
       onDismiss={onContinue}
       type="day"
+      ordinal={ordinal}
       message={ONBOARDING_FIRST_READING_COMPLETE_MESSAGE}
       detail={savedId && savedId === firstReadingId ? ONBOARDING_FIRST_READING_SAVED_MESSAGE : undefined}
     />

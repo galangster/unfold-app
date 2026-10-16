@@ -7,8 +7,10 @@
  */
 
 import { stripOuterQuotes } from '@/lib/cn';
-import { truncateNotificationBody } from '@/lib/daily-reminder-content';
-import { pickFromBag } from '@/lib/variation-bag';
+import { MAX_NOTIFICATION_BODY, truncateNotificationBody } from '@/lib/daily-reminder-content';
+import { drawCopy, drawRotation, minimumGapFor, type CopyVariation } from '@/lib/variation-bag';
+
+export type { CopyVariation };
 
 export const MIDDAY_MESSAGES: string[] = [
   "Hey — how’s today landing?",
@@ -407,25 +409,137 @@ export const EVENING_TITLES: string[] = [
 ];
 
 /**
- * Which draw a piece of copy belongs to.
- *
- * `seed` is the stable per-install identity, so two readers are never on the
- * same sequence. `dayIndex` is the local calendar day (see `dayIndexFor`), so
- * the copy turns over at the reader's own midnight — and so a notification
- * being SCHEDULED for a day five days out can be given that day's copy now,
- * rather than today's copy baked into every future occurrence.
+ * What tapping a check-in banner opens: the life update, spoken or typed.
+ * Every banner keeps the cue (PR #166), in wording that rotates, because one
+ * fixed cue was the sentence a reader saw twice a day. The cue counts inside
+ * the 150-character body and drops out only when the day's sentence needs the room.
+ * Each wording offers an update, never an answer: the tap opens the life
+ * update, which asks its own question, not the banner's.
  */
-export interface CopyVariation {
-  seed: string;
-  dayIndex: number;
+export const CHECK_IN_TAP_CUES: string[] = [
+  'Tap to talk or write an update.',
+  'Tap to share an update, spoken or typed.',
+  'Tap to record or write a few words.',
+  'Tap to tell Unfold what’s going on.',
+  'Tap to share what’s happening.',
+  'Tap to add a quick update.',
+];
+
+/** Lowercase words with curly apostrophes made straight. */
+function wordsOf(text: string): string[] {
+  return text.toLowerCase().replace(/’/g, "'").split(/[^a-z0-9']+/).filter(Boolean);
 }
 
 /**
- * Draw from `pool` for this day, salted so each field moves independently.
- * The `?? pool[0]` floor only fires if a pool is emptied by a bad edit.
+ * True when the body repeats three words of the title in a row, or the
+ * whole title when it is shorter ('Let the day settle' over "Let the day
+ * settle.").
  */
-function draw<T>(pool: readonly T[], variation: CopyVariation, field: string): T {
-  return pickFromBag(pool, `${variation.seed}|${field}`, variation.dayIndex) ?? pool[0];
+export function echoes(title: string, body: string): boolean {
+  const titleWords = wordsOf(title);
+  const bodyText = ` ${wordsOf(body).join(' ')} `;
+  const run = Math.min(3, titleWords.length);
+  for (let i = 0; i + run <= titleWords.length; i += 1) {
+    if (bodyText.includes(` ${titleWords.slice(i, i + run).join(' ')} `)) return true;
+  }
+  return false;
+}
+
+/** The titles every day inside the bag's minimum gap around this one draws, its own included. */
+function drawsNear(pool: readonly string[], variation: CopyVariation, field: string): Set<string> {
+  const gap = minimumGapFor(pool.length);
+  return new Set(Array.from({ length: 2 * gap - 1 }, (_, i) =>
+    drawCopy(pool, { ...variation, dayIndex: variation.dayIndex - gap + 1 + i }, field)));
+}
+
+/**
+ * How many swaps back a banner title follows. Each step back needs an
+ * earlier day inside the gap that swapped too, so a chain this long almost
+ * never happens, and the cap keeps the work bounded.
+ */
+const SWAP_LOOKBACK = 8;
+
+/**
+ * A banner title that does not repeat its body. Titles and bodies are drawn
+ * independently, so a few pairs echo each other. On those days the title
+ * steps to the next entry that does not echo the body, that no day inside
+ * the bag's minimum gap draws, and that no earlier day inside the gap swapped
+ * to. A later day avoids an earlier day's swap, never the other way round, so
+ * two days that both swap never meet on one title, and a swap cannot bring a
+ * title back early. Every day but today is scheduled with no reading
+ * context, so an earlier day's swap is worked out from its context-free body.
+ */
+function bannerTitle(
+  pool: readonly string[],
+  variation: CopyVariation,
+  field: string,
+  body: string,
+  contextFreeBody: (variation: CopyVariation) => string,
+): string {
+  const gap = minimumGapFor(pool.length);
+  const shown = new Map<number, string>();
+  const titleOn = (day: CopyVariation, dayBody: string, lookback: number): string => {
+    const known = shown.get(day.dayIndex);
+    if (known !== undefined) return known;
+    const drawn = drawCopy(pool, day, field);
+    let title = drawn;
+    if (echoes(drawn, dayBody)) {
+      const taken = drawsNear(pool, day, field);
+      for (let back = 1; lookback > 0 && back < gap; back += 1) {
+        const earlier = { ...day, dayIndex: day.dayIndex - back };
+        taken.add(titleOn(earlier, contextFreeBody(earlier), lookback - 1));
+      }
+      title = drawRotation(pool, day, field).slice(1)
+        .find((candidate) => !taken.has(candidate) && !echoes(candidate, dayBody)) ?? drawn;
+    }
+    shown.set(day.dayIndex, title);
+    return title;
+  };
+  return titleOn(variation, body, SWAP_LOOKBACK);
+}
+
+/**
+ * The tap cue for a sentence of `length` characters: the first cue from the
+ * day's draw onward that fits and is not `previousCue`, the cue the slot's
+ * fire date before this one carried. The notification batch works its fire
+ * dates out in order and carries each cue to the next, and it keeps the
+ * last cues it wrote, so the next batch's first banner knows the one before
+ * it (lib/copy-variation.ts). When only one cue fits, it shows even when the
+ * day before carried it too: that repeat stands, because a cue is better
+ * than none. Undefined when no cue fits.
+ */
+function tapCue(length: number, variation: CopyVariation, field: string, previousCue?: string): string | undefined {
+  const fitting = drawRotation(CHECK_IN_TAP_CUES, variation, field)
+    .filter((cue) => length + 1 + cue.length <= MAX_NOTIFICATION_BODY);
+  return fitting.find((cue) => cue !== previousCue) ?? fitting[0];
+}
+
+/**
+ * The banner body: the day's sentence, then a tap cue that fits inside the
+ * 150 characters (tapCue). The cue drops only when the shortest one does not
+ * fit, and a banner with no sentence keeps the cue alone. `cue` is the cue
+ * the body carries, for the next fire date to step past.
+ */
+function bannerBody(
+  selected: string,
+  variation: CopyVariation,
+  field: string,
+  previousCue?: string,
+): { body: string; cue?: string } {
+  const message = selected.trim();
+  const cue = tapCue(message.length, variation, field, previousCue);
+  if (!message) return { body: cue ?? '', cue };
+  return cue ? { body: `${message} ${cue}`, cue } : { body: truncateNotificationBody(message) };
+}
+
+/** The line the check-in sheet shows once an answer is saved. */
+export function getCheckInCelebrationMessage(variation: CopyVariation): string {
+  return drawCopy(CHECKIN_CELEBRATION_MESSAGES, variation, 'check-in-celebration');
+}
+
+/** The evening ending's line when ambient audio is off (EveningCelebration). */
+export function getEveningCelebrationMessage(variation: CopyVariation): string {
+  return drawCopy(EVENING_CELEBRATION_MESSAGES, variation, 'evening-celebration');
 }
 
 // ============================================================================
@@ -445,42 +559,108 @@ export interface DayContext {
 }
 
 
-const MIDDAY_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
+/**
+ * The day's quotable line as a closed sentence, so the frame after it reads
+ * as a new sentence. Empty when the day has none, which renders `""` and
+ * marks the template as one this day cannot fill.
+ */
+function quoteOf(ctx: DayContext): string {
+  const line = stripOuterQuotes(ctx.quotableLine ?? '').trim();
+  return line && !/[.!?…]["'”’)]*$/.test(line) ? `${line}.` : line;
+}
+
+/**
+ * Frames for the midday card and banner when the day has no nudge, carry
+ * line or check-in question. They vary the sentence, not only the slot word:
+ * eight frames of one shape read as one line within a fortnight.
+ */
+export const MIDDAY_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
   (ctx) => `Still thinking about "${ctx.title}"?`,
   (ctx) => `How is "${ctx.title}" landing for you?`,
-  (ctx) => `That passage in ${ctx.scriptureReference} — how’s it landing?`,
+  (ctx) => `That passage in ${ctx.scriptureReference}: how’s it landing?`,
   (ctx) => `How is ${ctx.scriptureReference} showing up in your afternoon?`,
   (ctx) => `Anything from "${ctx.title}" worth revisiting?`,
-  (ctx) => `"${stripOuterQuotes(ctx.quotableLine ?? '')}" — still resonating?`,
+  (ctx) => `"${quoteOf(ctx)}" Is that still with you?`,
   (ctx) => `One thought about ${ctx.scriptureReference} before the day moves on.`,
   (ctx) => `How did "${ctx.title}" meet you today?`,
+  (ctx) => `Where has "${ctx.title}" come up so far today?`,
+  (ctx) => `${ctx.scriptureReference} is worth a second look.`,
+  (ctx) => `What changes if "${ctx.title}" is true today?`,
+  (ctx) => `Bring ${ctx.scriptureReference} into whatever comes next.`,
+  (ctx) => `"${quoteOf(ctx)}" Where could that matter today?`,
+  (ctx) => `Has anything from "${ctx.title}" stayed with you?`,
+  (ctx) => `Which part of ${ctx.scriptureReference} keeps coming back to you?`,
+  (ctx) => `"${ctx.title}" can come with you into the rest of today.`,
+  (ctx) => `What did ${ctx.scriptureReference} stir up in you?`,
+  (ctx) => `Is "${ctx.title}" making a difference yet?`,
+  (ctx) => `"${quoteOf(ctx)}" Keep that one close.`,
+  (ctx) => `Take one phrase from ${ctx.scriptureReference} into the next hour.`,
+  (ctx) => `How would you sum up "${ctx.title}" for a friend?`,
+  (ctx) => `${ctx.scriptureReference} still has something to say today.`,
+  (ctx) => `Where is God in "${ctx.title}" for you right now?`,
+  (ctx) => `"${quoteOf(ctx)}" Does that fit where you are today?`,
+  (ctx) => `Who else could use the words of ${ctx.scriptureReference} today?`,
+  (ctx) => `What part of "${ctx.title}" is hardest to live out?`,
+  (ctx) => `A small pause with ${ctx.scriptureReference}.`,
+  (ctx) => `What have you seen today that connects to "${ctx.title}"?`,
+  (ctx) => `Pray one line of ${ctx.scriptureReference} before you go on.`,
+  (ctx) => `"${quoteOf(ctx)}" Where have you seen that today?`,
+  (ctx) => `Is there someone you could tell about "${ctx.title}"?`,
+  (ctx) => `What does ${ctx.scriptureReference} ask of you today?`,
 ];
 
-const EVENING_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
+/** Frames for the evening card body, and the evening banner when the day has no act. */
+export const EVENING_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
   (ctx) => `How did "${ctx.title}" shape your day?`,
-  (ctx) => `Before rest — one thought about "${ctx.title}."`,
+  (ctx) => `Before rest, one thought about "${ctx.title}."`,
   (ctx) => `Winding down with ${ctx.scriptureReference} on your mind.`,
   (ctx) => `How did ${ctx.scriptureReference} meet you today?`,
-  (ctx) => `"${stripOuterQuotes(ctx.quotableLine ?? '')}" — how did that land?`,
+  (ctx) => `"${quoteOf(ctx)}" How did that land?`,
   (ctx) => `A quiet moment to reflect on "${ctx.title}."`,
   (ctx) => `Looking back on ${ctx.scriptureReference} tonight.`,
   (ctx) => `One last thought about "${ctx.title}" before sleep.`,
+  (ctx) => `Where did "${ctx.title}" show up today?`,
+  (ctx) => `${ctx.scriptureReference}, at the end of the day.`,
+  (ctx) => `What stayed with you from "${ctx.title}"?`,
+  (ctx) => `Did "${ctx.title}" change anything today?`,
+  (ctx) => `Let ${ctx.scriptureReference} have the last word today.`,
+  (ctx) => `"${quoteOf(ctx)}" Was that true for you today?`,
+  (ctx) => `One honest look back at "${ctx.title}."`,
+  (ctx) => `What would you keep from ${ctx.scriptureReference}?`,
+  (ctx) => `Close the day with ${ctx.scriptureReference}.`,
+  (ctx) => `Where did you need "${ctx.title}" most today?`,
+  (ctx) => `"${quoteOf(ctx)}" Take that with you into rest.`,
+  (ctx) => `What surprised you in ${ctx.scriptureReference}?`,
+  (ctx) => `Did "${ctx.title}" come back to you today?`,
+  (ctx) => `${ctx.scriptureReference} is a good place to end the day.`,
+  (ctx) => `Thank God for one thing in "${ctx.title}."`,
+  (ctx) => `"${quoteOf(ctx)}" Hold on to that tonight.`,
+  (ctx) => `What did ${ctx.scriptureReference} ask of you today?`,
+  (ctx) => `Was there a moment today that fit "${ctx.title}"?`,
+  (ctx) => `Pray through ${ctx.scriptureReference} before bed.`,
+  (ctx) => `A last look at "${ctx.title}" before you rest.`,
+  (ctx) => `What do you want to remember about ${ctx.scriptureReference}?`,
+  (ctx) => `"${quoteOf(ctx)}" Did today bear that out?`,
+  (ctx) => `Rest with "${ctx.title}" in mind.`,
+  (ctx) => `Which part of ${ctx.scriptureReference} goes with you into tomorrow?`,
+  (ctx) => `What would you tell God about "${ctx.title}" tonight?`,
+  (ctx) => `Where was ${ctx.scriptureReference} true today?`,
 ];
 
-/** Templates whose every interpolated field is actually present on `day`. */
-function viableTemplates(
-  templates: ((ctx: DayContext) => string)[],
-  day: DayContext,
-): ((ctx: DayContext) => string)[] {
-  return templates.filter((template) => {
-    const rendered = template(day);
-    return !rendered.includes('undefined') && !rendered.includes('""');
-  });
+/** True when the rendered frame filled every field it interpolates. */
+function isViable(rendered: string): boolean {
+  return !rendered.includes('undefined') && !rendered.includes('""');
 }
 
 /**
  * A message that names the day when the day gives us something to name, and
  * otherwise draws from the slot's generic pool.
+ *
+ * The bag draws over the whole template list, whose length never changes, so
+ * its spacing holds (audit APP-29). A template the day cannot fill gives way
+ * to the generic pool instead of the next template: that pool keeps its own
+ * spacing and shares no line with the templates, so a day missing a field
+ * cannot land on the line the day before or after shows.
  */
 function contentAwareMessage(
   pool: string[],
@@ -489,10 +669,11 @@ function contentAwareMessage(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): string {
-  if (!day) return draw(pool, variation, `${slot}-body`);
-  const viable = viableTemplates(templates, day);
-  if (viable.length === 0) return draw(pool, variation, `${slot}-body`);
-  return draw(viable, variation, `${slot}-template`)(day);
+  if (day) {
+    const message = drawCopy(templates, variation, `${slot}-template`)(day);
+    if (isViable(message)) return message;
+  }
+  return drawCopy(pool, variation, `${slot}-body`);
 }
 
 /**
@@ -546,25 +727,65 @@ export function getEveningWindDownBody(
   return getContentAwareEveningMessage(day, variation);
 }
 
+/**
+ * One check-in banner: its title and body, and the tap cue the body carries
+ * (none when the sentence needs the room), for the next fire date.
+ */
+export interface CheckInBannerCopy {
+  title: string;
+  body: string;
+  cue?: string;
+}
+
+/**
+ * A slot's banner for its selected sentence: the title, and the body with its
+ * tap cue. `contextFreeBody` is the sentence the slot selects for a day with
+ * no reading context, which is how every day but today is scheduled.
+ * `previousCue` is the cue the slot's fire date before this one carried.
+ */
+function bannerCopy(
+  titles: readonly string[],
+  body: string,
+  contextFreeBody: (variation: CopyVariation) => string,
+  variation: CopyVariation,
+  slot: 'midday' | 'evening',
+  previousCue?: string,
+): CheckInBannerCopy {
+  return {
+    title: bannerTitle(titles, variation, `${slot}-title`, body, contextFreeBody),
+    ...bannerBody(body, variation, `${slot}-cue`, previousCue),
+  };
+}
+
 /** Title and truncated body for one midday notification occurrence. */
 export function getMiddayCheckInCopy(
   day: DayContext | null | undefined,
   carryLine: string | null | undefined,
   variation: CopyVariation,
-): { title: string; body: string } {
-  return {
-    title: draw(MIDDAY_TITLES, variation, 'midday-title'),
-    body: truncateNotificationBody(getMiddayCheckInBody(day, carryLine, variation)),
-  };
+  previousCue?: string,
+): CheckInBannerCopy {
+  return bannerCopy(
+    MIDDAY_TITLES,
+    getMiddayCheckInBody(day, carryLine, variation),
+    (other) => getMiddayCheckInBody(null, null, other),
+    variation,
+    'midday',
+    previousCue,
+  );
 }
 
 /** Title and truncated body for one evening notification occurrence. */
 export function getEveningWindDownCopy(
   day: DayContext | null | undefined,
   variation: CopyVariation,
-): { title: string; body: string } {
-  return {
-    title: draw(EVENING_TITLES, variation, 'evening-title'),
-    body: truncateNotificationBody(getEveningWindDownBody(day, variation)),
-  };
+  previousCue?: string,
+): CheckInBannerCopy {
+  return bannerCopy(
+    EVENING_TITLES,
+    getEveningWindDownBody(day, variation),
+    (other) => getEveningWindDownBody(null, other),
+    variation,
+    'evening',
+    previousCue,
+  );
 }

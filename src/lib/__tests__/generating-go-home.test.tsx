@@ -100,15 +100,22 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// Every line an Animated.Text renders, in order, so a test can see each
+// frame inside one act() as well as where it ends up.
+const mockAnimatedTextRenders: unknown[] = [];
 jest.mock('react-native-reanimated', () => {
   const { View, Text } = require('react-native');
   const chain: Record<string, unknown> = {};
   chain.duration = () => chain;
   chain.delay = () => chain;
   chain.easing = () => chain;
+  const AnimatedText = (props: { children?: React.ReactNode }) => {
+    mockAnimatedTextRenders.push(props.children);
+    return <Text {...props} />;
+  };
   return {
     __esModule: true,
-    default: { View, Text },
+    default: { View, Text: AnimatedText },
     FadeIn: chain,
     FadeInUp: chain,
     FadeOut: chain,
@@ -188,9 +195,12 @@ import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordR
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
 import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
+import { generatingStatusLines } from '@/constants/daily-copy';
+import { copyVariationFor } from '../copy-variation';
 
 const GO_HOME_LABEL = 'Go to Today';
 const EXPO_LOST_CONNECTION = 'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)';
+const RECONNECTING = 'Reconnecting\u2026';
 
 const user = {
   name: 'Jordan',
@@ -1278,17 +1288,92 @@ describe('honest wait line on /generating', () => {
     expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
   });
 
-  it('keeps one wait line while the waiting messages cycle', async () => {
+  it('keeps one wait line while the waiting messages step forward, then holds the last', async () => {
+    // The screen draws the same lines for today's date and this install.
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
     const tree = await renderWaiting(7);
-    expect(textNodes(tree, 'Reading your story')).toHaveLength(1);
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
 
     await act(async () => {
       jest.advanceTimersByTime(3800);
     });
     await flush();
 
-    expect(textNodes(tree, 'Choosing scripture')).toHaveLength(1);
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
     expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+
+    // No loop back to the first line: the last one holds.
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    expect(textNodes(tree, lines[0])).toHaveLength(0);
+  });
+
+  it('holds the line while a dropped connection shows Reconnecting…, then shows the line it paused on', async () => {
+    // The first submission loses its connection, and the screen submits
+    // again. That attempt is held for five 3.8 s cycles behind 'Reconnecting…'.
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    const held = deferred<{ jobId: string; devotionalId: string }>();
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockReturnValueOnce(held.promise);
+    mockPollJobStatus.mockReturnValue(new Promise(() => undefined));
+    const tree = await renderWaiting(7);
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * 5);
+    });
+    await flush();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(1);
+
+    await act(async () => {
+      held.resolve({ jobId: 'job-held', devotionalId: 'devo-held' });
+    });
+    await flush();
+    // None of the five cycles moved the line while nobody could see it.
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(0);
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+  });
+
+  it('starts the waiting lines over when Try again starts a new wait', async () => {
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    let failFirstWait!: (error: Error) => void;
+    mockSubmitGenerationJob.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      failFirstWait = reject;
+    }));
+    const tree = await renderWaiting(7);
+
+    // A first wait long enough to reach the held last line, then a failure.
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    await act(async () => {
+      failFirstWait(new Error('Request rejected'));
+    });
+    await flush();
+
+    mockAnimatedTextRenders.length = 0;
+    await press(tree, 'Try again');
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(0);
+    // The retry's first frame is already the first line: the held last line
+    // never renders again, not even for one frame before an effect.
+    const retryLines = mockAnimatedTextRenders.filter((line) => lines.includes(line as string));
+    expect(retryLines[0]).toBe(lines[0]);
+    expect(retryLines).not.toContain(lines[lines.length - 1]);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
   });
 
   it.each([

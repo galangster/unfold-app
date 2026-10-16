@@ -168,6 +168,7 @@ import {
   resetSyncSessionFenceForTesting,
 } from '../sync-session-fence';
 import { USER_PROFILE_CONFLICT_KEY } from '../user-profile-sync';
+import { COPY_MEMORY_KEY_PREFIX, rememberCarriedCues, takeCompletionOrdinal } from '../copy-variation';
 import { DELETED_SERIES_KEY, rememberDeletedSeries } from '../deleted-series';
 import {
   mmkvStorage,
@@ -327,6 +328,19 @@ describe('performFullLocalReset', () => {
     expect(mockStore.has('@unfold_rate_limits_companion')).toBe(false);
     expect(mockStore.has('@unfold_rate_limits_tts')).toBe(false);
     expect(mockStore.has('@unfold_rate_limits_some-future-endpoint')).toBe(false);
+    expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
+  });
+
+  it('forgets the copy memory: the completion order, each finished day’s order, and the check-in cues', async () => {
+    takeCompletionOrdinal(3, { devotionalId: 'series', dayNumber: 1 });
+    rememberCarriedCues('midday', {}, [{ dayIndex: 100, cue: 'Tap to check in.' }]);
+    const written = Array.from(mockStore.keys()).filter((key) => key.startsWith(COPY_MEMORY_KEY_PREFIX));
+    expect(written).toHaveLength(3);
+    mockStore.set('unfold-bible-meta-not-in-list', 'survivor');
+
+    await performFullLocalReset();
+
+    expect(Array.from(mockStore.keys()).filter((key) => key.startsWith(COPY_MEMORY_KEY_PREFIX))).toEqual([]);
     expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
   });
 

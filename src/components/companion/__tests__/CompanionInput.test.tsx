@@ -1,5 +1,7 @@
 import React from 'react';
 import { Text, TextInput } from 'react-native';
+import { COMPANION_INPUT_PLACEHOLDERS, companionInputPlaceholder } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -79,11 +81,24 @@ const COMPANION_MESSAGE_MAX_CHARS = 4000;
 // Drafts live in memory for the whole process, so each test starts clean.
 beforeEach(() => clearCompanionDrafts());
 
+// Every tree unmounts after its test, so the input's day clock (a timer to
+// the next midnight) never outlives it.
+const mounted: { unmount: () => void }[] = [];
+afterEach(() => {
+  act(() => mounted.splice(0).forEach((tree) => tree.unmount()));
+});
+
+function mount(element: React.ReactElement) {
+  const tree = renderer.create(element);
+  mounted.push(tree);
+  return tree;
+}
+
 function renderInput(onSend: (text: string) => boolean, conversationId = 'conversation-a') {
   let tree: any;
 
   act(() => {
-    tree = renderer.create(
+    tree = mount(
       <CompanionInput
         onSend={onSend}
         onStop={jest.fn()}
@@ -159,7 +174,7 @@ describe('CompanionInput send clearing', () => {
     let tree: any;
 
     act(() => {
-      tree = renderer.create(
+      tree = mount(
         <CompanionInput conversationId="conversation-a"
           onSend={onSend}
           onStop={onStop}
@@ -212,7 +227,7 @@ describe('CompanionInput send clearing', () => {
     let tree: any;
 
     act(() => {
-      tree = renderer.create(
+      tree = mount(
         <CompanionInput conversationId="conversation-a" onSend={onSend} onStop={jest.fn()} isStreaming={isStreaming} />
       );
     });
@@ -281,5 +296,14 @@ describe('CompanionInput drafts across conversations', () => {
     startRecording(tree);
     act(() => mockVoiceProps!.onChangeText('A transcript for A'));
     expect(shownText(tree)).toBe('A transcript for A');
+  });
+});
+
+describe('CompanionInput placeholder', () => {
+  it('shows the day’s placeholder from the companion pool, drawn by the bag', () => {
+    const tree = renderInput(jest.fn(() => true));
+    const { placeholder } = tree.root.findByType(TextInput).props;
+    expect(COMPANION_INPUT_PLACEHOLDERS).toContain(placeholder);
+    expect(placeholder).toBe(companionInputPlaceholder(copyVariationFor(new Date())));
   });
 });

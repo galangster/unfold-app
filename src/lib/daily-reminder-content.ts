@@ -1,12 +1,29 @@
+import {
+  FIRST_DAY_BODIES,
+  FIRST_DAY_TITLES,
+  IDLE_BODIES,
+  IDLE_TITLES,
+  NEXT_DAY_BODIES,
+  NEXT_DAY_TITLES,
+  OVERDUE_BODIES,
+  OVERDUE_TITLES,
+  PAST_END_BODIES,
+  PAUSED_NO_SERIES_BODIES,
+  PAUSED_SERIES_BODIES,
+  PAUSED_TITLES,
+} from '@/constants/reading-reminder-messages';
 import { getReadingDayLabel } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
+import { copyVariationAt, drawCopy, type CopyVariation } from './variation-bag';
 
 export interface DailyReminderContentInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   now?: Date;
+  /** The install's copy seed (copySeed()), so two readers draw different lines. */
+  seed: string;
 }
 
 export interface DailyReminderFingerprintInput {
@@ -157,25 +174,48 @@ function truncateBody(text: string, maxLength = 100): string {
   return truncateNotificationBody(text, maxLength);
 }
 
+/**
+ * Bible reading and a renewal invitation, with no claim that anything is
+ * being written. Only a reader whose series still has days ahead gets lines
+ * that name it and say it goes on.
+ */
+function pausedContent(variation: CopyVariation, seriesAhead: boolean): DailyReminderContent {
+  return {
+    title: drawCopy(PAUSED_TITLES, variation, 'reminder-paused-title'),
+    body: seriesAhead
+      ? drawCopy(PAUSED_SERIES_BODIES, variation, 'reminder-paused-series-body')
+      : drawCopy(PAUSED_NO_SERIES_BODIES, variation, 'reminder-paused-body'),
+  };
+}
+
+/** Day 1 is unread, on the device or not: no claim of a return or of earlier progress. */
+function firstDayContent(variation: CopyVariation, series: string): DailyReminderContent {
+  return {
+    title: drawCopy(FIRST_DAY_TITLES, variation, 'reminder-first-day-title'),
+    body: drawCopy(FIRST_DAY_BODIES, variation, 'reminder-first-day-body')(1, series),
+  };
+}
+
+/**
+ * Copy for the reminder that fires at `now`. Each pre-rolled occurrence
+ * passes its own fire date, so it draws that day's lines from the bag.
+ */
 export function getDailyReminderContent({
   currentDevotional,
   premiumPolicy,
   now = new Date(),
+  seed,
 }: DailyReminderContentInput): DailyReminderContent {
   const currentDay = getCurrentReminderDay(currentDevotional);
+  const variation = copyVariationAt(seed, now);
 
   // No active devotional
   if (!currentDevotional) {
-    if (premiumPolicy === 'denied') {
-      return {
-        title: 'Your Bible rhythm is still here',
-        body: 'Open scripture today, or renew Premium when you’re ready for another personal reading.',
-      };
-    }
+    if (premiumPolicy === 'denied') return pausedContent(variation, false);
 
     return {
-      title: 'Ready for something new?',
-      body: 'Start your next study when you\'re ready.',
+      title: drawCopy(IDLE_TITLES, variation, 'reminder-idle-title'),
+      body: drawCopy(IDLE_BODIES, variation, 'reminder-idle-body'),
     };
   }
 
@@ -186,9 +226,11 @@ export function getDailyReminderContent({
     const isOverdue = getReadingDayLabel(currentDevotional, currentDay, now) === 'Overdue';
 
     if (isOverdue) {
+      // An overdue Day 1 was never read, so there is nothing to return to.
+      if (currentDay.dayNumber <= 1) return firstDayContent(variation, currentDevotional.title);
       return {
-        title: 'Pick up where you left off',
-        body: `Day ${currentDay.dayNumber} of ${currentDevotional.title} is waiting for you.`,
+        title: drawCopy(OVERDUE_TITLES, variation, 'reminder-overdue-title'),
+        body: drawCopy(OVERDUE_BODIES, variation, 'reminder-overdue-body')(currentDay.dayNumber, currentDevotional.title),
       };
     }
 
@@ -209,15 +251,6 @@ export function getDailyReminderContent({
     return { title: currentDay.title, body: 'Your next reading is waiting.' };
   }
 
-  // Premium-denied users should never see generation or "next day is being
-  // prepared" copy. That implies work is happening when the series is paused.
-  if (premiumPolicy === 'denied') {
-    return {
-      title: 'Your Bible rhythm is still here',
-      body: 'Read scripture today, or renew Premium when you’re ready for the next personal reading.',
-    };
-  }
-
   // The next day is not on device yet. This is the NORMAL state at bedtime:
   // today's reading is done, tomorrow's is generated overnight and only
   // arrives when the app next opens. The reminder is baked into the OS at
@@ -225,10 +258,25 @@ export function getDailyReminderContent({
   // on a day that was already waiting. Name the day instead and let the app
   // fetch it on open.
   const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
-  const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
+  const totalDays = getServerOwnedSeriesTotalDays(currentDevotional);
+  // Past the last day there is no next day to promise, paused or not.
+  const pastEnd = totalDays > 0 && nextDayNumber > totalDays;
+
+  // Premium-denied users should never see generation or "next day is being
+  // prepared" copy. That implies work is happening when the series is paused.
+  // Past the end, the paused lines name no series, so none says it goes on.
+  if (premiumPolicy === 'denied') return pausedContent(variation, !pastEnd);
+
+  if (pastEnd) {
+    return { title: currentDevotional.title, body: drawCopy(PAST_END_BODIES, variation, 'reminder-past-end-body') };
+  }
+  if (nextDayNumber === 1) return firstDayContent(variation, currentDevotional.title);
+  const inSeries = nextDayNumber <= totalDays;
   return {
-    title: inSeries ? `Day ${nextDayNumber} of ${currentDevotional.title}` : currentDevotional.title,
-    body: 'Your next reading is waiting for you.',
+    title: inSeries
+      ? drawCopy(NEXT_DAY_TITLES, variation, 'reminder-next-title')(nextDayNumber, currentDevotional.title)
+      : currentDevotional.title,
+    body: drawCopy(NEXT_DAY_BODIES, variation, 'reminder-next-body'),
   };
 }
 

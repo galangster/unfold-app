@@ -75,6 +75,7 @@ import {
 } from '@/lib/devotional-canonical-days';
 import {
   blockedForwardMessage,
+  countReadsBefore,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
@@ -94,6 +95,8 @@ import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
 import { getCompletionNextStep } from '@/lib/completion-next-step';
+import { markActOutcome } from '@/lib/act-outcome';
+import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -330,7 +333,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
-  const setActOutcome = useUnfoldStore((s) => s.setActOutcome);
   const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -404,6 +406,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     savedPassage?: SavedScripturePassage;
   } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
+  // This completion's place in the reader's history: the readings finished
+  // before it, and past the last overlay this device opened. The overlay
+  // draws its copy by it, once, when the day completes.
+  const [celebrationOrdinal, setCelebrationOrdinal] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
@@ -1501,6 +1507,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         },
         completedTimeZone: getDeviceTimezone(),
       });
+      // Counted at the read time this day is about to get, and never below one
+      // past the last overlay this device opened, so a series deleted since
+      // cannot move the count back onto that overlay. The order is kept for
+      // this day too, before it is marked read, so its act note
+      // (DevotionalContent) draws at the same place.
+      setCelebrationOrdinal(takeCompletionOrdinal(
+        countReadsBefore(store.devotionals, clock.at),
+        { devotionalId: effectiveDevotionalId, dayNumber: viewingDay },
+      ));
       markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
@@ -1575,7 +1590,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     }
   }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets]);
 
-  const completionNextStep = getCompletionNextStep(currentDevotional, viewingDay, celebrationType);
+  // Only the open overlay reads the step, so a hidden render skips the draw.
+  const completionNextStep = showCelebration
+    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationOrdinal)
+    : null;
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
     ? 'Return to Study'
@@ -2905,7 +2923,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onActLocated={handleTargetHighlightLocated}
                 onActOutcome={(outcome) => {
                   if (!effectiveDevotionalId) return;
-                  setActOutcome(effectiveDevotionalId, viewingDay, outcome);
+                  markActOutcome(effectiveDevotionalId, viewingDay, outcome);
                   logEvent('act_outcome', { outcome, source: 'reading' });
                 }}
                 onScriptureTap={(ref, savedPassage) => {
@@ -3260,7 +3278,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <CompletionCelebration
         visible={showCelebration}
         onDismiss={() => dismissCelebration()}
-        nextStep={{
+        nextStep={completionNextStep ? {
           ...completionNextStep,
           primaryLabel: celebrationType === 'series'
             ? 'Choose next study'
@@ -3279,8 +3297,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           },
           secondaryLabel: completionNextStep.nextDay ? completionReturnLabel : 'Keep reflecting',
           onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
-        }}
+        } : undefined}
         type={celebrationType}
+        ordinal={celebrationOrdinal}
         seriesReflectionSummary={
           celebrationType === 'series'
             ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary

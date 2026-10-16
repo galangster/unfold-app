@@ -120,6 +120,7 @@ import {
   resetDailyReminderOwnershipForTesting,
 } from '../notifications';
 import * as reminderContent from '../daily-reminder-content';
+import { NEXT_DAY_BODIES, OVERDUE_TITLES } from '@/constants/reading-reminder-messages';
 import { captureSyncSession, resetSyncSessionFenceForTesting } from '../sync-session-fence';
 import {
   resetDailyReminderBackgroundTopupForTests,
@@ -251,10 +252,17 @@ describe('scheduleDailyReminderHorizon', () => {
       expect(request.trigger.type).toBe('date');
       // Day 6 is open on every one of these mornings; the copy names it
       // without claiming content the device does not have.
-      expect(request.content).toEqual(expect.objectContaining({
-        title: 'Day 6 of Psalm Walk',
-        body: 'Your next reading is waiting for you.',
-      }));
+      expect(request.content.title).toMatch(/\bday 6\b/i);
+      expect(request.content.title).toContain('Psalm Walk');
+      expect(NEXT_DAY_BODIES).toContain(request.content.body);
+    }
+    // Each morning draws for its own date, so no two in a row read the same.
+    const byDate = [...mockPending.values()].sort(
+      (a, b) => (a.trigger.date as Date).getTime() - (b.trigger.date as Date).getTime(),
+    );
+    for (let i = 1; i < byDate.length; i += 1) {
+      expect(byDate[i].content.title).not.toBe(byDate[i - 1].content.title);
+      expect(byDate[i].content.body).not.toBe(byDate[i - 1].content.body);
     }
   });
 
@@ -311,10 +319,9 @@ describe('scheduleDailyReminderHorizon', () => {
     expect(byDate[0].trigger.date).toEqual(at(7, 8));
     expect(byDate[0].content).toEqual(expect.objectContaining({ title: 'Title 6', body: 'Line 6' }));
     // A day left unread does not keep announcing itself as today's line.
-    expect(byDate[1].content).toEqual(expect.objectContaining({
-      title: 'Pick up where you left off',
-      body: 'Day 6 of Psalm Walk is waiting for you.',
-    }));
+    expect(OVERDUE_TITLES).toContain(byDate[1].content.title);
+    expect(byDate[1].content.body).toMatch(/\bday 6\b/i);
+    expect(byDate[1].content.body).toContain('Psalm Walk');
   });
 
   it('rebuilds the horizon in the new zone when the zone changes during a partial write', async () => {

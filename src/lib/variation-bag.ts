@@ -145,6 +145,42 @@ export function pickFromBag<T>(pool: readonly T[], seed: string, dayIndex: numbe
 }
 
 /**
+ * Which draw a piece of copy belongs to.
+ *
+ * `seed` is the stable per-install identity, so two readers are never on the
+ * same sequence. `dayIndex` is the local calendar day (see `dayIndexFor`), so
+ * the copy turns over at the reader's own midnight — and so a notification
+ * being SCHEDULED for a day five days out can be given that day's copy now,
+ * rather than today's copy baked into every future occurrence. Copy that
+ * belongs to a finished reading instead steps once per completion: there the
+ * index is the completion's place in the reader's history
+ * (completionVariation in constants/daily-copy.ts).
+ */
+export interface CopyVariation {
+  seed: string;
+  dayIndex: number;
+}
+
+/**
+ * One field of one day's copy: the bag salted with the field name, so a
+ * title and a body drawn for the same day move independently. The
+ * `?? pool[0]` floor only fires if a pool is emptied by a bad edit.
+ */
+export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field: string): T {
+  return pickFromBag(pool, `${variation.seed}|${field}`, variation.dayIndex) ?? pool[0];
+}
+
+/**
+ * The pool from the day's draw onward, wrapping round: the drawn entry
+ * first, then each entry after it. For a caller that steps past entries it
+ * cannot use, so the step starts where the bag put the day.
+ */
+export function drawRotation<T>(pool: readonly T[], variation: CopyVariation, field: string): T[] {
+  const start = pool.indexOf(drawCopy(pool, variation, field));
+  return [...pool.slice(start), ...pool.slice(0, start)];
+}
+
+/**
  * Days since the Unix epoch for the LOCAL calendar day of `date`.
  *
  * Built from the local Y/M/D rather than the timestamp so that "which day is
@@ -153,4 +189,9 @@ export function pickFromBag<T>(pool: readonly T[], seed: string, dayIndex: numbe
  */
 export function dayIndexFor(date: Date): number {
   return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
+/** The draw for the local calendar day of `date` on the sequence `seed` names. */
+export function copyVariationAt(seed: string, date: Date): CopyVariation {
+  return { seed, dayIndex: dayIndexFor(date) };
 }

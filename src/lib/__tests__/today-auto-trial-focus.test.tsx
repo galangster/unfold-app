@@ -83,8 +83,10 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockSearchParams,
 }));
 
+// Today's one query is the bridge. A test can hold it loading.
+let mockBridgeQuery: { data: unknown; isLoading?: boolean } = { data: null };
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: null }),
+  useQuery: () => mockBridgeQuery,
 }));
 
 jest.mock('@/lib/theme', () => ({
@@ -140,9 +142,10 @@ jest.mock('@/components/home/DevotionalCard', () => ({
     return null;
   },
 }));
-let mockTodayStackCards: { kind: string; onPress?: () => void }[] = [];
+type MockStackCard = { kind: string; title?: string; body?: string; accessibilityLabel?: string; onPress?: () => void };
+let mockTodayStackCards: MockStackCard[] = [];
 jest.mock('@/components/home/TodayCardStack', () => ({
-  TodayCardStack: (props: { cards: { kind: string; onPress?: () => void }[] }) => {
+  TodayCardStack: (props: { cards: MockStackCard[] }) => {
     mockTodayStackCards = props.cards;
     return null;
   },
@@ -287,6 +290,7 @@ import {
   type AutoTrialIntentV1,
 } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
+import { TODAY_CARD_COPY } from '@/constants/daily-copy';
 import {
   INFLIGHT_GENERATION_JOB_KEY,
   resolveTodayInflightAction,
@@ -1400,6 +1404,60 @@ describe('Today keeps the current series when opening history', () => {
       pathname: '/(tabs)/(today)/journal',
       params: { devotionalId: 'today-series', dayNumber: '1' },
     });
+  });
+});
+
+// While today's bridge loads, Today shows the loading card. Its title and
+// body are drawn from the bag, and the spoken label reads what it shows.
+describe('Today bridge loading card', () => {
+  const CURRENT = mockTodayStoreState.devotionals as Record<string, unknown>[];
+  let saved: Record<string, unknown>;
+  let tree: { unmount: () => void } | null = null;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    saved = { ...mockTodayStoreState };
+    mockTodayStackCards = [];
+    // Day 2 is on the device and unread, so Today asks for its bridge.
+    mockTodayStoreState.devotionals = [{
+      ...CURRENT[0],
+      days: [
+        ...(CURRENT[0].days as Record<string, unknown>[]),
+        { id: 'today-series-day-2', devotionalId: 'today-series', dayNumber: 2, title: 'Day 2', scriptureReference: 'Psalm 23:1', isRead: false },
+      ],
+    }];
+    // Day 1 is read, so Today also asks for that day's reflection.
+    mockTodayStoreState.getJournalEntry = jest.fn(() => undefined);
+    mockBridgeQuery = { data: undefined, isLoading: true };
+  });
+
+  afterEach(() => {
+    if (tree) act(() => tree!.unmount());
+    tree = null;
+    mockBridgeQuery = { data: null };
+    Object.keys(mockTodayStoreState).forEach((key) => delete mockTodayStoreState[key]);
+    Object.assign(mockTodayStoreState, saved);
+  });
+
+  it('keeps every loading line in progress', () => {
+    for (const title of TODAY_CARD_COPY.bridgeLoading) {
+      expect(title).toMatch(/…$/);
+      expect(title).not.toMatch(/\bready\b/i);
+    }
+    for (const body of TODAY_CARD_COPY.bridgeLoadingBody) expect(body).toMatch(/will appear here when (it is|they are) ready\.$/);
+  });
+
+  it('shows a drawn loading title and body, and reads both', async () => {
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+      await Promise.resolve();
+    });
+
+    const card = mockTodayStackCards.find((entry) => entry.kind === 'bridge-loading');
+    expect(card).toBeDefined();
+    expect(TODAY_CARD_COPY.bridgeLoading).toContain(card!.title);
+    expect(TODAY_CARD_COPY.bridgeLoadingBody).toContain(card!.body);
+    expect(card!.accessibilityLabel).toBe(`${card!.title} ${card!.body}`);
   });
 });
 

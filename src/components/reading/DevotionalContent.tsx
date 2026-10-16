@@ -22,6 +22,8 @@ import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, Bookmark, useUnfoldStore } from '@/lib/store';
 import { preventOrphan, stripOuterQuotes } from '@/lib/cn';
+import { actOutcomeNote, completionVariation } from '@/constants/daily-copy';
+import { actNoteOrdinal, copySeed } from '@/lib/copy-variation';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ScriptureVerseBlock } from './ScriptureVerseBlock';
@@ -176,6 +178,23 @@ export function DevotionalContent({
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
+
+  // The act note is drawn for this day's completion, at the order this device
+  // holds for the day (actNoteOrdinal): the order its overlay took, or, for a
+  // day finished on another device, before this build, or in onboarding, the
+  // one it kept when its act was first marked here (its place in the history,
+  // or the next order when another day holds that place). Two days one after
+  // the other get different notes, on one day, across midnight, or with a
+  // series deleted between them, unless their orders end up two or more apart
+  // and meet across a lap of the bag. Worked out only once the act is marked,
+  // and again only when the day or the history changes.
+  const { readAt } = day;
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  const actNote = useMemo(() => {
+    if (!day.actOutcome) return null;
+    const ordinal = actNoteOrdinal(devotionals, { devotionalId, dayNumber, readAt });
+    return actOutcomeNote(day.actOutcome, completionVariation(copySeed(), ordinal));
+  }, [day.actOutcome, devotionals, devotionalId, dayNumber, readAt]);
 
   // Fetch scripture with verse numbers from local DB, fallback to remote API.
   // The local result carries a per-verse `passage`, which makes the block
@@ -646,7 +665,7 @@ export function DevotionalContent({
           {day.isRead && onActOutcome && (
             day.actOutcome ? (
               <Text style={[dcStyles.actOutcomeNote, { color: colors.textMuted }]}>
-                {day.actOutcome === 'done' ? 'Done. Well held.' : 'Set aside for now.'}
+                {actNote}
               </Text>
             ) : (
               <View style={dcStyles.actOutcomeRow}>
