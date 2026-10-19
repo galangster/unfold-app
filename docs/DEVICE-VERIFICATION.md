@@ -2,6 +2,11 @@
 
 How to build, run, and verify this app on the iOS Simulator using **FlowDeck**.
 
+Owner clarification, 2026-10-19: agent “device QA” means virtual-device QA.
+Use FlowDeck with iPhone and iPad simulators. Never use iPhone Mirroring or
+Nick's physical phone. Exercise supported rotation, in-app text sizes and
+system accessibility scaling. Record hardware-only features as not covered.
+
 The simulator is the only real visual verification for Unfold. The web target
 cannot render the app — Rive, Skia, `react-native-webview`, and the native Swift
 editor all lack web implementations, and Home white-screens on the Rive import.
@@ -502,3 +507,45 @@ flowdeck simulator content-size set large -S "<QA simulator>" --json
 Retain the source hash, viewport, content size, theme, build identity, fixture scope, and proof paths.
 Run the existing typecheck, lint, and Jest gates after the final changes.
 A compatible Debug binary with Metro proves local native layout. It does not prove a release build or physical installation.
+
+## Bible reader native text regression
+
+A complete accessibility label does not prove that scripture is visible.
+Fabric can report a 144-point paragraph as 143.999878 points. TextKit then
+merges the final line into the preceding line's glyph range and clips it.
+The Bible paragraph corrects its measured host height. It resets that
+measurement when width, typography, chapter, translation or inline notes change.
+
+Use the full app with an isolated fictional profile and the established local
+stub backend. Start Metro offline. Keep the stub and Metro in owned foreground
+processes, retain their logs outside the checkout, and stop them after QA.
+Use a dedicated named simulator. Do not run a production release smoke for this
+regression. The existing public offline Bible database is a suitable fixture.
+
+For machine assertions, temporarily instrument the actual reader before launch:
+
+```sh
+node scripts/qa/bible-reader-layout.mjs instrument 'src/app/(tabs)/(bible)/reader.tsx' /tmp/bible-reader-probe.json
+node scripts/qa/bible-reader-layout.mjs check /tmp/metro-case.log native 21
+node scripts/qa/bible-reader-layout.mjs restore 'src/app/(tabs)/(bible)/reader.tsx' /tmp/bible-reader-probe.json
+node --test scripts/__tests__/bible-reader-layout.test.mjs
+```
+
+The snapshot must be new and outside the checkout. Restoration refuses to
+overwrite later edits. Keep instrumentation out of the production diff. It
+records only numeric geometry and verse numbers. Each case needs a fresh log
+or a unique fixture tag (`globalThis.__bibleProbeTag`), set before navigation.
+Wait for the chapter to load and layout to settle before checking. Require all
+21 verses for Revelation 19 and all 176 verses for Psalm 119. An incomplete
+probe is a failure. The observer checks line count against the native height
+and checks every line's bounds. Its tests include the captured native failure.
+
+Run the full-reader matrix on small and large iPhone simulators and an iPad
+simulator. Include default and maximum in-app sizes, maximum system text size,
+live font changes, selection/highlight overlays and note markers. Verify iPad
+portrait and landscape. Current iPhone configuration is portrait-locked; do
+not describe an attempted rotation as landscape coverage. Capture and inspect
+pixels at Revelation 19:10–12, including the complete endings and next heading.
+Exercise the right-side settings gear, its sheet and dismissal, the search
+back action and chapter notes. A standalone text fixture is diagnostic evidence
+only; it cannot replace this full-screen pass.

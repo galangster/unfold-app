@@ -1,1 +1,1 @@
-Refer to CLAUDE.md and follow instructions precisely.
+Read [CLAUDE.md](CLAUDE.md) and [REVIEW-SOP.md](REVIEW-SOP.md) before working in this repository.
