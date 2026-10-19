@@ -13,8 +13,8 @@ const readerSource = readFileSync(
 // native text, so these checks only guard the keys that make a new host
 // re-measure.
 describe('Bible reader live Dynamic Type contract', () => {
-  it('keys each verse text host and its section heading on the system fontScale', () => {
-    expect(readerSource).toMatch(/<Text\s+key=\{fontScale\}\s+onTextLayout=\{handleTextLayout\}/);
+  it('invalidates verse measurements with the reader layout and keys headings on fontScale', () => {
+    expect(readerSource).toContain('layoutKey={`${contentKey}:${layoutKey}:${hasNote}`}');
     expect(readerSource).toMatch(/<Text key=\{fontScale\} style=\{\[\s*styles\.sectionHeading/);
   });
 
