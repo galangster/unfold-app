@@ -7,6 +7,8 @@ from `~/.claude/CLAUDE.md` and governs. This file adds the repository tier.
 
 Read the applicable repository instructions, product and design records, and verification rules. Trace affected call sites and tests in the exact working tree before changing code. [REVIEW-SOP.md](REVIEW-SOP.md) owns the independent native-review workflow and supersedes older external-review, knowledge-base and score requirements in inherited instructions and dated handoffs. External review services are not part of Unfold's workflow.
 
+Greptile is retired on every repository (Nick, 2026-10-22). Do not run, trigger, score or read it. Read local source instead.
+
 Preserve these codebase-wide invariants when relevant:
 
 - A devotional is not ready until generation state reconciles or delivers.
