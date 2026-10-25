@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
 import {
   buildActReminderFingerprint,
   buildActReminderPlan,
@@ -68,7 +69,10 @@ export function useActReminderSync() {
   const premiumPolicy = usePremiumAccessPolicy();
   const selectorRef = useRef(createFingerprintSelector());
   const storeFingerprint = useUnfoldStore(selectorRef.current);
-  const fingerprint = `${storeFingerprint}|${premiumPolicy}`;
+  // A run without permission plans nothing and still counts as applied, so a
+  // later grant must change the fingerprint to plan again.
+  const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
+  const fingerprint = `${storeFingerprint}|${premiumPolicy}|${notificationPermissionEpoch}`;
 
   const lastAppliedRef = useRef('');
   const lastAppliedDayRef = useRef('');

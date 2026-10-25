@@ -2,6 +2,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { buildActReminderFingerprint } from '@/lib/act-reminder';
+import { useUIState } from '@/lib/ui-state';
 import { readActReminderPlanInput, useActReminderSync } from '../useActReminderSync';
 
 const ACT =
@@ -185,5 +186,21 @@ describe('useActReminderSync wind-down collision', () => {
 
     expect(mockCancelActReminder.mock.calls.length).toBeGreaterThan(cancelledAfterMount);
     expect(mockScheduleActReminder.mock.calls.length).toBe(scheduledAfterMount);
+  });
+
+  it('plans again when notification permission is granted later the same day', async () => {
+    // Today's midday check-in steps aside for a midday act, so an act
+    // reminder skipped for lack of permission must come back once it is granted.
+    mockAreNotificationsEnabled.mockResolvedValue(false);
+    await mountHook();
+    expect(mockScheduleActReminder).not.toHaveBeenCalled();
+
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    act(() => {
+      useUIState.getState().bumpNotificationPermissionEpoch();
+    });
+    await flushFingerprint();
+
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(1);
   });
 });
