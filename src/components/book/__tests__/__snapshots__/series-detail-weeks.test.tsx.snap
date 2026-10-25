@@ -1,0 +1,324 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`R6: a legacy arc renders as today keeps the legacy chapter list 1`] = `
+<View
+  accessibilityLabel="In this season"
+  testID="book-chapter-journey"
+>
+  <View
+    style={
+      {
+        "alignItems": "baseline",
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 10,
+        "justifyContent": "space-between",
+        "marginBottom": 8,
+      }
+    }
+  >
+    <Text
+      style={
+        [
+          {
+            "flexShrink": 1,
+            "fontFamily": "PPEditorialNew-Light",
+            "fontSize": 22,
+            "lineHeight": 26,
+          },
+          {
+            "color": "#F6EFE3",
+          },
+        ]
+      }
+    >
+      In this season
+    </Text>
+    <Text
+      style={
+        [
+          {
+            "flexShrink": 0,
+            "fontFamily": "Inter_400Regular",
+            "fontSize": 11,
+            "lineHeight": 16,
+          },
+          {
+            "color": "#B8AA96",
+          },
+        ]
+      }
+    >
+      2 chapters
+    </Text>
+  </View>
+  <View
+    style={
+      [
+        {},
+        null,
+      ]
+    }
+  >
+    <View
+      accessibilityLabel="Synthetic Movement One, 9 of 14 days complete"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": false,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onClick={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 12,
+          "minHeight": 56,
+          "opacity": 1,
+          "paddingVertical": 16,
+        }
+      }
+      testID="book-chapter-1"
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "minWidth": 22,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 12,
+                "fontVariant": [
+                  "tabular-nums",
+                ],
+              },
+              {
+                "color": "#C8A55C",
+              },
+            ]
+          }
+        >
+          01
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flex": 1,
+            "gap": 4,
+            "minWidth": 0,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "lineHeight": 20,
+              },
+              {
+                "color": "#F6EFE3",
+              },
+            ]
+          }
+        >
+          Synthetic Movement One
+        </Text>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 11,
+                "letterSpacing": 0,
+                "lineHeight": 16,
+              },
+              {
+                "color": "#C8A55C",
+              },
+            ]
+          }
+        >
+          9 of 14 days complete
+        </Text>
+      </View>
+      <View
+        accessibilityLabel="Current chapter"
+        style={
+          [
+            {
+              "borderRadius": 3,
+              "height": 6,
+              "marginRight": 4,
+              "width": 6,
+            },
+            {
+              "backgroundColor": "#C8A55C",
+            },
+          ]
+        }
+      />
+    </View>
+  </View>
+  <View
+    style={
+      [
+        {},
+        {
+          "borderTopColor": "#3A3328",
+          "borderTopWidth": 1,
+        },
+      ]
+    }
+  >
+    <View
+      accessibilityLabel="Synthetic Movement Two, 14 days · Still to come"
+      accessibilityRole="button"
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": false,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onClick={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 12,
+          "minHeight": 56,
+          "opacity": 1,
+          "paddingVertical": 16,
+        }
+      }
+      testID="book-chapter-15"
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "minWidth": 22,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 12,
+                "fontVariant": [
+                  "tabular-nums",
+                ],
+              },
+              {
+                "color": "#B8AA96",
+              },
+            ]
+          }
+        >
+          02
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "flex": 1,
+            "gap": 4,
+            "minWidth": 0,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "lineHeight": 20,
+              },
+              {
+                "color": "#F6EFE3",
+              },
+            ]
+          }
+        >
+          Synthetic Movement Two
+        </Text>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 11,
+                "letterSpacing": 0,
+                "lineHeight": 16,
+              },
+              {
+                "color": "#B8AA96",
+              },
+            ]
+          }
+        >
+          14 days · Still to come
+        </Text>
+      </View>
+      <CaretRightIcon
+        color="#B8AA96"
+        size={14}
+        weight="regular"
+      />
+    </View>
+  </View>
+</View>
+`;

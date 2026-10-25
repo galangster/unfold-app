@@ -7,6 +7,7 @@ import {
 } from './devotional-day-access';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
+import { readSeriesWeeks, weekRowDetail, type SeriesWeek } from './series-weeks';
 
 export type BookChapterStatus = 'done' | 'current' | 'available' | 'upcoming';
 
@@ -18,6 +19,8 @@ export type BookChapter = {
   dayCount: number;
   readCount: number;
   status: BookChapterStatus;
+  /** Set only for a chaptered series: the act is a week (Ruled 2). */
+  week?: SeriesWeek;
 };
 
 export type BookTodayPage = {
@@ -92,8 +95,10 @@ export function buildBookChapters(
 ): BookChapter[] {
   if (!devotional) return [];
 
-  const acts = listSeriesActs(devotional.seriesArc, getServerOwnedSeriesTotalDays(devotional));
+  const totalDays = getServerOwnedSeriesTotalDays(devotional);
+  const acts = listSeriesActs(devotional.seriesArc, totalDays);
   if (acts.length === 0) return [];
+  const weeks = readSeriesWeeks(devotional.seriesArc, { totalDays, nowMs: now.getTime() });
 
   const days = listDaysInOrder(devotional.days);
   const seriesComplete = isSeriesComplete(devotional);
@@ -120,6 +125,7 @@ export function buildBookChapters(
       status = 'available';
     }
 
+    const week = weeks?.weeks.find((item) => item.fromDay === fromDay);
     return {
       name: act.name,
       function: act.function,
@@ -128,6 +134,7 @@ export function buildBookChapters(
       dayCount,
       readCount,
       status,
+      ...(week ? { week } : {}),
     };
   });
 }
@@ -216,7 +223,8 @@ export function buildBookOfSeasonsModel(
     page: {
       dayNumber,
       totalDays,
-      chapterName: currentChapter?.name,
+      // A week shows its name only once it is planned (Ruled 6).
+      chapterName: currentChapter?.week ? currentChapter.week.name ?? undefined : currentChapter?.name,
       chapterDayNumber: currentChapter
         ? dayNumber - currentChapter.fromDay + 1
         : undefined,
@@ -244,6 +252,7 @@ export function buildBookTodayPage(
 }
 
 export function chapterStatusLabel(chapter: BookChapter): string {
+  if (chapter.week) return weekRowDetail(chapter.week, chapter.status, chapter.readCount);
   if (chapter.status === 'done') {
     return chapter.dayCount === 1
       ? '1 day, complete'

@@ -8,6 +8,7 @@ import {
   chapterStatusLabel,
   type BookChapter,
 } from '@/lib/book-of-seasons';
+import { weekRowSpokenLabel, weekRowTitle, weeksHeadingLabel, type SeriesWeek } from '@/lib/series-weeks';
 
 function chapterNumber(index: number): string {
   return String(index + 1).padStart(2, '0');
@@ -18,16 +19,23 @@ export function ChapterJourney({
   colors,
   canOpenChapter,
   onOpenChapter,
+  seriesPaused = false,
 }: {
   chapters: readonly BookChapter[];
   colors: ColorTheme;
   canOpenChapter: (chapter: BookChapter) => boolean;
   onOpenChapter: (chapter: BookChapter) => void;
+  /** A paused series promises no planning (R4). */
+  seriesPaused?: boolean;
 }) {
   if (chapters.length === 0) return null;
 
-  const countLabel =
-    chapters.length === 1 ? '1 chapter' : `${chapters.length} chapters`;
+  const weeks = chapters.every((chapter) => chapter.week)
+    ? chapters.map((chapter) => chapter.week as SeriesWeek)
+    : null;
+  const countLabel = weeks
+    ? weeksHeadingLabel({ weeks, totalDays: weeks[weeks.length - 1].toDay })
+    : chapters.length === 1 ? '1 chapter' : `${chapters.length} chapters`;
 
   return (
     <View testID="book-chapter-journey" accessibilityLabel="In this season">
@@ -42,6 +50,11 @@ export function ChapterJourney({
       {chapters.map((chapter, index) => {
         const openable = canOpenChapter(chapter);
         const current = chapter.status === 'current';
+        const week = weeks ? chapter.week : undefined;
+        const title = week ? weekRowTitle(week, { seriesPaused }) : chapter.name;
+        const label = week
+          ? weekRowSpokenLabel(week, chapter.status, chapter.readCount, { seriesPaused })
+          : `${chapter.name}, ${chapterStatusLabel(chapter)}`;
         return (
           <View
             key={`${chapter.fromDay}-${chapter.name}`}
@@ -54,7 +67,7 @@ export function ChapterJourney({
               testID={`book-chapter-${chapter.fromDay}`}
               accessibilityRole="button"
               accessibilityState={{ disabled: !openable }}
-              accessibilityLabel={`${chapter.name}, ${chapterStatusLabel(chapter)}`}
+              accessibilityLabel={label}
               disabled={!openable}
               onPress={() => {
                 if (openable) onOpenChapter(chapter);
@@ -62,7 +75,7 @@ export function ChapterJourney({
               activeOpacity={0.7}
               style={styles.row}
             >
-              <View style={styles.numberSlot}>
+              {week ? null : <View style={styles.numberSlot}>
                 {chapter.status === 'done' ? (
                   <CheckIcon size={18} color={colors.accent} weight="regular" />
                 ) : (
@@ -75,12 +88,12 @@ export function ChapterJourney({
                     {chapterNumber(index)}
                   </Text>
                 )}
-              </View>
+              </View>}
               <View style={styles.info}>
                 <Text
                   style={[styles.title, { color: colors.text }]}
                 >
-                  {chapter.name}
+                  {title}
                 </Text>
                 <Text
                   style={[
@@ -94,7 +107,7 @@ export function ChapterJourney({
               {current ? (
                 <View
                   style={[styles.marker, { backgroundColor: colors.accent }]}
-                  accessibilityLabel="Current chapter"
+                  accessibilityLabel={week ? 'Current week' : 'Current chapter'}
                 />
               ) : openable ? (
                 <CaretRightIcon

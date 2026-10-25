@@ -96,6 +96,7 @@ export function BookOfSeasonsView({
   const contents = chapters.length > 0 && !showAllReadings ? <ChapterJourney
     chapters={chapters}
     colors={colors}
+    seriesPaused={seriesPaused}
     canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
     onOpenChapter={(chapter) => {
       const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);
