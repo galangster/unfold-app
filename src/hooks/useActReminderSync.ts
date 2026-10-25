@@ -12,6 +12,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
+import { getDeviceTimezone } from '@/lib/device-timezone';
 import {
   buildActReminderFingerprint,
   buildActReminderPlan,
@@ -84,7 +85,9 @@ export function useActReminderSync() {
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
     if (!hasHydrated) return;
-    const target = latestFingerprintRef.current;
+    // Read live, as withDeviceTimezone does for the daily reminder: a crossing
+    // moves today's slots and re-renders nothing before this foreground run.
+    const target = `${latestFingerprintRef.current}|tz:${getDeviceTimezone() ?? ''}`;
     const todayStr = new Date().toDateString();
     if (reason !== 'hydration' && target === lastAppliedRef.current && todayStr === lastAppliedDayRef.current) {
       return;
@@ -104,8 +107,10 @@ export function useActReminderSync() {
       const plan = input.enabled
         ? buildActReminderPlan({ ...input, notificationsEnabled })
         : null;
-      if (plan && notificationsEnabled) {
-        await scheduleActReminder(plan);
+      if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
+        // Leave the run unapplied so the next foreground writes it again:
+        // today's midday check-in may already have stepped aside for it.
+        return;
       }
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;

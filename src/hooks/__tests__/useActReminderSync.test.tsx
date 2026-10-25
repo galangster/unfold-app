@@ -33,7 +33,7 @@ const devotional = {
   generationMode: 'progressive' as const,
 };
 
-const mockScheduleActReminder = jest.fn(async (..._args: unknown[]) => 'act-1');
+const mockScheduleActReminder = jest.fn(async (..._args: unknown[]): Promise<string | null> => 'act-1');
 const mockCancelActReminder = jest.fn(async () => undefined);
 const mockAreNotificationsEnabled = jest.fn(async () => true);
 let mockPremiumPolicy: 'granted' | 'denied' | 'unknown' = 'granted';
@@ -202,5 +202,50 @@ describe('useActReminderSync wind-down collision', () => {
     await flushFingerprint();
 
     expect(mockScheduleActReminder).toHaveBeenCalledTimes(1);
+  });
+
+  function captureForegroundHandler(): () => Promise<void> {
+    let handler: ((state: string) => void) | null = null;
+    (AppState.addEventListener as jest.Mock).mockImplementation((_event: string, next: (state: string) => void) => {
+      handler = next;
+      return { remove: jest.fn() };
+    });
+    return async () => {
+      await act(async () => {
+        handler?.('active');
+      });
+      await flushScheduled();
+    };
+  }
+
+  it('tries again on the next foreground when the OS write failed', async () => {
+    const foreground = captureForegroundHandler();
+    mockScheduleActReminder.mockResolvedValue(null);
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+    expect(attempts).toBeGreaterThan(0);
+
+    mockScheduleActReminder.mockResolvedValue('act-1');
+    await foreground();
+
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts + 1);
+  });
+
+  it('plans again on the next foreground after the device timezone changes', async () => {
+    const foreground = captureForegroundHandler();
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+
+    await foreground();
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts);
+
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolved,
+      timeZone: resolved.timeZone === 'Pacific/Honolulu' ? 'America/Los_Angeles' : 'Pacific/Honolulu',
+    });
+    await foreground();
+
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts + 1);
   });
 });
