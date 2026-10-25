@@ -15,6 +15,8 @@ export interface RemoteConfigV1 {
     platforms: ('ios' | 'android')[];
     maxTrialDays: AllowedTrialDays;
   };
+  /** Weekly chapters creation switch. A missing or malformed field reads as off. */
+  chapteredSeries: { enabled: boolean };
   source: 'db' | 'fallback';
 }
 
@@ -56,6 +58,9 @@ export function parseRemoteConfig(json: unknown): RemoteConfigV1 | null {
   if (typeof series.maxTrialDays !== 'number' || !ALLOWED_DAYS.has(series.maxTrialDays as AllowedTrialDays)) {
     return null;
   }
+  const chaptered = row.chapteredSeries && typeof row.chapteredSeries === 'object'
+    ? (row.chapteredSeries as Record<string, unknown>)
+    : null;
   return {
     version: 1,
     autoTrialSeries: {
@@ -63,6 +68,7 @@ export function parseRemoteConfig(json: unknown): RemoteConfigV1 | null {
       platforms: [...series.platforms],
       maxTrialDays: series.maxTrialDays as AllowedTrialDays,
     },
+    chapteredSeries: { enabled: chaptered?.enabled === true },
     source: row.source,
   };
 }
@@ -195,4 +201,17 @@ export function readAutoTrialSwitchSnapshot(
     return { enabled: false, maxTrialDays, fetchedAtMs, reason: 'platform_off' };
   }
   return { enabled: true, maxTrialDays, fetchedAtMs, reason: 'on' };
+}
+
+/**
+ * Whether the reader may start a 4-week chaptered series. Off before a fetch,
+ * after a failed or fallback fetch, and once the config is older than its max age.
+ */
+export function readChapteredSeriesEnabled(
+  nowMs: number,
+  current: RemoteConfigState = state,
+): boolean {
+  if (current.status !== 'ok') return false;
+  if (nowMs - current.fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS) return false;
+  return current.config.chapteredSeries.enabled;
 }

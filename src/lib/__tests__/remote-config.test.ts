@@ -6,6 +6,7 @@ jest.mock('../api-config', () => ({
 
 import {
   parseRemoteConfig,
+  readChapteredSeriesEnabled,
   readAutoTrialSwitchSnapshot,
   refreshRemoteConfig,
   resetRemoteConfigForTesting,
@@ -40,6 +41,7 @@ describe('E1 remote-config outcomes', () => {
       config: {
         version: 1,
         autoTrialSeries: { enabled: true, platforms: ['ios'], maxTrialDays: 7 },
+        chapteredSeries: { enabled: false },
         source: 'db',
       },
       fetchedAtMs: 1_000,
@@ -235,5 +237,40 @@ describe('E3 throttle', () => {
       enabled: true,
       reason: 'on',
     });
+  });
+});
+
+describe('chapteredSeries switch (weekly chapters, unreadable means off)', () => {
+  beforeEach(() => {
+    resetRemoteConfigForTesting();
+  });
+
+  it('reads chapteredSeries.enabled from a db body', async () => {
+    const fetchImpl = jest.fn(async () => jsonResponse({ ...VALID_BODY, chapteredSeries: { enabled: true } }));
+    const state = await refreshRemoteConfig({ fetchImpl, nowMs: 1_000 });
+    expect(state.status === 'ok' && state.config.chapteredSeries).toEqual({ enabled: true });
+    expect(readChapteredSeriesEnabled(1_000)).toBe(true);
+  });
+
+  it('keeps the auto-trial switch and reads chapters off when the field is missing or malformed', () => {
+    expect(parseRemoteConfig(VALID_BODY)?.chapteredSeries).toEqual({ enabled: false });
+    expect(parseRemoteConfig({ ...VALID_BODY, chapteredSeries: { enabled: 'true' } })?.chapteredSeries).toEqual({ enabled: false });
+    expect(parseRemoteConfig({ ...VALID_BODY, chapteredSeries: true })?.chapteredSeries).toEqual({ enabled: false });
+    expect(parseRemoteConfig({ ...VALID_BODY, chapteredSeries: true })?.autoTrialSeries.enabled).toBe(true);
+  });
+
+  it('reads off before a fetch, after a failed fetch, for a fallback body, and when stale', async () => {
+    expect(readChapteredSeriesEnabled(0)).toBe(false);
+    await refreshRemoteConfig({ fetchImpl: jest.fn(async () => { throw new Error('offline'); }), nowMs: 0 });
+    expect(readChapteredSeriesEnabled(0)).toBe(false);
+
+    resetRemoteConfigForTesting();
+    await refreshRemoteConfig({ fetchImpl: jest.fn(async () => jsonResponse({ ...VALID_BODY, source: 'fallback', chapteredSeries: { enabled: true } })), nowMs: 0 });
+    expect(readChapteredSeriesEnabled(0)).toBe(false);
+
+    resetRemoteConfigForTesting();
+    await refreshRemoteConfig({ fetchImpl: jest.fn(async () => jsonResponse({ ...VALID_BODY, chapteredSeries: { enabled: true } })), nowMs: 0 });
+    expect(readChapteredSeriesEnabled(60 * 60_000)).toBe(true);
+    expect(readChapteredSeriesEnabled(60 * 60_000 + 1)).toBe(false);
   });
 });
