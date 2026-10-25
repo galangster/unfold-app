@@ -14,6 +14,7 @@
 
 import { useUnfoldStore } from '@/lib/store';
 import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
+import { getMiddayActClaim } from '@/lib/act-reminder';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import {
   scheduleMiddayCheckIn,
@@ -58,6 +59,7 @@ export function readCheckInFingerprintInputs(): CheckInFingerprintInputs {
     hasCompletedOnboarding: !!state.user?.hasCompletedOnboarding,
     todayCarryLine: getTodayCarryLine(state.devotionals, state.currentDevotionalId) ?? '',
     todayCompanionNudge: getTodayCompanionNudge(state.devotionals, state.currentDevotionalId) ?? '',
+    todayMiddayActClaim: getMiddayActClaim(state)?.toISOString() ?? '',
     notificationPermissionEpoch: ui.notificationPermissionEpoch,
     trialNoticeEpoch: ui.trialNoticeEpoch,
     deviceTimezone: getDeviceTimezone() ?? '',

@@ -8,9 +8,9 @@
  * not, and it never repeats — one act, one nudge, then silence.
  */
 import type { PremiumAccessPolicy } from './premium-access-policy';
-import type { Devotional, DevotionalDay } from './store';
+import type { Devotional, DevotionalDay, UserProfile } from './store';
 import { truncateNotificationBody } from './daily-reminder-content';
-import { localDayKey, localDayKeyFromIso } from './home-devotional-state';
+import { getCurrentDevotional, getDaysReadToday, localDayKey, localDayKeyFromIso } from './home-devotional-state';
 import { parseReminderClock } from './push-notification-helpers';
 import { QUIET_HOURS } from './quiet-hours';
 
@@ -166,6 +166,62 @@ export function getActReminderFireAt(
   return late <= cutoff ? late : null;
 }
 
+/** The store fields that pick the act reminder's day and switch it on. */
+export interface ActReminderStoreSlice {
+  devotionals: readonly Devotional[];
+  currentDevotionalId: string | null;
+  user: Pick<UserProfile, 'dailyReminderEnabled' | 'reminderTime'> | null;
+  middayCheckInTime?: string | null;
+}
+
+// Rides on the daily-reminder preference: a reader who switched reminders
+// off asked for silence, not a new kind of nudge.
+function actRemindersEnabled(user: ActReminderStoreSlice['user']): boolean {
+  return user?.dailyReminderEnabled ?? Boolean(user?.reminderTime);
+}
+
+/** The day the act reminder belongs to, and whether the reader wants it. */
+export function readActReminderDay(state: ActReminderStoreSlice, now = new Date()): {
+  devotional: Devotional | undefined;
+  day: DevotionalDay | null;
+  enabled: boolean;
+} {
+  const devotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
+  return {
+    devotional,
+    day: getDaysReadToday(devotional, now)[0] ?? null,
+    enabled: actRemindersEnabled(state.user),
+  };
+}
+
+/** The act to remind about: read today, not yet done. Null otherwise. */
+function actToRemind(day: DevotionalDay, now: Date): string | null {
+  const act = day.act?.trim();
+  if (!act || !day.isRead || day.actOutcome) return null;
+  return localDayKeyFromIso(day.readAt) === localDayKey(now) ? act : null;
+}
+
+/**
+ * The midday instant today's act reminder takes from the midday check-in, or
+ * null. One banner per moment: the act is the day's one thing and its tap
+ * opens what it names, so today's check-in steps aside, as it does for the
+ * trial notice. (At evening the wind-down carries the act instead.)
+ *
+ * The lead counts from `readAt`, the moment the reminder was first planned,
+ * not from `now`: a midday act read too late rolls to the evening and leaves
+ * the check-in alone, and the claim stays fixed for the day, so a later
+ * replan cannot bring the pair back.
+ */
+export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date()): Date | null {
+  if (!actRemindersEnabled(state.user)) return null;
+  const { day } = readActReminderDay(state, now);
+  const act = day ? actToRemind(day, now) : null;
+  if (!day || !act || inferActSlot(act, day.actSlot) !== 'midday') return null;
+  const midday = atClock(now, parseReminderClock(state.middayCheckInTime, DEFAULT_MIDDAY));
+  const readAt = Date.parse(day.readAt ?? '');
+  return midday.getTime() >= readAt + MIN_LEAD_MS ? midday : null;
+}
+
 /**
  * The reminder for the day the reader finished today, or null when there is
  * nothing to remind about: no act, day not read today, outcome already
@@ -184,9 +240,8 @@ export function buildActReminderPlan({
   morningTime,
 }: ActReminderPlanInput): ActReminderPlan | null {
   if (!devotional || !day) return null;
-  const act = day.act?.trim();
-  if (!act || !day.isRead || day.actOutcome) return null;
-  if (localDayKeyFromIso(day.readAt) !== localDayKey(now)) return null;
+  const act = actToRemind(day, now);
+  if (!act) return null;
 
   const slot = inferActSlot(act, day.actSlot);
   const fireAt = getActReminderFireAt(slot, now, {

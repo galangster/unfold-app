@@ -51,6 +51,7 @@ jest.mock('../daily-reminder-content', () => ({
 }));
 
 jest.mock('../quiet-hours', () => ({
+  QUIET_HOURS: { startHour: 22, endHour: 7 },
   deferPastQuietHours: (date: Date) => date,
 }));
 

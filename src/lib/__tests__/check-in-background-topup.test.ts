@@ -66,6 +66,8 @@ jest.mock('@/lib/premium-state', () => ({
 jest.mock('@/lib/home-devotional-state', () => ({
   getTodayCarryLine: () => '',
   getTodayCompanionNudge: () => null,
+  getCurrentDevotional: () => undefined,
+  getDaysReadToday: () => [],
 }));
 jest.mock('@/lib/device-timezone', () => ({
   getDeviceTimezone: () => 'Pacific/Honolulu',

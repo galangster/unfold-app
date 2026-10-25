@@ -11,8 +11,12 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
-import { getCurrentDevotional, getDaysReadToday } from '@/lib/home-devotional-state';
-import { buildActReminderFingerprint, buildActReminderPlan, type ActReminderPlanInput } from '@/lib/act-reminder';
+import {
+  buildActReminderFingerprint,
+  buildActReminderPlan,
+  readActReminderDay,
+  type ActReminderPlanInput,
+} from '@/lib/act-reminder';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
@@ -22,19 +26,14 @@ const DEBOUNCE_MS = 500;
 type StoreState = ReturnType<typeof useUnfoldStore.getState>;
 
 export function readActReminderPlanInput(state: StoreState): ActReminderPlanInput & { enabled: boolean } {
-  const devotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
   return {
-    devotional,
-    day: getDaysReadToday(devotional)[0] ?? null,
+    ...readActReminderDay(state),
     middayTime: state.middayCheckInTime,
     eveningTime: state.eveningWindDownTime,
     eveningWindDownEnabled: state.eveningWindDownEnabled,
     eveningWindDownByDay: state.eveningWindDownByDay,
     premiumPolicy: getEffectivePremiumAccessPolicy(),
     morningTime: state.user?.reminderTime,
-    // Rides on the daily-reminder preference: a reader who switched
-    // reminders off asked for silence, not a new kind of nudge.
-    enabled: state.user?.dailyReminderEnabled ?? Boolean(state.user?.reminderTime),
   };
 }
 

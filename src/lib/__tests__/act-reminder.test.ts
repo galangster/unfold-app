@@ -2,6 +2,7 @@ import {
   buildActReminderFingerprint,
   buildActReminderPlan,
   getActReminderFireAt,
+  getMiddayActClaim,
   inferActSlot,
 } from '../act-reminder';
 import type { Devotional, DevotionalDay } from '../store';
@@ -244,5 +245,37 @@ describe('fingerprint', () => {
     };
     const a = buildActReminderFingerprint(base);
     expect(buildActReminderFingerprint({ ...base, eveningWindDownEnabled: true })).not.toBe(a);
+  });
+});
+
+describe('getMiddayActClaim', () => {
+  function state(today: DevotionalDay, reminders = true) {
+    return {
+      devotionals: [{ ...devotional(), days: [today] }],
+      currentDevotionalId: 'dev-1',
+      user: { dailyReminderEnabled: reminders, reminderTime: '8:00 AM' },
+      middayCheckInTime: '13:00',
+    };
+  }
+
+  it('claims the midday check-in clock for a midday act read today', () => {
+    const claim = getMiddayActClaim(state(day({ act: 'At lunch, text the friend you thought of.' })), now);
+    expect(claim).toEqual(new Date(2026, 8, 8, 13, 0, 0));
+  });
+
+  it('claims nothing for an evening act, a done act, a day read yesterday, or reminders off', () => {
+    const midday = { act: 'At lunch, text the friend you thought of.' };
+    expect(getMiddayActClaim(state(day()), now)).toBeNull();
+    expect(getMiddayActClaim(state(day({ ...midday, actOutcome: 'done' })), now)).toBeNull();
+    expect(getMiddayActClaim(state(day({ ...midday, readAt: new Date(2026, 8, 7, 7, 40).toISOString() })), now)).toBeNull();
+    expect(getMiddayActClaim(state(day(midday), false), now)).toBeNull();
+  });
+
+  it('counts the lead from the read, so a later replan keeps the claim and a late read makes none', () => {
+    const midday = { act: 'At lunch, text the friend you thought of.' };
+    const afterLunch = new Date(2026, 8, 8, 12, 50, 0);
+    expect(getMiddayActClaim(state(day(midday)), afterLunch)).toEqual(new Date(2026, 8, 8, 13, 0, 0));
+    const lateRead = day({ ...midday, readAt: new Date(2026, 8, 8, 12, 50, 0).toISOString() });
+    expect(getMiddayActClaim(state(lateRead), afterLunch)).toBeNull();
   });
 });

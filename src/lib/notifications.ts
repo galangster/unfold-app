@@ -10,7 +10,7 @@ import {
   type CopyVariation,
   type DayContext,
 } from '@/constants/check-in-messages';
-import { buildCheckInSchedule, getAllCheckInIdentifiers } from '@/lib/check-in-schedule';
+import { buildCheckInSchedule, getAllCheckInIdentifiers, type BuildCheckInScheduleArgs } from '@/lib/check-in-schedule';
 import { copySeed, cueCarriedBefore, readCarriedCues, rememberCarriedCues } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import {
@@ -26,7 +26,7 @@ import {
 import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
-import type { ActReminderPlan } from '@/lib/act-reminder';
+import { getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -909,6 +909,7 @@ interface CheckInSlot {
   byDay: Record<string, string | null> | null;
   fallback: { hour: number; minute: number };
   dataType: string;
+  skipAt?: BuildCheckInScheduleArgs['skipAt'];
   logNoun: string;
   eventType: 'midday_checkin' | 'evening_winddown';
   /**
@@ -968,6 +969,7 @@ async function scheduleCheckInSlot(
     byDay: slot.byDay,
     fallback: slot.fallback,
     skipLocalDate: clock ? clock.localDate : readTrialCheckInSkipDate(),
+    skipAt: slot.skipAt,
     now,
   });
 
@@ -1044,6 +1046,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
   // The carry line of the day finished today — the devotional following the
   // reader into their afternoon. Only today's occurrence can carry it.
   const carryLine = getTodayCarryLine(store.devotionals, store.currentDevotionalId);
+  const now = clock?.now ?? new Date();
   return scheduleCheckInSlot(
     {
       idBase: NOTIFICATION_IDS.MIDDAY_CHECKIN,
@@ -1051,12 +1054,13 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       byDay: store.middayCheckInByDay ?? null,
       fallback: MIDDAY_FALLBACK,
       dataType: 'midday-checkin',
+      skipAt: getMiddayActClaim(store, now),
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
       copyFor: (today, variation, previousCue) => getMiddayCheckInCopy(today, today ? carryLine : null, variation, previousCue),
     },
     getTodayDayContext(currentDevotional),
-    dayIndexFor(clock?.now ?? new Date()),
+    dayIndexFor(now),
     cancelMiddayCheckIn,
     clock,
   );

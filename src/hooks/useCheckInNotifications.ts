@@ -50,6 +50,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
+import { getMiddayActClaim } from '@/lib/act-reminder';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUIState } from '@/lib/ui-state';
 import { getDeviceTimezone } from '@/lib/device-timezone';
@@ -103,6 +104,9 @@ function useCheckInFingerprint(): string {
   const todayCompanionNudge = useUnfoldStore(
     (s) => getTodayCompanionNudge(s.devotionals, s.currentDevotionalId) ?? '',
   );
+  // Reads the clock, so after midnight it holds yesterday's claim until the
+  // next store write. Harmless: a past instant matches no occurrence.
+  const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s)?.toISOString() ?? '');
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
   // INCLUDED: the device timezone. Occurrences are written as absolute
@@ -125,6 +129,7 @@ function useCheckInFingerprint(): string {
     hasCompletedOnboarding,
     todayCarryLine,
     todayCompanionNudge,
+    todayMiddayActClaim,
     notificationPermissionEpoch,
     trialNoticeEpoch,
     deviceTimezone,
