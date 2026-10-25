@@ -174,7 +174,9 @@ describe('Today tab motion guardrails', () => {
     expect(mainCardSource).not.toContain('heroScriptureRule');
     expect(mainCardSource).not.toContain('heroScripture');
 
-    expect(revealSource).toContain('const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);');
+    // A chaptered series captions with its planned week name; every other card formats the series title.
+    expect(revealSource).toContain('const displaySeriesTitle = heroCaption(state.weeks, state.dayNumber, state.seriesTitle);');
+    expect(devotionalCardSource).toContain('return weekCaption(weeks, dayNumber) ?? formatHeroSeriesTitle(seriesTitle);');
     expect(revealSource).toContain('{displaySeriesTitle}');
     expect(devotionalCardSource).toContain('function formatHeroSeriesTitle(title: string): string');
     expect(devotionalCardSource).not.toContain('heroSeriesEyebrow');
