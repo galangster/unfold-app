@@ -1,5 +1,7 @@
 import { NEXT_STEP_DETAILS, completionVariation } from '@/constants/daily-copy';
-import { getDayMenuPresentation } from './devotional-day-access';
+import { getDayMenuPresentation, getSelectableDayLimit } from './devotional-day-access';
+import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
+import { readSeriesWeeks, weekCompleteMoment, type WeekCompleteMoment } from './series-weeks';
 import type { CompletionType } from './completion-dismiss-route';
 import type { Devotional } from './store';
 import { drawCopy } from './variation-bag';
@@ -51,4 +53,43 @@ export function getCompletionNextStep(
       ? drawCopy(NEXT_STEP_DETAILS.preparing, variation, 'next-step-preparing')
       : drawCopy(NEXT_STEP_DETAILS.ahead, variation, 'next-step-ahead'),
   };
+}
+
+/**
+ * When the next week's first day opens, by the pacing rule. 'now' when it is
+ * ready to read, 'tomorrow' when the pace holds it one day, else null. A
+ * paused series (not the current one, or premium inactive) gets no new days,
+ * so it promises nothing (R4).
+ */
+function nextWeekOpens(
+  devotional: Devotional,
+  nextDay: number,
+  now: Date,
+  seriesPaused: boolean,
+): 'now' | 'tomorrow' | null {
+  if (seriesPaused) return null;
+  const next = getDayMenuPresentation(devotional, nextDay, now);
+  if (next.kind === 'ready') return 'now';
+  if (next.kind !== 'locked-titled' && next.kind !== 'coming-soon') return null;
+  if (!devotional.seriesStartDate || Number.isNaN(Date.parse(devotional.seriesStartDate))) return null;
+  return nextDay - getSelectableDayLimit(devotional, now) === 1 ? 'tomorrow' : null;
+}
+
+/**
+ * The week-complete moment after day 7, 14 or 21 of a chaptered series.
+ * Null on any other day, on the last day, and for a legacy series.
+ */
+export function resolveWeekCompletion(
+  devotional: Devotional | null | undefined,
+  completedDay: number,
+  now: Date,
+  { seriesPaused }: { seriesPaused: boolean },
+): WeekCompleteMoment | null {
+  if (!devotional) return null;
+  const weeks = readSeriesWeeks(devotional.seriesArc, {
+    totalDays: getServerOwnedSeriesTotalDays(devotional) || devotional.totalDays,
+    nowMs: now.getTime(),
+  });
+  if (!weekCompleteMoment(weeks, completedDay, null)) return null;
+  return weekCompleteMoment(weeks, completedDay, nextWeekOpens(devotional, completedDay + 1, now, seriesPaused));
 }

@@ -94,7 +94,8 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
-import { getCompletionNextStep } from '@/lib/completion-next-step';
+import { getCompletionNextStep, resolveWeekCompletion } from '@/lib/completion-next-step';
+import { readSeriesWeeks, weekCompleteAnnouncement } from '@/lib/series-weeks';
 import { markActOutcome } from '@/lib/act-outcome';
 import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
@@ -1567,9 +1568,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       });
 
       // Announce completion to screen reader
+      // Days 7, 14 and 21 of a chaptered series name the finished week (row 20).
+      const weekAnnouncement = completingLastDay
+        ? null
+        : weekCompleteAnnouncement(readSeriesWeeks(currentDevotional?.seriesArc, { totalDays }), viewingDay);
       const announcement = completingLastDay
         ? 'Congratulations! You’ve completed this devotional series.'
-        : `Day ${viewingDay} completed. Great job!`;
+        : weekAnnouncement ?? `Day ${viewingDay} completed. Great job!`;
       AccessibilityInfo.announceForAccessibility(announcement);
 
       if (viewingDay < expectedTotal) {
@@ -1593,6 +1598,13 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // Only the open overlay reads the step, so a hidden render skips the draw.
   const completionNextStep = showCelebration
     ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationOrdinal)
+    : null;
+  // The restrained week moment after day 7, 14 or 21 of a chaptered series.
+  // It never replaces the series celebration on the last day.
+  const weekMoment = showCelebration && celebrationType === 'day'
+    ? resolveWeekCompletion(currentDevotional, viewingDay, new Date(), {
+      seriesPaused: !isViewingActiveSeries || premiumPolicy === 'denied',
+    })
     : null;
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
@@ -3278,8 +3290,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <CompletionCelebration
         visible={showCelebration}
         onDismiss={() => dismissCelebration()}
+        week={weekMoment}
         nextStep={completionNextStep ? {
           ...completionNextStep,
+          title: weekMoment?.nextLine ?? completionNextStep.title,
           primaryLabel: celebrationType === 'series'
             ? 'Choose next study'
             : completionNextStep.nextDay
