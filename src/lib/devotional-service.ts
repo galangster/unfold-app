@@ -365,7 +365,7 @@ export interface GenerationContext {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 30;
+  devotionalLength: 3 | 7 | 14 | 28 | 30;
   bibleTranslation: BibleTranslation;
   previouslyUsedScriptures?: string[]; // References to avoid repeating (legacy)
   usedScriptureHistory?: UsedScripture[]; // Full scripture objects for variance analysis
@@ -2029,7 +2029,7 @@ export async function continueGeneratingDays(
         faithImpact: devotional.userContext.faithImpact ?? user.faithImpact ?? '',
         spiritualSeeking: user.spiritualSeeking,
         readingDuration: user.readingDuration,
-        devotionalLength: targetDays as 3 | 7 | 14 | 30,
+        devotionalLength: targetDays as GenerationContext['devotionalLength'],
         bibleTranslation: user.bibleTranslation,
         themeCategory: devotional.themeCategory,
         devotionalType: devotional.devotionalType,

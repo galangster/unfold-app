@@ -49,6 +49,8 @@ import {
 import { resolveLaterEntryExit, type VerifiedEntitlementExit, type VerifiedExitDecision } from '@/lib/auto-trial-exit';
 import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import { refreshRemoteConfig } from '@/lib/remote-config';
+import { paywallSeriesLengthRow } from '@/lib/series-length-copy';
+import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
 import { getTrialPaywallTimeline, trialLabelToDays } from '@/lib/trial-reminder-copy';
 import { MIDDAY_FALLBACK } from '@/lib/notifications';
 import { usePendingPaywallGrantOnUnmount } from '@/hooks/usePendingPaywallGrantOnUnmount';
@@ -116,6 +118,7 @@ export default function PaywallScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly');
+  const chapteredSeriesEnabled = useChapteredSeriesEnabled();
   const [showExclusiveOffer, setShowExclusiveOffer] = useState(false);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -753,7 +756,7 @@ export default function PaywallScreen() {
   // Free vs premium comparison rows
   const comparison = [
     { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
-    { label: 'Series length', free: 'A one-day sample', premium: '3 to 30 days' },
+    { label: 'Series length', free: 'A one-day sample', premium: paywallSeriesLengthRow(chapteredSeriesEnabled) },
     { label: 'AI Companion', free: false, premium: 'Daily check-ins + chat' },
     { label: 'Study methods', free: 'Basic', premium: `${ALL_METHOD_IDS.length} methods` },
     { label: 'Journal prompts', free: false, premium: true },

@@ -5,10 +5,13 @@
  */
 import { WAIT_LINE_NOTIFY_PROMISE_COPY, type NotifyPromisePlacement } from './generating-notify-state';
 import { isLongSeries, MONTH_SERIES_DAYS, WEEK_SERIES_DAYS } from './generation-poll-outcome';
+import { FOUR_WEEK_SERIES_DAYS } from './series-weeks';
 
 function resolveWaitEstimate(totalDays: number): string {
   // Negated comparisons so a non-finite length reads as the shortest series.
   if (!(totalDays > WEEK_SERIES_DAYS)) return 'This usually takes about two minutes.';
+  // A 4-week series writes only its first week before Day 1 opens (Ruled 5).
+  if (totalDays === FOUR_WEEK_SERIES_DAYS) return 'Your first week usually takes about two minutes.';
   if (!isLongSeries(totalDays)) return 'This usually takes about three minutes.';
   if (totalDays === MONTH_SERIES_DAYS) return 'A 30-day series usually takes four to six minutes.';
   return 'A longer series usually takes four to six minutes.';

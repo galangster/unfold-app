@@ -11,6 +11,8 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
+import { premiumLengthDescription } from '@/lib/series-length-copy';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, adaptiveViewportMaxHeight } from '@/lib/adaptive-layout';
 import Animated, {
   FadeIn,
@@ -170,7 +172,11 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
   const sheetFrameStyle = adaptiveFrameStyle(adaptiveLayout.sheetMaxWidth);
   const sheetMaxHeight = adaptiveViewportMaxHeight(adaptiveLayout.height, 0.85);
 
-  const config = FEATURES[feature] ?? FEATURES.general;
+  const chapteredSeriesEnabled = useChapteredSeriesEnabled();
+  const baseConfig = FEATURES[feature] ?? FEATURES.general;
+  const config = feature === 'devotionalLength'
+    ? { ...baseConfig, description: premiumLengthDescription(chapteredSeriesEnabled) }
+    : baseConfig;
   const IconComponent = config.icon as React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
 
   const paywallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

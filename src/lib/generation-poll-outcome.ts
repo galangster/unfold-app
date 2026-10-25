@@ -193,7 +193,11 @@ export function isLongSeries(totalDays: number): boolean {
   return totalDays > LONG_SERIES_AFTER_DAYS;
 }
 
+/** A 4-week series writes week 1 only before Day 1 opens, so its wait is a short one (E.8). */
+const FIRST_WEEK_ONLY_SERIES_DAYS = 28;
+
 export function resolveLongRunningAfterMs(totalDays: number): number {
+  if (totalDays === FIRST_WEEK_ONLY_SERIES_DAYS) return SHORT_SERIES_LONG_RUNNING_AFTER_MS;
   return isLongSeries(totalDays) ? LONG_SERIES_LONG_RUNNING_AFTER_MS : SHORT_SERIES_LONG_RUNNING_AFTER_MS;
 }
 /**
