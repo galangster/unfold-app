@@ -107,6 +107,20 @@ describe('buildActReminderPlan', () => {
     });
   });
 
+  it('keeps the midday slot on a replan inside the lead, so it never disagrees with the check-in claim', () => {
+    // Read at 07:40, cold launch at 12:20: the hydration replan must still
+    // land at 12:30, where today's check-in already stepped aside.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const relaunch = new Date(2026, 8, 8, 12, 20, 0);
+    const plan = buildActReminderPlan({ devotional: devotional(), day: midday, now: relaunch, middayTime: '12:30' });
+    expect(plan?.fireAt).toEqual(new Date(2026, 8, 8, 12, 30, 0));
+    const claim = getMiddayActClaim(
+      { devotionals: [{ ...devotional(), days: [midday] }], currentDevotionalId: 'dev-1', user: { dailyReminderEnabled: true, reminderTime: '8:00 AM' }, middayCheckInTime: '12:30' },
+      relaunch,
+    );
+    expect(claim).toEqual(plan?.fireAt);
+  });
+
   it('uses the profile reminder time for a next-morning act', () => {
     const plan = buildActReminderPlan({
       devotional: devotional(),

@@ -142,13 +142,23 @@ function isEveningWindDownScheduledAt(
 }
 
 /**
+ * Whether the midday slot was far enough out when the day was read. Counted
+ * from the read, not from now, so a replan later in the morning keeps the
+ * slot the first plan chose, and the check-in claim agrees with the planner.
+ */
+function middayLeadMet(midday: Date, readAt: string | undefined): boolean {
+  return midday.getTime() >= Date.parse(readAt ?? '') + MIN_LEAD_MS;
+}
+
+/**
  * Picks the fire time for a slot, or null when the moment has passed for
- * good (a midnight nudge helps nobody).
+ * good (a midnight nudge helps nobody). `readAt` anchors the midday lead.
  */
 export function getActReminderFireAt(
   slot: ActSlot,
   now: Date,
   clocks: { midday: { hour: number; minute: number }; evening: { hour: number; minute: number }; morning: { hour: number; minute: number } },
+  readAt?: string,
 ): Date | null {
   const earliest = new Date(now.getTime() + MIN_LEAD_MS);
   if (slot === 'morning-next') {
@@ -156,7 +166,8 @@ export function getActReminderFireAt(
   }
   if (slot === 'midday') {
     const midday = atClock(now, clocks.midday);
-    if (midday >= earliest) return midday;
+    const leadMet = readAt ? middayLeadMet(midday, readAt) : midday >= earliest;
+    if (leadMet && midday > now) return midday;
     // Missed midday: fall through to the evening slot.
   }
   const evening = atClock(now, clocks.evening);
@@ -207,10 +218,9 @@ function actToRemind(day: DevotionalDay, now: Date): string | null {
  * opens what it names, so today's check-in steps aside, as it does for the
  * trial notice. (At evening the wind-down carries the act instead.)
  *
- * The lead counts from `readAt`, the moment the reminder was first planned,
- * not from `now`: a midday act read too late rolls to the evening and leaves
- * the check-in alone, and the claim stays fixed for the day, so a later
- * replan cannot bring the pair back.
+ * Shares the planner's midday lead, counted from the read: a midday act read
+ * too late rolls to the evening and leaves the check-in alone, and the claim
+ * stays fixed for the day.
  */
 export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date()): Date | null {
   if (!actRemindersEnabled(state.user)) return null;
@@ -218,8 +228,7 @@ export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date()
   const act = day ? actToRemind(day, now) : null;
   if (!day || !act || inferActSlot(act, day.actSlot) !== 'midday') return null;
   const midday = atClock(now, parseReminderClock(state.middayCheckInTime, DEFAULT_MIDDAY));
-  const readAt = Date.parse(day.readAt ?? '');
-  return midday.getTime() >= readAt + MIN_LEAD_MS ? midday : null;
+  return middayLeadMet(midday, day.readAt) ? midday : null;
 }
 
 /**
@@ -248,7 +257,7 @@ export function buildActReminderPlan({
     midday: parseReminderClock(middayTime, DEFAULT_MIDDAY),
     evening: parseReminderClock(eveningTime, DEFAULT_EVENING),
     morning: parseReminderClock(morningTime, DEFAULT_MORNING),
-  });
+  }, day.readAt);
   if (!fireAt) return null;
   // The wind-down body already carries the act. Two banners at the same
   // instant is the collision. A missed midday that rolled into the evening
