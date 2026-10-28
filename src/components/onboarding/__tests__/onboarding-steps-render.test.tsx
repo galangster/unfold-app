@@ -16,6 +16,7 @@ const mockFeatureSummaryCarousel = jest.fn((_props: unknown) => null);
 const mockMmkvStore = new Map<string, string>();
 let mockOnboardingSearchParams: Record<string, string> = { startAt: 'hook' };
 let mockChapteredSeriesEnabled = false;
+const mockConfigListeners = new Set<() => void>();
 
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText } = jest.requireActual('react-native');
@@ -148,6 +149,10 @@ jest.mock('@/lib/remote-config', () => ({
   awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
   readChapteredSeriesEnabled: () => mockChapteredSeriesEnabled,
+  subscribeRemoteConfig: (listener: () => void) => {
+    mockConfigListeners.add(listener);
+    return () => mockConfigListeners.delete(listener);
+  },
 }));
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => 'America/Chicago' }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
@@ -478,5 +483,17 @@ describe('onboarding series length cards', () => {
     expect(card().props.accessibilityState.selected).toBe(false);
     await act(async () => { card().props.onPress(); });
     expect(card().props.accessibilityState.selected).toBe(true);
+  });
+
+  it('keeps the cards in place when the switch changes while the step is shown', async () => {
+    const root = await openAt('devotionalLength');
+    const before = radios(root).map((radio) => radio.props.accessibilityLabel);
+    expect(before).toEqual(['3 days', '7 days', '14 days', '30 days']);
+    mockChapteredSeriesEnabled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(before);
+    const last = radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!;
+    await act(async () => { last.props.onPress(); });
+    expect(radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!.props.accessibilityState.selected).toBe(true);
   });
 });

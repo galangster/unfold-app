@@ -168,6 +168,7 @@ import { refreshRemoteConfig } from '@/lib/remote-config';
 import { seriesLengthOptions } from '@/lib/series-length-options';
 import type { DevotionalLength } from '@/lib/series-length';
 import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
+import { useFrozenWhile } from '@/hooks/useFrozenWhile';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
@@ -1269,6 +1270,8 @@ export default function OnboardingScreen() {
 
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
+  // The length cards stay put while their step is on screen, even if a config refresh lands.
+  const lengthOptions = useFrozenWhile(currentStepId === 'devotionalLength', seriesLengthOptions(chapteredSeriesEnabled));
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
 
   // Helper to get the index of current step in STEPS array
@@ -3401,7 +3404,7 @@ export default function OnboardingScreen() {
 
     if (step.type === 'choice' || step.type === 'timeChoice') {
       const options: readonly ChoiceOption[] = step.hasDynamicOptions && step.id === 'devotionalLength'
-        ? seriesLengthOptions(chapteredSeriesEnabled)
+        ? lengthOptions
         : step.options || [];
 
       return (
