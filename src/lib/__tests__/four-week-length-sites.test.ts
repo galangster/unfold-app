@@ -15,6 +15,11 @@ import {
   seriesLengthPhrase,
 } from '../series-length-copy';
 
+const readDays = (count: number, read: number) =>
+  Array.from({ length: count }, (_, i) => ({ isRead: i < read }));
+const finished = (totalDays: number) => ({ totalDays, days: readDays(totalDays, totalDays) });
+const unfinished = (totalDays: number) => ({ totalDays, days: readDays(totalDays, totalDays - 1) });
+
 describe('wait line (row 5, Ruled 5)', () => {
   it('reads the first-week estimate for 28 days', () => {
     expect(resolveGeneratingWaitCopy(28, 'exit')).toBe('Your first week usually takes about two minutes.');
@@ -60,12 +65,21 @@ describe('PDF cover (row 39)', () => {
 describe('recap closing (row 38)', () => {
   it('fires the long closing at the series total, 28 or 30', () => {
     const long = 'You have built something rare — a rhythm of returning. Whatever comes next, you have the roots for it.';
-    expect(recapLongRhythmDays([{ totalDays: 30 }, { totalDays: 7 }])).toBe(30);
-    expect(recapLongRhythmDays([{ totalDays: 28 }])).toBe(28);
+    expect(recapLongRhythmDays([finished(30), finished(7)])).toBe(30);
+    expect(recapLongRhythmDays([finished(28)])).toBe(28);
     expect(recapClosingMessage(28, 28)).toBe(long);
     expect(recapClosingMessage(28, 30)).toBe('A week of showing up changes more than you think. The seeds are already taking root.');
     expect(recapClosingMessage(30, 30)).toBe(long);
     expect(recapClosingMessage(2, 30)).toBe('It has begun. The most important step is the next one.');
+  });
+});
+
+describe('recap threshold uses the finished series total (row 38)', () => {
+  it('holds 30 until a 28-day series is finished', () => {
+    expect(recapLongRhythmDays([unfinished(28)])).toBe(30);
+    expect(recapLongRhythmDays([unfinished(28), finished(30)])).toBe(30);
+    expect(recapLongRhythmDays([finished(28), unfinished(30)])).toBe(28);
+    expect(recapLongRhythmDays([{ totalDays: 28, days: [] }])).toBe(30);
   });
 });
 

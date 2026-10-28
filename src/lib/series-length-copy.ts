@@ -27,9 +27,19 @@ export function seriesLengthPhrase(totalDays: number): string {
   return totalDays === FOUR_WEEK_SERIES_DAYS ? '4-week' : `${totalDays}-day`;
 }
 
-/** The read count that earns the recap's long closing: 28 once the reader holds a 4-week series, else 30 (row 38). */
-export function recapLongRhythmDays(series: readonly { totalDays: number }[]): number {
-  return series.some((item) => item.totalDays === FOUR_WEEK_SERIES_DAYS) ? FOUR_WEEK_SERIES_DAYS : MONTH_SERIES_DAYS;
+type RecapSeries = { totalDays: number; days?: readonly { isRead: boolean }[] };
+
+function isFinished({ totalDays, days = [] }: RecapSeries): boolean {
+  return days.length >= totalDays && days.every((day) => day.isRead);
+}
+
+/**
+ * The read count that earns the recap's long closing: the finished series'
+ * own total, so 28 once the reader finishes a 4-week series, else 30 (row 38).
+ */
+export function recapLongRhythmDays(series: readonly RecapSeries[]): number {
+  const finishedFourWeek = series.some((item) => item.totalDays === FOUR_WEEK_SERIES_DAYS && isFinished(item));
+  return finishedFourWeek ? FOUR_WEEK_SERIES_DAYS : MONTH_SERIES_DAYS;
 }
 
 export function recapClosingMessage(totalDaysRead: number, longRhythmDays: number): string {
