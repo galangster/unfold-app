@@ -52,6 +52,15 @@ const mockStoreState = {
   },
 };
 
+const mockMmkv = new Map<string, string>();
+jest.mock('@/lib/mmkv-storage', () => ({
+  mmkvStorage: {
+    getItem: (key: string) => mockMmkv.get(key) ?? null,
+    setItem: (key: string, value: string) => { mockMmkv.set(key, value); },
+    removeItem: (key: string) => { mockMmkv.delete(key); },
+  },
+}));
+
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: Object.assign(
     (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState),
@@ -113,6 +122,7 @@ describe('useActReminderSync wind-down collision', () => {
     mockCancelActReminder.mockResolvedValue(undefined);
     mockAreNotificationsEnabled.mockResolvedValue(true);
     useUIState.setState({ actReminderWriteFailed: false });
+    mockMmkv.clear();
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => {
       return { remove: jest.fn() };
     });
@@ -241,6 +251,25 @@ describe('useActReminderSync wind-down collision', () => {
     mockScheduleActReminder.mockResolvedValue('act-1');
     await foreground();
     expect(useUIState.getState().actReminderWriteFailed).toBe(false);
+  });
+
+  it('adds no second reminder when a replan comes after the first one fired', async () => {
+    const foreground = captureForegroundHandler();
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+    expect(attempts).toBeGreaterThan(0);
+
+    // The 20:30 reminder fires, then a timezone change replans at 21:00.
+    jest.setSystemTime(new Date(2026, 8, 8, 21, 0, 0));
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolved,
+      timeZone: resolved.timeZone === 'Pacific/Honolulu' ? 'America/Los_Angeles' : 'Pacific/Honolulu',
+    });
+    await foreground();
+
+    expect(mockCancelActReminder.mock.calls.length).toBeGreaterThan(attempts);
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts);
   });
 
   it('plans again on the next foreground after the device timezone changes', async () => {

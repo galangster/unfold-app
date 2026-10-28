@@ -121,11 +121,23 @@ describe('buildActReminderPlan', () => {
     expect(claim).toEqual(plan?.fireAt);
   });
 
-  it('plans nothing more once the midday reminder has fired, so a later replan adds no evening banner', () => {
+  it('plans nothing more once a reminder for the day has fired, so a later replan adds no evening banner', () => {
     // Read at 07:40, the 12:30 reminder fired, then a timezone change replans at 15:00.
     const midday = day({ act: 'At lunch, text the friend you thought of.' });
     const afternoon = new Date(2026, 8, 8, 15, 0, 0);
-    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30' })).toBeNull();
+    const lastWrite = { devotionalId: 'dev-1', dayNumber: midday.dayNumber, fireAt: new Date(2026, 8, 8, 12, 30).toISOString() };
+    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30', lastWrite })).toBeNull();
+  });
+
+  it('rolls an unwritten midday reminder to the evening when the replan comes after midday', () => {
+    // Read at 07:40 with reminders off or permission denied; switched on at 13:00.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const afternoon = new Date(2026, 8, 8, 13, 0, 0);
+    const plan = buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30' });
+    expect(plan?.fireAt).toEqual(new Date(2026, 8, 8, 20, 30));
+    const yesterdays = { devotionalId: 'dev-1', dayNumber: midday.dayNumber - 1, fireAt: new Date(2026, 8, 7, 12, 30).toISOString() };
+    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30', lastWrite: yesterdays })?.fireAt)
+      .toEqual(new Date(2026, 8, 8, 20, 30));
   });
 
   it('uses the profile reminder time for a next-morning act', () => {

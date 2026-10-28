@@ -8,7 +8,7 @@
  * the root layout next to the other notification owners.
  */
 import { useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -18,12 +18,24 @@ import {
   buildActReminderPlan,
   readActReminderDay,
   type ActReminderPlanInput,
+  type ActReminderWrite,
 } from '@/lib/act-reminder';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 
 const DEBOUNCE_MS = 500;
+const LAST_WRITE_KEY = '@unfold_act_reminder_last_write';
+
+function readLastWrite(): ActReminderWrite | null {
+  try {
+    // MMKV reads are synchronous; the StateStorage type also allows a promise.
+    return JSON.parse((mmkvStorage.getItem(LAST_WRITE_KEY) as string | null) ?? 'null') as ActReminderWrite | null;
+  } catch {
+    return null;
+  }
+}
 
 type StoreState = ReturnType<typeof useUnfoldStore.getState>;
 
@@ -84,7 +96,8 @@ export function useActReminderSync() {
   latestFingerprintRef.current = fingerprint;
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
-    if (!hasHydrated) return;
+    // Web has no local notifications, so there is nothing to plan or fail.
+    if (!hasHydrated || Platform.OS === 'web') return;
     // Read live, as withDeviceTimezone does for the daily reminder: a crossing
     // moves today's slots and re-renders nothing before this foreground run.
     const target = `${latestFingerprintRef.current}|tz:${getDeviceTimezone() ?? ''}`;
@@ -99,13 +112,17 @@ export function useActReminderSync() {
     inFlightRef.current = true;
     try {
       const input = readActReminderPlanInput(useUnfoldStore.getState());
+      const now = new Date();
+      const lastWrite = readLastWrite();
       // Cancel-then-write: every run clears the pending act reminder so a
-      // replan never leaves an orphan for a day that changed.
+      // replan never leaves an orphan for a day that changed. A reminder still
+      // ahead is cancelled here, so it never fires and its record goes too.
+      if (lastWrite && Date.parse(lastWrite.fireAt) > now.getTime()) mmkvStorage.removeItem(LAST_WRITE_KEY);
       await cancelActReminder();
 
       const notificationsEnabled = await areNotificationsEnabled();
       const plan = input.enabled
-        ? buildActReminderPlan({ ...input, notificationsEnabled })
+        ? buildActReminderPlan({ ...input, now, notificationsEnabled, lastWrite })
         : null;
       if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
         // Leave the run unapplied so the next foreground writes it again, and
@@ -114,6 +131,10 @@ export function useActReminderSync() {
         return;
       }
       useUIState.getState().setActReminderWriteFailed(false);
+      if (plan && notificationsEnabled) {
+        const write: ActReminderWrite = { devotionalId: plan.data.devotionalId, dayNumber: plan.data.dayNumber, fireAt: plan.fireAt.toISOString() };
+        mmkvStorage.setItem(LAST_WRITE_KEY, JSON.stringify(write));
+      }
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(`[useActReminderSync] ${plan ? `planned ${plan.slot} at ${plan.fireAt.toISOString()}` : 'nothing to plan'} (reason=${reason})`);

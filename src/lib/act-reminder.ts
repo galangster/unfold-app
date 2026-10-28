@@ -34,10 +34,19 @@ export interface ActReminderPlan {
   data: ActReminderData;
 }
 
+/** The act reminder last written to the OS. Once its time passes, it has fired. */
+export interface ActReminderWrite {
+  devotionalId: string;
+  dayNumber: number;
+  fireAt: string;
+}
+
 export interface ActReminderPlanInput {
   devotional: Devotional | null | undefined;
   day: DevotionalDay | null | undefined;
   now?: Date;
+  /** The last written reminder. One that fired for this day stops a replan. */
+  lastWrite?: ActReminderWrite | null;
   /** "HH:mm" store value for the midday check-in. */
   middayTime?: string | null;
   /** "HH:mm" store value for the evening wind-down. */
@@ -168,9 +177,6 @@ export function getActReminderFireAt(
     const midday = atClock(now, clocks.midday);
     const leadMet = readAt ? middayLeadMet(midday, readAt) : midday >= earliest;
     if (leadMet && midday > now) return midday;
-    // The midday reminder was due and has fired: one nudge, then silence. A
-    // replan later in the day (timezone, settings) must not add an evening one.
-    if (readAt && leadMet) return null;
     // Missed midday: fall through to the evening slot.
   }
   const evening = atClock(now, clocks.evening);
@@ -251,10 +257,22 @@ export function buildActReminderPlan({
   notificationsEnabled,
   premiumPolicy,
   morningTime,
+  lastWrite,
 }: ActReminderPlanInput): ActReminderPlan | null {
   if (!devotional || !day) return null;
   const act = actToRemind(day, now);
   if (!act) return null;
+  // One nudge, then silence: a reminder for this day already fired, so a
+  // later replan (timezone, settings) adds no second one. A write that failed
+  // or was cancelled before its time leaves no fired record.
+  if (
+    lastWrite
+    && lastWrite.devotionalId === devotional.id
+    && lastWrite.dayNumber === day.dayNumber
+    && Date.parse(lastWrite.fireAt) <= now.getTime()
+  ) {
+    return null;
+  }
 
   const slot = inferActSlot(act, day.actSlot);
   const fireAt = getActReminderFireAt(slot, now, {
