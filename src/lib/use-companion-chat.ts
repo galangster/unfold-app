@@ -28,7 +28,7 @@ import { pickRegenerateTarget } from './companion-regenerate';
 import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { CRISIS_LINES, CRISIS_REPLY, crisisMentions, namesCrisis, withCrisisLines } from '@/lib/crisis-words';
+import { crisisFailure, type CrisisFailure } from '@/lib/crisis-words';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
 import { copySeed } from '@/lib/copy-variation';
 import { getTodayDayNumber } from '@/lib/home-devotional-state';
@@ -48,40 +48,11 @@ function announceCompanionReply(content: string) {
   }
 }
 
-type CrisisFailure = { kind: 'none' | 'lines' | 'reply'; patch: Partial<CompanionMessage> };
-
-/**
- * The patch for a failed reply. In a conversation where the reader named
- * suicide, self-harm or abuse, help cannot wait on the network: a partial
- * reply keeps its error state with the crisis lines added ('lines'), and a
- * failure with no text becomes the crisis reply ('reply').
- */
-function crisisFailure(
-  messages: readonly CompanionMessage[],
-  patch: Partial<CompanionMessage>,
-  partial: string,
-): CrisisFailure {
-  const crisis = crisisMentions(messages
-    .filter((message) => message.role === 'user')
-    .map((message) => message.content)
-    .join('\n'));
-  if (!namesCrisis(crisis)) return { kind: 'none', patch };
-  if (partial) return { kind: 'lines', patch: { ...patch, content: withCrisisLines(partial, crisis.abuse) } };
-  return {
-    kind: 'reply',
-    patch: {
-      content: CRISIS_REPLY,
-      status: 'complete',
-      suggestions: [],
-      deepLinks: [],
-      interrupted: false,
-      errorCopy: undefined,
-    },
-  };
+/** Speaks the crisis lines ahead of the reply, so the announcement cap cannot cut them off. */
+function announceWithCrisisLines(spoken: string, content: string) {
+  const announcement = [spoken, companionReplyAnnouncement(content)].filter(Boolean).join(' ');
+  if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
 }
-
-/** What a screen reader also hears when the crisis lines were added under a partial reply. */
-const spokenCrisisLines = (kind: CrisisFailure['kind']) => (kind === 'lines' ? ` ${CRISIS_LINES}` : '');
 
 /**
  * Outcome of a sendMessage call:
@@ -642,7 +613,7 @@ export function useCompanionChat() {
 
       // Records a failed reply, with the crisis lines or the crisis reply in
       // a crisis conversation (see crisisFailure).
-      const failReply = (patch: Partial<CompanionMessage>): CrisisFailure['kind'] => {
+      const failReply = (patch: Partial<CompanionMessage>): CrisisFailure => {
         const messages = useCompanionChatStore.getState().conversations
           .find((conversation) => conversation.id === streamConversationId)?.messages ?? [];
         const partial = patch.interrupted
@@ -652,9 +623,9 @@ export function useCompanionChat() {
         updateMessage(companionId, failure.patch, streamConversationId);
         if (failure.kind === 'reply') {
           if (isStreamConversationVisible()) setSuggestions([]);
-          announceCompanionReply(CRISIS_REPLY);
+          announceCompanionReply(failure.spoken);
         }
-        return failure.kind;
+        return failure;
       };
 
       try {
@@ -776,7 +747,7 @@ export function useCompanionChat() {
           if (isStreamConversationVisible()) setIsSearching(false);
           if (accumulatedText) {
             // Preserve the partial text and its classified cause across launches.
-            const crisisKind = failReply({
+            const crisis = failReply({
               content: accumulatedText,
               status: 'error',
               interrupted: true,
@@ -785,15 +756,13 @@ export function useCompanionChat() {
             if (isStreamConversationVisible()) {
               setError(`${serverErrorMessage} Your reply may be incomplete.`);
             }
-            AccessibilityInfo.announceForAccessibility(
-              `Companion reply interrupted. ${serverErrorMessage}${spokenCrisisLines(crisisKind)}`,
-            );
+            announceWithCrisisLines(crisis.spoken, `Companion reply interrupted. ${serverErrorMessage}`);
             return 'sent';
           }
           if (failReply({
             status: 'error',
             content: serverErrorMessage,
-          }) === 'reply') return 'crisis';
+          }).kind === 'reply') return 'crisis';
           if (isStreamConversationVisible()) setError(serverErrorMessage);
           AccessibilityInfo.announceForAccessibility(
             `Companion reply failed. ${serverErrorMessage}`,
@@ -807,7 +776,7 @@ export function useCompanionChat() {
           // Preserve partial text without issuing a second provider request.
           cancelThrottle();
           if (isStreamConversationVisible()) setIsSearching(false);
-          const crisisKind = failReply({
+          const crisis = failReply({
             content: accumulatedText,
             status: 'error',
             interrupted: true,
@@ -816,7 +785,7 @@ export function useCompanionChat() {
           if (isStreamConversationVisible()) {
             setError(`${COMPANION_ERROR_CONNECTION} Your reply may be incomplete.`);
           }
-          announceCompanionReply(`${accumulatedText}${spokenCrisisLines(crisisKind)}`);
+          announceWithCrisisLines(crisis.spoken, accumulatedText);
           streamSucceeded = true; // partial kept — skip the fallback below
         }
 
@@ -898,7 +867,7 @@ export function useCompanionChat() {
             .find((c) => c.id === streamConversationId);
           const current = (streamConv?.messages ?? []).find((m) => m.id === companionId);
           const hasPartial = Boolean(current?.content);
-          const crisisKind = failReply({
+          const crisis = failReply({
             status: 'error',
             interrupted: hasPartial,
             // User-stop must not invent a connection error. Other aborts
@@ -908,7 +877,7 @@ export function useCompanionChat() {
               : COMPANION_ERROR_CONNECTION,
           });
           if (hasPartial) return 'sent';
-          return crisisKind === 'reply' ? 'crisis' : 'error';
+          return crisis.kind === 'reply' ? 'crisis' : 'error';
         } else {
           const analyzed = analyzeNetworkError(err);
           // The budget copy (with its reset estimate) beats the generic classifier.
@@ -919,7 +888,7 @@ export function useCompanionChat() {
           logger.warn('[CompanionChat] Error:', err, analyzed.type);
           if (accumulatedText) {
             // Preserve partial text with a durable interruption flag and retry control.
-            const crisisKind = failReply({
+            const crisis = failReply({
               content: accumulatedText,
               status: 'error',
               interrupted: true,
@@ -928,15 +897,16 @@ export function useCompanionChat() {
             if (isStreamConversationVisible()) {
               setError(`${userFriendlyMessage} Your reply may be incomplete.`);
             }
-            AccessibilityInfo.announceForAccessibility(
-              `Connection interrupted. ${userFriendlyMessage} Your reply may be incomplete.${spokenCrisisLines(crisisKind)}`,
+            announceWithCrisisLines(
+              crisis.spoken,
+              `Connection interrupted. ${userFriendlyMessage} Your reply may be incomplete.`,
             );
             return 'sent';
           }
           if (failReply({
             status: 'error',
             content: userFriendlyMessage,
-          }) === 'reply') return 'crisis';
+          }).kind === 'reply') return 'crisis';
           if (isStreamConversationVisible()) setError(userFriendlyMessage);
           AccessibilityInfo.announceForAccessibility(
             `Companion reply failed. ${userFriendlyMessage}`,

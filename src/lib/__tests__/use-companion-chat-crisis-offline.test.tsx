@@ -307,6 +307,17 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     announce.mockRestore();
   });
 
+  it('speaks the abuse hotline added under a partial reply', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    mockFetch.mockResolvedValueOnce(streamThatDropsAfter(['data: {"t":"I hear you."}\n\n']) as any);
+    const hook = await renderHook();
+
+    await send(hook, 'My husband hits me');
+
+    expect(announce.mock.calls.some(([text]) => String(text).includes('1-800-799-7233'))).toBe(true);
+    announce.mockRestore();
+  });
+
   it('gives a reply that died while the app was suspended the crisis reply', async () => {
     const addEventListener = AppState.addEventListener as unknown as jest.Mock;
     const before = addEventListener.mock.calls.length;

@@ -33,6 +33,7 @@ import {
   shouldEnqueueCompanionMessage,
 } from './companion-chat-request';
 import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { crisisFailure } from './crisis-words';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,10 +108,11 @@ export function reconcileUnfinishedCompanionReplies(
       ...conversation,
       messages: messages.map((message) => {
         if (message.status !== 'streaming') return message;
+        // A crisis conversation gets the crisis lines or reply here too: the
+        // hook never sees this reply as streaming after a cold start.
         const corrected: CompanionMessage = {
           ...message,
-          status: 'error',
-          interrupted: true,
+          ...crisisFailure(messages, { status: 'error', interrupted: true }, message.content).patch,
         };
         corrections.push({ conversationId: conversation.id, message: corrected });
         return corrected;

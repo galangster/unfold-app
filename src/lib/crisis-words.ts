@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { CompanionMessage } from './companion-chat-store';
 
 /**
  * Crisis words in the reader's own writing, and the lines that answer them.
@@ -119,3 +120,47 @@ export const CRISIS_REPLY =
   "I couldn't send a reply just now, and I don't want to leave you without help. " +
   `${CRISIS_LINES} ${ABUSE_LINE} ` +
   'Please reach out today to a pastor, a counselor, or someone you trust. You do not have to carry this alone.';
+
+export type CrisisFailure = {
+  kind: 'none' | 'lines' | 'reply';
+  patch: Partial<CompanionMessage>;
+  /** What a screen reader hears about help: the added lines or the crisis reply. */
+  spoken: string;
+};
+
+/**
+ * The patch for a failed reply. In a conversation where the reader named
+ * suicide, self-harm or abuse, help cannot wait on the network: a partial
+ * reply keeps its error state with the crisis lines added ('lines'), and a
+ * failure with no text becomes the crisis reply ('reply').
+ */
+export function crisisFailure(
+  messages: readonly CompanionMessage[],
+  patch: Partial<CompanionMessage>,
+  partial: string,
+): CrisisFailure {
+  const crisis = crisisMentions(messages
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content)
+    .join('\n'));
+  if (!namesCrisis(crisis)) return { kind: 'none', patch, spoken: '' };
+  if (partial) {
+    return {
+      kind: 'lines',
+      patch: { ...patch, content: withCrisisLines(partial, crisis.abuse) },
+      spoken: withCrisisLines('', crisis.abuse),
+    };
+  }
+  return {
+    kind: 'reply',
+    patch: {
+      content: CRISIS_REPLY,
+      status: 'complete',
+      suggestions: [],
+      deepLinks: [],
+      interrupted: false,
+      errorCopy: undefined,
+    },
+    spoken: CRISIS_REPLY,
+  };
+}
