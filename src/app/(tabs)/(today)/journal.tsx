@@ -50,6 +50,8 @@ import { useKeyboardFoldedPanes } from '@/hooks/useKeyboardFoldedPanes';
 import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { FacingPanes } from '@/components/ui/FacingPanes';
 import { JournalSourcePage } from '@/components/journal/JournalSourcePage';
+import { CrisisResourcesCard } from '@/components/journal/CrisisResourcesCard';
+import { crisisMentions, namesCrisis } from '@/lib/crisis-words';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -887,6 +889,18 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   // Prayer requests from existing entry
   const prayerRequests = existingEntry?.prayerRequests ?? [];
 
+  // Every field the reader writes in on this screen, checked for crisis words.
+  const crisis = useMemo(
+    () => crisisMentions([
+      content,
+      ...questionResponses.values(),
+      ...Object.values(soapValues),
+      newPrayerText,
+      ...(existingEntry?.prayerRequests ?? []).map((prayer) => prayer.text),
+    ].join('\n')),
+    [content, questionResponses, soapValues, newPrayerText, existingEntry?.prayerRequests],
+  );
+
   // The writing desk (DESIGN.md, Journal, write): writing from a day's reading
   // puts that day on a source page beside the draft, or above it in a tall
   // window. The draft keeps its place in the tree in every layout, so opening
@@ -1272,6 +1286,8 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
 
               </Animated.View>
             )}
+
+            {namesCrisis(crisis) && <CrisisResourcesCard abuse={crisis.abuse} />}
 
             {/* ===== PRAYER REQUESTS SECTION ===== */}
             <Animated.View
