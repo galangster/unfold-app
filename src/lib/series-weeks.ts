@@ -40,6 +40,29 @@ function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 1;
 }
 
+/**
+ * The arc's acts when they cover days 1..totalDays contiguously with names,
+ * else []. book-of-seasons groups series detail by them; a chaptered arc's
+ * acts are its weeks.
+ */
+export function listSeriesActs(
+  seriesArc: SeriesArc | null | undefined,
+  totalDays = seriesArc?.totalDaysPlanned ?? 0,
+): NonNullable<SeriesArc['acts']> {
+  if (!Array.isArray(seriesArc?.acts)) return [];
+  const valid = seriesArc.acts.every((act) => act && typeof act.name === 'string' && act.name.trim().length > 0
+    && Number.isInteger(act.fromDay) && Number.isInteger(act.toDay)
+    && act.fromDay >= 1 && act.toDay >= act.fromDay && act.toDay <= totalDays);
+  if (!valid) return [];
+  const acts = [...seriesArc.acts].sort((a, b) => a.fromDay - b.fromDay);
+  let nextDay = 1;
+  for (const act of acts) {
+    if (act.fromDay !== nextDay) return [];
+    nextDay = act.toDay + 1;
+  }
+  return nextDay === totalDays + 1 ? acts : [];
+}
+
 function effectiveStatus(chapter: SeriesArcChapterPlan, nowMs: number): WeekStatus {
   if (chapter.status !== 'preparing') return chapter.status;
   const since = typeof chapter.preparingSince === 'string' ? Date.parse(chapter.preparingSince) : Number.NaN;
@@ -58,7 +81,8 @@ export function readSeriesWeeks(
   if (!isPositiveInteger(totalDays)) return null;
 
   const chapters = [...planning.chapters].sort((a, b) => (a?.fromDay ?? 0) - (b?.fromDay ?? 0));
-  const acts = Array.isArray(arc.acts) ? [...arc.acts].sort((a, b) => (a?.fromDay ?? 0) - (b?.fromDay ?? 0)) : [];
+  // The acts already cover the series contiguously; each week must match one.
+  const acts = listSeriesActs(arc, totalDays);
   if (acts.length !== chapters.length) return null;
 
   const nowMs = options.nowMs ?? Date.now();
@@ -70,8 +94,7 @@ export function readSeriesWeeks(
     if (!chapter || chapter.index !== position + 1 || !STATUSES.has(chapter.status)) return null;
     if (!isPositiveInteger(chapter.fromDay) || !isPositiveInteger(chapter.toDay)) return null;
     if (chapter.fromDay !== nextDay || chapter.toDay < chapter.fromDay) return null;
-    if (!act || act.fromDay !== chapter.fromDay || act.toDay !== chapter.toDay) return null;
-    if (typeof act.name !== 'string' || act.name.trim().length === 0) return null;
+    if (act.fromDay !== chapter.fromDay || act.toDay !== chapter.toDay) return null;
     const status = effectiveStatus(chapter, nowMs);
     weeks.push({
       index: chapter.index,
@@ -95,27 +118,53 @@ export function findWeekForDay(
   return week ? { week, dayInWeek: dayNumber - week.fromDay + 1 } : null;
 }
 
-/** "Week 2 · Day 3 of 7" (Ruled 2). */
-export function weekDayLabel(weeks: SeriesWeeks | null | undefined, dayNumber: number): string | null {
-  const found = findWeekForDay(weeks, dayNumber);
-  return found ? `Week ${found.week.index} · Day ${found.dayInWeek} of ${found.week.dayCount}` : null;
+export interface DayFraming {
+  /** True when the day sits inside a week of a chaptered series. */
+  inWeek: boolean;
+  /** "Week 2 · Day 3 of 7", or today's "Day 10 of 28". */
+  label: string;
+  /** "Week 2, day 3 of 7", or today's "day 10 of 28". */
+  spoken: string;
+  /** The week's name once it is planned, else null: the caller shows the series title. */
+  caption: string | null;
+  /** "9 of 28 days complete. Week 2 of 4." for the progress bar, else undefined (R6). */
+  progressLabel: string | undefined;
 }
 
-/** "Week 2, day 3 of 7". VoiceOver never reads the separator. */
-export function weekDaySpokenLabel(weeks: SeriesWeeks | null | undefined, dayNumber: number): string | null {
+/**
+ * Every Today framing of one day: "Week 2 · Day 3 of 7" (Ruled 2), spoken
+ * "Week 2, day 3 of 7" with no separator, with today's display as the
+ * fallback (R6).
+ */
+export function dayFraming(
+  weeks: SeriesWeeks | null | undefined,
+  dayNumber: number,
+  totalDays: number,
+  daysCompleted = 0,
+): DayFraming {
   const found = findWeekForDay(weeks, dayNumber);
-  return found ? `Week ${found.week.index}, day ${found.dayInWeek} of ${found.week.dayCount}` : null;
+  if (!found || !weeks) {
+    return {
+      inWeek: false,
+      label: `Day ${dayNumber} of ${totalDays}`,
+      spoken: `day ${dayNumber} of ${totalDays}`,
+      caption: null,
+      progressLabel: undefined,
+    };
+  }
+  const { week, dayInWeek } = found;
+  return {
+    inWeek: true,
+    label: `Week ${week.index} · Day ${dayInWeek} of ${week.dayCount}`,
+    spoken: `Week ${week.index}, day ${dayInWeek} of ${week.dayCount}`,
+    caption: week.name,
+    progressLabel: `${daysCompleted} of ${totalDays} days complete. Week ${week.index} of ${weeks.weeks.length}.`,
+  };
 }
 
-/** "Week 2 of 4". */
-export function weekOfSeriesSpokenLabel(weeks: SeriesWeeks | null | undefined, dayNumber: number): string | null {
-  const found = findWeekForDay(weeks, dayNumber);
-  return found && weeks ? `Week ${found.week.index} of ${weeks.weeks.length}` : null;
-}
-
-/** The Today caption: the week's name once it is planned, else null (the caller shows the series title). */
-export function weekCaption(weeks: SeriesWeeks | null | undefined, dayNumber: number): string | null {
-  return findWeekForDay(weeks, dayNumber)?.week.name ?? null;
+/** "Week 2 · <name>" once planned, else "Week 2". */
+export function weekLabel(week: SeriesWeek): string {
+  return week.name ? `Week ${week.index} · ${week.name}` : `Week ${week.index}`;
 }
 
 /** Only an unplanned week of a series with a worker behind it says when it is planned. */
@@ -125,9 +174,8 @@ function promisesPlanning(week: SeriesWeek, seriesPaused: boolean): boolean {
 
 /** "Week 2 · <name>", "Week 3 · Planned when you reach it", or "Week 3". */
 export function weekRowTitle(week: SeriesWeek, { seriesPaused }: { seriesPaused: boolean }): string {
-  if (week.name) return `Week ${week.index} · ${week.name}`;
-  if (promisesPlanning(week, seriesPaused)) return `Week ${week.index} · Planned when you reach it`;
-  return `Week ${week.index}`;
+  if (!week.name && promisesPlanning(week, seriesPaused)) return `Week ${week.index} · Planned when you reach it`;
+  return weekLabel(week);
 }
 
 function progressPhrase(week: SeriesWeek, progress: WeekRowProgress, readCount: number): string {
@@ -169,7 +217,7 @@ export function weeksHeadingLabel(weeks: SeriesWeeks): string {
 }
 
 /** The week that `dayNumber` finishes, when it is not the last day of the series. */
-function weekFinishedBy(weeks: SeriesWeeks | null | undefined, dayNumber: number): SeriesWeek | null {
+export function weekFinishedBy(weeks: SeriesWeeks | null | undefined, dayNumber: number): SeriesWeek | null {
   if (!weeks || dayNumber >= weeks.totalDays) return null;
   return weeks.weeks.find((week) => week.toDay === dayNumber) ?? null;
 }
@@ -196,7 +244,7 @@ export function weekCompleteMoment(
   if (!week || !weeks) return null;
   const count = weeks.weeks.length;
   const next = weeks.weeks.find((item) => item.index === week.index + 1);
-  const nextName = next ? (next.name ? `Week ${next.index} · ${next.name}` : `Week ${next.index}`) : null;
+  const nextName = next ? weekLabel(next) : null;
   let nextLine: string | null = null;
   if (nextName && nextOpens === 'tomorrow') nextLine = `${nextName} begins tomorrow`;
   else if (nextName && nextOpens === 'now') nextLine = `${nextName} is ready`;

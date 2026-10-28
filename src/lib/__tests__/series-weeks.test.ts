@@ -2,14 +2,13 @@ import type { SeriesArc } from '../store';
 import { makeChapteredArc } from './fixtures/chaptered-arc';
 import {
   WEEK_PREPARING_STALE_MS,
+  dayFraming,
   findWeekForDay,
   readSeriesWeeks,
-  weekCaption,
   weekCompleteAnnouncement,
   weekCompleteMoment,
-  weekDayLabel,
-  weekDaySpokenLabel,
-  weekOfSeriesSpokenLabel,
+  weekFinishedBy,
+  weekLabel,
   weekRowDetail,
   weekRowSpokenLabel,
   weekRowTitle,
@@ -73,17 +72,30 @@ describe('week framing strings', () => {
   it('frames a day inside its week', () => {
     expect(findWeekForDay(weeks, 10)).toMatchObject({ dayInWeek: 3, week: { index: 2 } });
     expect(findWeekForDay(weeks, 29)).toBeNull();
-    expect(weekDayLabel(weeks, 10)).toBe('Week 2 · Day 3 of 7');
-    expect(weekDayLabel(weeks, 8)).toBe('Week 2 · Day 1 of 7');
-    expect(weekDaySpokenLabel(weeks, 10)).toBe('Week 2, day 3 of 7');
-    expect(weekOfSeriesSpokenLabel(weeks, 10)).toBe('Week 2 of 4');
-    expect(weekDayLabel(null, 10)).toBeNull();
+    expect(dayFraming(weeks, 10, 28, 9)).toEqual({
+      inWeek: true,
+      label: 'Week 2 · Day 3 of 7',
+      spoken: 'Week 2, day 3 of 7',
+      caption: 'Synthetic Week Two',
+      progressLabel: '9 of 28 days complete. Week 2 of 4.',
+    });
+    expect(dayFraming(weeks, 8, 28).label).toBe('Week 2 · Day 1 of 7');
+  });
+
+  it('falls back to today\'s day framing without weeks (R6)', () => {
+    expect(dayFraming(null, 10, 28, 9)).toEqual({
+      inWeek: false,
+      label: 'Day 10 of 28',
+      spoken: 'day 10 of 28',
+      caption: null,
+      progressLabel: undefined,
+    });
   });
 
   it('captions with the week name only once the week is planned', () => {
-    expect(weekCaption(weeks, 10)).toBe('Synthetic Week Two');
-    expect(weekCaption(weeks, 16)).toBeNull();
-    expect(weekCaption(null, 10)).toBeNull();
+    expect(dayFraming(weeks, 16, 28).caption).toBeNull();
+    expect(weekLabel(weeks.weeks[1])).toBe('Week 2 · Synthetic Week Two');
+    expect(weekLabel(weeks.weeks[2])).toBe('Week 3');
   });
 
   it('titles series detail rows by week state (Ruled 6)', () => {
@@ -120,7 +132,7 @@ describe('week framing strings', () => {
     expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: false })).toBe('Week 3, planned when you reach it, days 15 to 21, still to come');
     expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: true })).toBe('Week 3, days 15 to 21, still to come');
     expect(weekRowSpokenLabel(w1, 'done', 7, { seriesPaused: false })).toBe('Week 1, Synthetic Week One, days 1 to 7, complete');
-    for (const label of [weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false }), weekDaySpokenLabel(weeks, 10)]) {
+    for (const label of [weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false }), dayFraming(weeks, 10, 28).spoken]) {
       expect(label).not.toContain('·');
     }
   });
@@ -151,6 +163,12 @@ describe('week-complete moment', () => {
     expect(weekCompleteMoment(planned, 14, 'now')?.nextLine).toBe('Week 3 is ready');
     // No promise without pacing to back it, and none for a paused series.
     expect(weekCompleteMoment(planned, 14, null)?.nextLine).toBeNull();
+  });
+
+  it('finds the week a day finishes, never the last one', () => {
+    expect(weekFinishedBy(planned, 14)?.index).toBe(2);
+    expect(weekFinishedBy(planned, 13)).toBeNull();
+    expect(weekFinishedBy(planned, 28)).toBeNull();
   });
 
   it('announces the finished week', () => {

@@ -53,13 +53,7 @@ import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
 import { useAppForegrounded } from '@/hooks/useAppForegrounded';
 import { getTodayProgressHistory, type ProgressHistoryRef } from '@/lib/today-progress-session';
-import {
-  weekCaption,
-  weekDayLabel,
-  weekDaySpokenLabel,
-  weekOfSeriesSpokenLabel,
-  type SeriesWeeks,
-} from '@/lib/series-weeks';
+import { dayFraming, type DayFraming } from '@/lib/series-weeks';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -106,14 +100,9 @@ function formatHeroSeriesTitle(title: string): string {
   ));
 }
 
-/** "Week 2 · Day 3 of 7" for a chaptered series, else "Day 10 of 28" (R6). */
-function dayMetaLabel(weeks: SeriesWeeks | undefined, dayNumber: number, totalDays: number): string {
-  return weekDayLabel(weeks, dayNumber) ?? `Day ${dayNumber} of ${totalDays}`;
-}
-
 /** The week name once its week is planned, else the series title (Ruled 2 and 6). */
-function heroCaption(weeks: SeriesWeeks | undefined, dayNumber: number, seriesTitle: string): string {
-  return weekCaption(weeks, dayNumber) ?? formatHeroSeriesTitle(seriesTitle);
+function heroCaption(framing: DayFraming, seriesTitle: string): string {
+  return framing.caption ?? formatHeroSeriesTitle(seriesTitle);
 }
 
 const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: string; animDelay: number }) {
@@ -541,8 +530,8 @@ function RevealReadyState({
   const isCompactHero = width < 400 || isLargeTextHero;
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const statusLabel = 'Ready to reveal';
-  const displaySeriesTitle = heroCaption(state.weeks, state.dayNumber, state.seriesTitle);
-  const spokenWeekDay = weekDaySpokenLabel(state.weeks, state.dayNumber);
+  const framing = dayFraming(state.weeks, state.dayNumber, state.totalDays);
+  const displaySeriesTitle = heroCaption(framing, state.seriesTitle);
 
   return (
     <Animated.View entering={announceReady ? entering(FadeIn.duration(Duration.normal).easing(Ease.out)) : undefined}>
@@ -565,14 +554,14 @@ function RevealReadyState({
             </Text>
 
             <Text style={[styles.heroDayMeta, { color: colors.textMuted, textAlign: 'left' }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-              {statusLabel} · {dayMetaLabel(state.weeks, state.dayNumber, state.totalDays)}
+              {statusLabel} · {framing.label}
             </Text>
           </HeroGround>
           <TouchableOpacity
             activeOpacity={0.74}
             onPress={state.onReveal}
             accessibilityRole="button"
-            accessibilityLabel={`Reveal ${state.seriesTitle}, ${spokenWeekDay ?? `day ${state.dayNumber}`}`}
+            accessibilityLabel={`Reveal ${state.seriesTitle}, ${framing.inWeek ? framing.spoken : `day ${state.dayNumber}`}`}
             accessibilityHint="Opens the reveal screen for this devotional reading"
           >
             <GlassSurface radius={Radius.full} style={[styles.heroActions, { borderColor: alpha(colors.accent, 0.24) }]}>
@@ -991,14 +980,11 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
   // The visible label leads the spoken one (WCAG 2.5.3), so the words on the
   // button, drawn or fixed, are also the words that activate it by voice.
   const lockedNote = isTomorrowLocked ? ' Tomorrow’s reading is locked.' : '';
-  const weeks = state.weeks;
-  const spokenContinueDay = weekDaySpokenLabel(weeks, continueDayNumber) ?? `day ${continueDayNumber} of ${totalDays}`;
-  const accessibilityLabel = `${ctaText}. ${seriesTitle}, ${spokenContinueDay}.${lockedNote}`;
-  const dayMeta = dayMetaLabel(weeks, dayData.dayNumber, totalDays);
-  const weekOfSeries = weekOfSeriesSpokenLabel(weeks, dayData.dayNumber);
-  const progressBarLabel = weekOfSeries
-    ? `${daysCompleted} of ${totalDays} days complete. ${weekOfSeries}.`
-    : undefined;
+  const framing = dayFraming(state.weeks, dayData.dayNumber, totalDays, daysCompleted);
+  const continueFraming = continueDayNumber === dayData.dayNumber
+    ? framing
+    : dayFraming(state.weeks, continueDayNumber, totalDays);
+  const accessibilityLabel = `${ctaText}. ${seriesTitle}, ${continueFraming.spoken}.${lockedNote}`;
 
   return (
     <Animated.View style={[scaleStyle, readyFadeStyle]}>
@@ -1018,14 +1004,14 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
               style={[styles.heroSeriesMeta, { color: colors.textMuted, textAlign: 'left' }]}
               maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
-              {heroCaption(weeks, dayData.dayNumber, seriesTitle)}
+              {heroCaption(framing, seriesTitle)}
             </Text>
 
             {hasCompletedToday ? (
               <View
                 style={styles.heroDayMetaRow}
                 accessible
-                accessibilityLabel={`Completed. ${weekDaySpokenLabel(weeks, dayData.dayNumber) ?? `Day ${dayData.dayNumber} of ${totalDays}`}`}
+                accessibilityLabel={`Completed. ${framing.inWeek ? framing.spoken : framing.label}`}
               >
                 <View
                   style={[
@@ -1051,12 +1037,12 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                   </Text>
                 </View>
                 <Text style={[styles.heroDayMetaDayText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-                  {dayMeta}
+                  {framing.label}
                 </Text>
               </View>
             ) : (
               <Text style={[styles.heroDayMeta, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-                {statusLabel} · {dayMeta}
+                {statusLabel} · {framing.label}
               </Text>
             )}
 
@@ -1093,7 +1079,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                     {Math.round(progress)}%
                   </Text>
                 </View>
-                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} accessibilityLabel={progressBarLabel} />
+                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} accessibilityLabel={framing.progressLabel} />
               </View>
             </HeroGround>
 

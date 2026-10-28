@@ -7,7 +7,9 @@ import {
 } from './devotional-day-access';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { readSeriesWeeks, weekRowDetail, type SeriesWeek } from './series-weeks';
+import { listSeriesActs, readSeriesWeeks, weekRowDetail, type SeriesWeek, type SeriesWeeks } from './series-weeks';
+
+export { listSeriesActs };
 
 export type BookChapterStatus = 'done' | 'current' | 'available' | 'upcoming';
 
@@ -61,24 +63,6 @@ export function isSeriesComplete(devotional: Devotional | null | undefined): boo
   const totalDays = getServerOwnedSeriesTotalDays(devotional) || devotional.totalDays;
   if (totalDays <= 0) return false;
   return countReadDays(devotional.days, 1, totalDays) === totalDays;
-}
-
-export function listSeriesActs(
-  seriesArc: SeriesArc | null | undefined,
-  totalDays = seriesArc?.totalDaysPlanned ?? 0,
-): NonNullable<SeriesArc['acts']> {
-  if (!Array.isArray(seriesArc?.acts)) return [];
-  const valid = seriesArc.acts.every((act) => act && typeof act.name === 'string' && act.name.trim().length > 0
-    && Number.isInteger(act.fromDay) && Number.isInteger(act.toDay)
-    && act.fromDay >= 1 && act.toDay >= act.fromDay && act.toDay <= totalDays);
-  if (!valid) return [];
-  const acts = [...seriesArc.acts].sort((a, b) => a.fromDay - b.fromDay);
-  let nextDay = 1;
-  for (const act of acts) {
-    if (act.fromDay !== nextDay) return [];
-    nextDay = act.toDay + 1;
-  }
-  return nextDay === totalDays + 1 ? acts : [];
 }
 
 function countReadInRange(
