@@ -144,7 +144,8 @@ describe('series detail heading and rows (rows 22-26)', () => {
   it('gives each row its days and progress, and drops the number slot', () => {
     const screen = view(chaptered(['planned', 'planned', 'outline', 'outline']));
     expect(screen.getByText('Days 1-7 · Complete')).toBeTruthy();
-    expect(screen.getByText('Days 8-14 · 2 of 7 days complete')).toBeTruthy();
+    expect(screen.getByText('Days 8-14 · Your current week')).toBeTruthy();
+    expect(screen.queryByText(/of 7 days complete/)).toBeNull();
     expect(screen.getByText('Days 15-21 · Still to come')).toBeTruthy();
     expect(screen.queryByText('02')).toBeNull();
     expect(screen.queryByText('03')).toBeNull();
@@ -154,7 +155,7 @@ describe('series detail heading and rows (rows 22-26)', () => {
     const screen = view(chaptered(['planned', 'planned', 'outline', 'outline']));
     expect(rowLabels(screen)).toEqual([
       'Week 1, Synthetic Week One, days 1 to 7, complete',
-      'Week 2, Synthetic Week Two, days 8 to 14, current week, 2 of 7 days complete',
+      'Week 2, Synthetic Week Two, days 8 to 14, current week',
       'Week 3, planned when you reach it, days 15 to 21, still to come',
       'Week 4, planned when you reach it, days 22 to 28, still to come',
     ]);

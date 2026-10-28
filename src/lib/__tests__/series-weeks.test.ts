@@ -124,7 +124,7 @@ describe('week framing strings', () => {
     const [w1, w2, w3] = weeks.weeks;
     expect(weekRowDetail(w1, 'done', 7)).toBe('Days 1-7 · Complete');
     expect(weekRowDetail(w2, 'current', 0)).toBe('Days 8-14 · Your current week');
-    expect(weekRowDetail(w2, 'current', 3)).toBe('Days 8-14 · 3 of 7 days complete');
+    expect(weekRowDetail(w2, 'current', 3)).toBe('Days 8-14 · Your current week');
     expect(weekRowDetail(w2, 'available', 2)).toBe('Days 8-14 · 2 of 7 days complete');
     expect(weekRowDetail(w3, 'upcoming', 0)).toBe('Days 15-21 · Still to come');
   });
@@ -132,7 +132,7 @@ describe('week framing strings', () => {
   it('speaks each row without the separator', () => {
     const [w1, w2, w3] = weeks.weeks;
     expect(weekRowSpokenLabel(w2, 'current', 0, { seriesPaused: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
-    expect(weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week, 3 of 7 days complete');
+    expect(weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
     expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: false })).toBe('Week 3, planned when you reach it, days 15 to 21, still to come');
     expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: true })).toBe('Week 3, days 15 to 21, still to come');
     expect(weekRowSpokenLabel(w1, 'done', 7, { seriesPaused: false })).toBe('Week 1, Synthetic Week One, days 1 to 7, complete');

@@ -200,7 +200,7 @@ export function weekRowTitle(week: SeriesWeek, { seriesPaused }: { seriesPaused:
 function progressPhrase(week: SeriesWeek, progress: WeekRowProgress, readCount: number): string {
   if (progress === 'done') return 'Complete';
   if (progress === 'upcoming') return 'Still to come';
-  if (progress === 'current' && readCount === 0) return 'Your current week';
+  if (progress === 'current') return 'Your current week';
   return `${readCount} of ${week.dayCount} days complete`;
 }
 
@@ -209,7 +209,7 @@ export function weekRowDetail(week: SeriesWeek, progress: WeekRowProgress, readC
   return `Days ${week.fromDay}-${week.toDay} · ${progressPhrase(week, progress, readCount)}`;
 }
 
-/** "Week 2, Learning to Rest, days 8 to 14, current week, 3 of 7 days complete". */
+/** "Week 2, Learning to Rest, days 8 to 14, current week". */
 export function weekRowSpokenLabel(
   week: SeriesWeek,
   progress: WeekRowProgress,
@@ -220,12 +220,7 @@ export function weekRowSpokenLabel(
   if (week.name) parts.push(week.name);
   else if (promisesPlanning(week, seriesPaused)) parts.push('planned when you reach it');
   parts.push(`days ${week.fromDay} to ${week.toDay}`);
-  if (progress === 'current') {
-    parts.push('current week');
-    if (readCount > 0) parts.push(`${readCount} of ${week.dayCount} days complete`);
-  } else {
-    parts.push(progressPhrase(week, progress, readCount).toLowerCase());
-  }
+  parts.push(progress === 'current' ? 'current week' : progressPhrase(week, progress, readCount).toLowerCase());
   return parts.join(', ');
 }
 
