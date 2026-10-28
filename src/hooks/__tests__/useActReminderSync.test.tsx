@@ -112,6 +112,7 @@ describe('useActReminderSync wind-down collision', () => {
     mockScheduleActReminder.mockResolvedValue('act-1');
     mockCancelActReminder.mockResolvedValue(undefined);
     mockAreNotificationsEnabled.mockResolvedValue(true);
+    useUIState.setState({ actReminderWriteFailed: false });
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => {
       return { remove: jest.fn() };
     });
@@ -229,6 +230,17 @@ describe('useActReminderSync wind-down collision', () => {
     await foreground();
 
     expect(mockScheduleActReminder.mock.calls.length).toBe(attempts + 1);
+  });
+
+  it('marks a failed write so the check-in keeps its slot, and clears it once a write lands', async () => {
+    const foreground = captureForegroundHandler();
+    mockScheduleActReminder.mockResolvedValue(null);
+    await mountHook();
+    expect(useUIState.getState().actReminderWriteFailed).toBe(true);
+
+    mockScheduleActReminder.mockResolvedValue('act-1');
+    await foreground();
+    expect(useUIState.getState().actReminderWriteFailed).toBe(false);
   });
 
   it('plans again on the next foreground after the device timezone changes', async () => {

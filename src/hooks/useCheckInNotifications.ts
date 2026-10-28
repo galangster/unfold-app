@@ -106,7 +106,8 @@ function useCheckInFingerprint(): string {
   );
   // Reads the clock, so after midnight it holds yesterday's claim until the
   // next store write. Harmless: a past instant matches no occurrence.
-  const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s)?.toISOString() ?? '');
+  const actReminderWriteFailed = useUIState((s) => s.actReminderWriteFailed);
+  const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s, new Date(), actReminderWriteFailed)?.toISOString() ?? '');
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
   // INCLUDED: the device timezone. Occurrences are written as absolute

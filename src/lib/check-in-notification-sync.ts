@@ -59,7 +59,7 @@ export function readCheckInFingerprintInputs(): CheckInFingerprintInputs {
     hasCompletedOnboarding: !!state.user?.hasCompletedOnboarding,
     todayCarryLine: getTodayCarryLine(state.devotionals, state.currentDevotionalId) ?? '',
     todayCompanionNudge: getTodayCompanionNudge(state.devotionals, state.currentDevotionalId) ?? '',
-    todayMiddayActClaim: getMiddayActClaim(state)?.toISOString() ?? '',
+    todayMiddayActClaim: getMiddayActClaim(state, new Date(), ui.actReminderWriteFailed)?.toISOString() ?? '',
     notificationPermissionEpoch: ui.notificationPermissionEpoch,
     trialNoticeEpoch: ui.trialNoticeEpoch,
     deviceTimezone: getDeviceTimezone() ?? '',

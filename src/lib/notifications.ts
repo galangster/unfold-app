@@ -1054,7 +1054,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       byDay: store.middayCheckInByDay ?? null,
       fallback: MIDDAY_FALLBACK,
       dataType: 'midday-checkin',
-      skipAt: getMiddayActClaim(store, now),
+      skipAt: getMiddayActClaim(store, now, useUIState.getState().actReminderWriteFailed),
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
       copyFor: (today, variation, previousCue) => getMiddayCheckInCopy(today, today ? carryLine : null, variation, previousCue),

@@ -108,10 +108,12 @@ export function useActReminderSync() {
         ? buildActReminderPlan({ ...input, notificationsEnabled })
         : null;
       if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
-        // Leave the run unapplied so the next foreground writes it again:
-        // today's midday check-in may already have stepped aside for it.
+        // Leave the run unapplied so the next foreground writes it again, and
+        // give today's midday slot back to the check-in until then.
+        useUIState.getState().setActReminderWriteFailed(true);
         return;
       }
+      useUIState.getState().setActReminderWriteFailed(false);
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(`[useActReminderSync] ${plan ? `planned ${plan.slot} at ${plan.fireAt.toISOString()}` : 'nothing to plan'} (reason=${reason})`);

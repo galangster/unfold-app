@@ -121,6 +121,13 @@ describe('buildActReminderPlan', () => {
     expect(claim).toEqual(plan?.fireAt);
   });
 
+  it('plans nothing more once the midday reminder has fired, so a later replan adds no evening banner', () => {
+    // Read at 07:40, the 12:30 reminder fired, then a timezone change replans at 15:00.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const afternoon = new Date(2026, 8, 8, 15, 0, 0);
+    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30' })).toBeNull();
+  });
+
   it('uses the profile reminder time for a next-morning act', () => {
     const plan = buildActReminderPlan({
       devotional: devotional(),
@@ -291,5 +298,10 @@ describe('getMiddayActClaim', () => {
     expect(getMiddayActClaim(state(day(midday)), afterLunch)).toEqual(new Date(2026, 8, 8, 13, 0, 0));
     const lateRead = day({ ...midday, readAt: new Date(2026, 8, 8, 12, 50, 0).toISOString() });
     expect(getMiddayActClaim(state(lateRead), afterLunch)).toBeNull();
+  });
+
+  it('gives the slot back to the check-in while the act reminder write is failing', () => {
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    expect(getMiddayActClaim(state(midday), now, true)).toBeNull();
   });
 });

@@ -168,6 +168,9 @@ export function getActReminderFireAt(
     const midday = atClock(now, clocks.midday);
     const leadMet = readAt ? middayLeadMet(midday, readAt) : midday >= earliest;
     if (leadMet && midday > now) return midday;
+    // The midday reminder was due and has fired: one nudge, then silence. A
+    // replan later in the day (timezone, settings) must not add an evening one.
+    if (readAt && leadMet) return null;
     // Missed midday: fall through to the evening slot.
   }
   const evening = atClock(now, clocks.evening);
@@ -220,10 +223,11 @@ function actToRemind(day: DevotionalDay, now: Date): string | null {
  *
  * Shares the planner's midday lead, counted from the read: a midday act read
  * too late rolls to the evening and leaves the check-in alone, and the claim
- * stays fixed for the day.
+ * stays fixed for the day. While the act reminder write is failing, the slot
+ * goes back to the check-in, so the reader still gets one banner.
  */
-export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date()): Date | null {
-  if (!actRemindersEnabled(state.user)) return null;
+export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date(), actWriteFailed = false): Date | null {
+  if (actWriteFailed || !actRemindersEnabled(state.user)) return null;
   const { day } = readActReminderDay(state, now);
   const act = day ? actToRemind(day, now) : null;
   if (!day || !act || inferActSlot(act, day.actSlot) !== 'midday') return null;

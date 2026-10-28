@@ -49,6 +49,9 @@ export const useUIState = create<{
   bumpNotificationPermissionEpoch: () => void;
   trialNoticeEpoch: number;
   bumpTrialNoticeEpoch: () => void;
+  /** True while the last act reminder write failed. Today's check-in keeps its midday slot meanwhile. */
+  actReminderWriteFailed: boolean;
+  setActReminderWriteFailed: (value: boolean) => void;
   qaCaptureMode: boolean;
   setQaCaptureMode: (value: boolean) => void;
   autoTrialRevealGuardKey: string | null;
@@ -82,6 +85,8 @@ export const useUIState = create<{
   bumpTrialNoticeEpoch: () => set((state) => ({
     trialNoticeEpoch: state.trialNoticeEpoch + 1,
   })),
+  actReminderWriteFailed: false,
+  setActReminderWriteFailed: (value) => set({ actReminderWriteFailed: value }),
   qaCaptureMode: false,
   setQaCaptureMode: (value) => set({ qaCaptureMode: value }),
   autoTrialRevealGuardKey: null,
