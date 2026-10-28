@@ -462,6 +462,12 @@ describe('onboarding series length cards', () => {
     mockConfigSettled = true;
   });
 
+  // A tap starts the step's 300 ms auto-advance. Let it run before teardown,
+  // or its Keyboard.dismiss fires inside the next suite on this worker.
+  async function settleAutoAdvance() {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+  }
+
   type Radio = { props: { accessibilityLabel: string; accessibilityState: { selected: boolean }; onPress: () => void } };
   function radios(root: Tree): Radio[] {
     const found = root.root.findAll((n: { props?: { accessibilityRole?: string; onPress?: unknown } }) =>
@@ -486,6 +492,7 @@ describe('onboarding series length cards', () => {
     expect(card().props.accessibilityState.selected).toBe(false);
     await act(async () => { card().props.onPress(); });
     expect(card().props.accessibilityState.selected).toBe(true);
+    await settleAutoAdvance();
   });
 
   it('keeps the cards in place when the switch changes while the step is shown', async () => {
@@ -498,6 +505,7 @@ describe('onboarding series length cards', () => {
     const last = radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!;
     await act(async () => { last.props.onPress(); });
     expect(radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!.props.accessibilityState.selected).toBe(true);
+    await settleAutoAdvance();
   });
 
   it('follows the first config answer when the step opens before it', async () => {
