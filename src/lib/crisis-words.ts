@@ -1,10 +1,13 @@
+import { Platform } from 'react-native';
+
 /**
  * Crisis words in the reader's own writing, and the lines that answer them.
  *
  * The word lists and the matching mirror the backend's Companion check
  * (`src/routes/companion.ts` in unfold-backend, PR #137): a phrase counts when
  * it appears in the lowercase text or in a copy with leet-speak and spaced-out
- * letters undone. Keep the two lists in step.
+ * letters undone. Keep the two lists in step. The backend's spaced-letter step
+ * only joins pairs, so it misses "s u i c i d e"; this one joins the whole run.
  */
 
 const SELF_HARM_WORDS = [
@@ -45,7 +48,7 @@ const APOSTROPHES = /[‘’ʼ`´＇]| ́/g;
 
 /** Undoes leet speak ("su1c1de") and spaced-out letters ("s u i c i d e"). */
 function normalize(text: string): string {
-  let normalized = text
+  const normalized = text
     .toLowerCase()
     .replace(/[1!|]/g, 'i')
     .replace(/[3]/g, 'e')
@@ -58,12 +61,11 @@ function normalize(text: string): string {
     .replace(/\b2\b/g, 'to')
     .replace(/ph/g, 'f')
     .replace(/vv/g, 'w');
-  let previous;
-  do {
-    previous = normalized;
-    normalized = normalized.replace(/\b(\w)[.\-_\s]+(\w)\b/g, '$1$2');
-  } while (normalized !== previous);
-  return normalized.replace(/\s+/g, ' ').trim();
+  return normalized
+    // A run of single letters spells one word: "s u i c i d e", "s.u.i.c.i.d.e".
+    .replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => run.replace(/[.\-_\s]+/g, ''))
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export type CrisisMentions = { selfHarm: boolean; abuse: boolean };
@@ -104,7 +106,8 @@ export function withCrisisLines(text: string, abuse = false): string {
 /** Phone and message links the crisis card opens. */
 export const CRISIS_LINKS = {
   call988: 'tel:988',
-  text741741: 'sms:741741&body=HOME',
+  // iOS reads the body after "&", Android after "?".
+  text741741: Platform.OS === 'ios' ? 'sms:741741&body=HOME' : 'sms:741741?body=HOME',
   callAbuseHotline: 'tel:18007997233',
 } as const;
 

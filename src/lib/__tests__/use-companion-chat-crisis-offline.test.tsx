@@ -5,7 +5,7 @@
  * gets to send.
  */
 import React from 'react';
-import { AppState } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -188,7 +188,8 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     const outcome = await send(hook, 'I feel suicidal tonight');
 
     const reply = lastReply();
-    expect(outcome).toBe('sent');
+    // Not 'sent': the local crisis reply must not use a free daily message.
+    expect(outcome).toBe('crisis');
     expect(reply?.status).toBe('complete');
     expect(reply?.content).toMatch(/\b988\b/);
     expect(reply?.content).toContain('741741');
@@ -231,7 +232,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     mockFetch.mockRejectedValue(new Error('Network request failed'));
     const outcome = await send(hook, 'what do I say when I call');
 
-    expect(outcome).toBe('sent');
+    expect(outcome).toBe('crisis');
     expect(lastReply()?.status).toBe('complete');
     expect(lastReply()?.content).toContain('741741');
   });
@@ -242,7 +243,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
 
     const outcome = await send(hook, 'I want to end my own life');
 
-    expect(outcome).toBe('sent');
+    expect(outcome).toBe('crisis');
     expect(lastReply()?.status).toBe('complete');
     expect(lastReply()?.content).toContain('741741');
   });
@@ -256,5 +257,73 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     expect(outcome).toBe('error');
     expect(lastReply()?.status).toBe('error');
     expect(lastReply()?.content ?? '').not.toContain('988');
+  });
+
+  it('adds the crisis lines under a partial reply the reader stopped', async () => {
+    const encoder = new TextEncoder();
+    let firstRead = true;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: jest.fn(() => {
+            if (firstRead) {
+              firstRead = false;
+              return Promise.resolve({ done: false, value: encoder.encode('data: {"t":"I am here."}\n\n') });
+            }
+            return new Promise<never>(() => {});
+          }),
+          cancel: jest.fn(async () => {}),
+          releaseLock: jest.fn(),
+        }),
+      },
+    });
+    const hook = await renderHook();
+
+    let pending!: Promise<string>;
+    await act(async () => {
+      pending = hook().sendMessage('I feel suicidal');
+      await wait(50);
+    });
+    let outcome!: string;
+    await act(async () => {
+      hook().stopGeneration();
+      outcome = await pending;
+    });
+
+    expect(outcome).toBe('sent');
+    expect(lastReply()?.content?.startsWith('I am here.')).toBe(true);
+    expect(lastReply()?.content).toContain('741741');
+  });
+
+  it('speaks the crisis lines added under a partial reply', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    mockFetch.mockResolvedValueOnce(streamThatDropsAfter(['data: {"t":"I hear you."}\n\n']) as any);
+    const hook = await renderHook();
+
+    await send(hook, 'I keep thinking about killing myself');
+
+    expect(announce.mock.calls.some(([text]) => String(text).includes('741741'))).toBe(true);
+    announce.mockRestore();
+  });
+
+  it('gives a reply that died while the app was suspended the crisis reply', async () => {
+    const addEventListener = AppState.addEventListener as unknown as jest.Mock;
+    const before = addEventListener.mock.calls.length;
+    await renderHook();
+    const onChange = addEventListener.mock.calls
+      .slice(before)
+      .filter(([event]: [string]) => event === 'change')
+      .map(([, listener]: [string, (status: string) => void]) => listener)[0];
+
+    act(() => {
+      const store = useCompanionChatStore.getState();
+      store.addMessage({ id: 'user-1', role: 'user', content: 'I feel suicidal', timestamp: 1, status: 'sent' });
+      store.addMessage({ id: 'companion-1', role: 'companion', content: '', timestamp: 2, status: 'streaming' });
+    });
+    act(() => { onChange('active'); });
+
+    expect(lastReply()?.status).toBe('complete');
+    expect(lastReply()?.content).toContain('741741');
   });
 });

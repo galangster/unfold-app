@@ -229,3 +229,41 @@ describe('journal crisis resources card', () => {
     expect(entries.some((entry: any) => entry.content === 'I feel suicidal.')).toBe(true);
   });
 });
+
+describe('journal crisis resources card in the other fields', () => {
+  let tree: any;
+
+  beforeEach(() => {
+    useUnfoldStore.getState().reset();
+    mmkvStorage.removeItem(OUTBOX_KEY);
+    useUnfoldStore.setState({ devotionals: [DEVOTIONAL], currentDevotionalId: 'dev-1' });
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    act(() => tree.unmount());
+    jest.useRealTimers();
+  });
+
+  const byLabel = (label: string) =>
+    tree.root.findAll((node: any) => node.props.accessibilityLabel === label && typeof node.type !== 'string')[0];
+
+  it('appears for a SOAP field', () => {
+    useUnfoldStore.getState().addJournalEntry({ devotionalId: 'dev-1', dayNumber: 1, content: '', journalMode: 'soap' });
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    act(() => { byLabel('Scripture journal entry').props.onChangeText('I want to end my own life.'); });
+    expect(findCard(tree)).toHaveLength(1);
+  });
+
+  it('appears for a prayer request being written', () => {
+    act(() => { tree = renderer.create(<JournalScreen />); });
+    const label = tree.root.findAll(
+      (node: any) => typeof node.type === 'string' && node.props.children === 'Add a prayer request',
+    )[0];
+    let add = label.parent;
+    while (add && !add.props.onPress) add = add.parent;
+    act(() => { add.props.onPress(); });
+    act(() => { byLabel('New prayer request').props.onChangeText('Pray for me, I feel suicidal.'); });
+    expect(findCard(tree)).toHaveLength(1);
+  });
+});

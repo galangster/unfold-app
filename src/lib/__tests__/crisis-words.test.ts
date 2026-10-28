@@ -10,6 +10,8 @@ describe('crisisMentions', () => {
     'I want to kill myself',
     'I don’t want to live anymore',
     'thinking about su1c1de',
+    'thinking about s u i c i d e',
+    'thinking about s.u.i.c.i.d.e',
   ])('finds self-harm words in %p', (text) => {
     expect(crisisMentions(text)).toEqual({ selfHarm: true, abuse: false });
   });
@@ -26,7 +28,7 @@ describe('crisisMentions', () => {
     expect(crisisMentions('He hurts me and I feel suicidal')).toEqual({ selfHarm: true, abuse: true });
   });
 
-  it.each(['', 'A quiet morning with Psalm 23.', 'I prayed for my sister today.'])(
+  it.each(['', 'A quiet morning with Psalm 23.', 'I prayed for my sister today.', 'I am a b c learner'])(
     'finds nothing in %p',
     (text) => {
       expect(crisisMentions(text)).toEqual({ selfHarm: false, abuse: false });

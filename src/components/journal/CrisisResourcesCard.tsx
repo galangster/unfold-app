@@ -1,4 +1,5 @@
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { AccessibilityInfo, Linking, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -21,6 +22,14 @@ function open(url: string) {
 export function CrisisResourcesCard({ abuse }: { abuse: boolean }) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
+
+  // The card mounts below the input the reader is typing in, out of focus,
+  // so a screen reader would never reach it on its own.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(
+      'Help is below. You can call or text 988, or text HOME to 741741.',
+    );
+  }, []);
 
   return (
     <Animated.View

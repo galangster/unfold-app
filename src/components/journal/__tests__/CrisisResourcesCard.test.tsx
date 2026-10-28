@@ -1,5 +1,5 @@
 import React from 'react';
-import { Linking } from 'react-native';
+import { AccessibilityInfo, Linking } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { CrisisResourcesCard } from '../CrisisResourcesCard';
 
@@ -44,5 +44,12 @@ describe('CrisisResourcesCard', () => {
     const { getByText } = render(<CrisisResourcesCard abuse />);
     fireEvent.press(getByText('Call 1-800-799-7233'));
     expect(openURL).toHaveBeenCalledWith('tel:18007997233');
+  });
+
+  it('tells a screen reader that help is below', () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    render(<CrisisResourcesCard abuse={false} />);
+    expect(announce).toHaveBeenCalledWith(expect.stringContaining('988'));
+    announce.mockRestore();
   });
 });
