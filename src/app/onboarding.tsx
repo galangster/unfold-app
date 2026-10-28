@@ -1112,18 +1112,21 @@ export default function OnboardingScreen() {
     opacity: inputOpacity.value,
   }));
 
+  // A ring at rest (value 0) is hidden. The ripple is off on the diagnostic
+  // step, with Reduce Motion, and during each ring's start delay, and a resting
+  // ring read as a static circle around the mascot.
   const ripple1Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
+    opacity: ripple1.value > 0 ? 0.35 - ripple1.value * 0.35 : 0,
     transform: [{ scale: 0.35 + ripple1.value * 1.5 }],
   }));
 
   const ripple2Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.3 - ripple2.value * 0.3),
+    opacity: ripple2.value > 0 ? 0.3 - ripple2.value * 0.3 : 0,
     transform: [{ scale: 0.35 + ripple2.value * 1.5 }],
   }));
 
   const ripple3Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.25 - ripple3.value * 0.25),
+    opacity: ripple3.value > 0 ? 0.25 - ripple3.value * 0.25 : 0,
     transform: [{ scale: 0.35 + ripple3.value * 1.5 }],
   }));
 
