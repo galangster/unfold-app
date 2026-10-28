@@ -7,6 +7,7 @@
  *
  * Reader-facing text says "Week". "Chapter" stays in code (Ruled 2).
  */
+import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { SeriesArc, SeriesArcChapterPlan } from './store';
 
 /** A `preparing` week older than this reads as `outline`: no worker, no promise (R4). */
@@ -162,6 +163,14 @@ export function dayFraming(
  * The week is the one that holds the last day read, so the label follows the
  * reader's progress and not the day the card shows next.
  */
+/**
+ * Week promise copy fails closed: a paused series, or premium that is not
+ * granted (denied or still unknown), promises no planning and no next week (R4).
+ */
+export function withholdsWeekPromise(seriesPaused: boolean, premiumPolicy: PremiumAccessPolicy): boolean {
+  return seriesPaused || premiumPolicy !== 'granted';
+}
+
 export function weekProgressLabel(
   weeks: SeriesWeeks | null | undefined,
   daysCompleted: number,

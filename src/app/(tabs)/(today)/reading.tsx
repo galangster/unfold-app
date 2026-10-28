@@ -96,7 +96,7 @@ import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
 import { completionAnnouncement, getCompletionNextStep, resolveWeekCompletion } from '@/lib/completion-next-step';
-import { readSeriesWeeks } from '@/lib/series-weeks';
+import { readSeriesWeeks, withholdsWeekPromise } from '@/lib/series-weeks';
 import { markActOutcome } from '@/lib/act-outcome';
 import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
@@ -1602,8 +1602,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     : null;
   // The restrained week moment after day 7, 14 or 21 of a chaptered series.
   // It never replaces the series celebration on the last day.
-  // Only the current series gets new days, and none while premium is inactive (R4).
-  const weekSeriesPaused = isPausedSeries(currentDevotional, currentDevotionalId) || premiumPolicy === 'denied';
+  // Only the current series gets new days, and none unless premium is granted (R4).
+  const weekSeriesPaused = withholdsWeekPromise(isPausedSeries(currentDevotional, currentDevotionalId), premiumPolicy);
   const weekMoment = useMemo(
     () => (showCelebration && celebrationType === 'day'
       ? resolveWeekCompletion(currentDevotional, seriesWeeks, viewingDay, new Date(), { seriesPaused: weekSeriesPaused })

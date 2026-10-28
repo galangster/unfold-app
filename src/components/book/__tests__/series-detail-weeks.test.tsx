@@ -42,6 +42,7 @@ import { ChapterJourney } from '../ChapterJourney';
 import { buildBookChapters } from '@/lib/book-of-seasons';
 import { canonicalGeneratedDayId } from '@/lib/devotional-canonical-days';
 import type { ColorTheme } from '@/constants/colors';
+import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import type { Devotional, DevotionalDay, SeriesArcChapterPlan } from '@/lib/store';
 import { makeChapteredArc } from '@/lib/__tests__/fixtures/chaptered-arc';
 
@@ -95,9 +96,12 @@ function legacy(): Devotional {
   ] } });
 }
 
-function view(devotional: Devotional, { seriesPaused = false, showAllReadings = false, onOpenDay = jest.fn() } = {}) {
+function view(
+  devotional: Devotional,
+  { seriesPaused = false, premiumPolicy = 'granted' as PremiumAccessPolicy, showAllReadings = false, onOpenDay = jest.fn() } = {},
+) {
   return render(
-    <BookOfSeasonsView devotional={devotional} seriesPaused={seriesPaused} now={NOW} colors={colors} isDark onOpenDay={onOpenDay} showAllReadings={showAllReadings} />,
+    <BookOfSeasonsView devotional={devotional} seriesPaused={seriesPaused} premiumPolicy={premiumPolicy} now={NOW} colors={colors} isDark onOpenDay={onOpenDay} showAllReadings={showAllReadings} />,
   );
 }
 
@@ -177,7 +181,7 @@ describe('series detail heading and rows (rows 22-26)', () => {
     const screen = view(chaptered(['planned', 'outline', 'outline', 'outline']));
     expect(screen.getByText('Week 2 · Planned when you reach it')).toBeTruthy();
     screen.rerender(
-      <BookOfSeasonsView devotional={chaptered(['planned', 'planned', 'outline', 'outline'])} seriesPaused={false} now={NOW} colors={colors} isDark onOpenDay={jest.fn()} />,
+      <BookOfSeasonsView devotional={chaptered(['planned', 'planned', 'outline', 'outline'])} seriesPaused={false} premiumPolicy="granted" now={NOW} colors={colors} isDark onOpenDay={jest.fn()} />,
     );
     expect(screen.getByText('Week 2 · Synthetic Week Two')).toBeTruthy();
   });
@@ -202,6 +206,14 @@ describe('week states (row 27, R4)', () => {
     const screen = view(chaptered(['planned', 'planned', 'outline', 'preparing']), { seriesPaused: true });
     expect(screen.getByText('Week 3')).toBeTruthy();
     expect(screen.getByText('Week 4')).toBeTruthy();
+    expect(screen.queryByText(/Planned when you reach it/)).toBeNull();
+  });
+
+  it.each(['denied', 'unknown'] as const)('promises nothing for a current series while premium is %s', (premiumPolicy) => {
+    const devotional = chaptered(['planned', 'planned', 'outline', 'preparing']);
+    expect(view(devotional).getByText('Week 3 · Planned when you reach it')).toBeTruthy();
+    const screen = view(devotional, { premiumPolicy });
+    expect(screen.getByText('Week 3')).toBeTruthy();
     expect(screen.queryByText(/Planned when you reach it/)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   WEEK_PREPARING_STALE_MS,
   dayFraming,
   weekProgressLabel,
+  withholdsWeekPromise,
   findWeekForDay,
   readSeriesWeeks,
   weekCompleteAnnouncement,
@@ -180,5 +181,14 @@ describe('week-complete moment', () => {
     expect(weekCompleteAnnouncement(planned, 28)).toBeNull();
     expect(weekCompleteAnnouncement(planned, 6)).toBeNull();
     expect(weekCompleteAnnouncement(null, 7)).toBeNull();
+  });
+});
+
+describe('withholdsWeekPromise (R4, fail closed on entitlement)', () => {
+  it('promises only for a current series with granted premium', () => {
+    expect(withholdsWeekPromise(false, 'granted')).toBe(false);
+    expect(withholdsWeekPromise(false, 'denied')).toBe(true);
+    expect(withholdsWeekPromise(false, 'unknown')).toBe(true);
+    expect(withholdsWeekPromise(true, 'granted')).toBe(true);
   });
 });

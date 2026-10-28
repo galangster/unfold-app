@@ -15,10 +15,13 @@ import { OpenReadingPage } from './OpenReadingPage';
 import { ActiveSeriesBookHero } from './ActiveSeriesBookHero';
 import { ChapterJourney } from './ChapterJourney';
 import { BookDayList } from './BookDayList';
+import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
+import { withholdsWeekPromise } from '@/lib/series-weeks';
 
 export function BookOfSeasonsView({
   devotional,
   seriesPaused,
+  premiumPolicy,
   now,
   colors,
   isDark,
@@ -29,6 +32,8 @@ export function BookOfSeasonsView({
 }: {
   devotional: Devotional;
   seriesPaused: boolean;
+  /** Week promises need granted premium; seriesPaused alone still drives page and day access. */
+  premiumPolicy: PremiumAccessPolicy;
   now: Date;
   colors: ColorTheme;
   isDark: boolean;
@@ -99,7 +104,7 @@ export function BookOfSeasonsView({
   const contents = chapters.length > 0 && !showAllReadings ? <ChapterJourney
     chapters={chapters}
     colors={colors}
-    seriesPaused={seriesPaused}
+    seriesPaused={withholdsWeekPromise(seriesPaused, premiumPolicy)}
     weeks={model?.weeks ?? null}
     canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
     onOpenChapter={(chapter) => {
