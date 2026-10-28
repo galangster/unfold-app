@@ -8,8 +8,8 @@ import {
   countReadDays,
   isSeriesComplete,
   listDaysInOrder,
-  listSeriesActs,
 } from "../book-of-seasons";
+import { listSeriesActs } from "../series-weeks";
 import { getSeriesCover } from "../series-cover";
 import type { Devotional, DevotionalDay, SeriesArc } from "../store";
 

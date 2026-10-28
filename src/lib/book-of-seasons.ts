@@ -9,7 +9,6 @@ import { selectRenderableDevotionalDay } from './devotional-canonical-days';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import { listSeriesActs, readSeriesWeeks, weekRowDetail, type SeriesWeek, type SeriesWeeks } from './series-weeks';
 
-export { listSeriesActs };
 
 export type BookChapterStatus = 'done' | 'current' | 'available' | 'upcoming';
 
