@@ -178,6 +178,7 @@ jest.mock('@/lib/notification-ask', () => ({
 jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(async () => undefined),
   readChapteredSeriesEnabled: () => false,
+  hasRemoteConfigSettled: () => true,
   subscribeRemoteConfig: () => () => undefined,
 }));
 const mockSetPendingPaywallGrant = jest.fn();

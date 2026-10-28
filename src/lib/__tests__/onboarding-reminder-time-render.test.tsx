@@ -146,6 +146,7 @@ jest.mock('@/lib/remote-config', () => ({
   awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
   readChapteredSeriesEnabled: () => false,
+  hasRemoteConfigSettled: () => true,
   subscribeRemoteConfig: () => () => undefined,
 }));
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => 'America/Chicago' }));

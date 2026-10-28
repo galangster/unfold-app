@@ -164,10 +164,10 @@ import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success'
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
-import { hasRemoteConfigSettled, refreshRemoteConfig } from '@/lib/remote-config';
+import { refreshRemoteConfig } from '@/lib/remote-config';
 import { seriesLengthOptions } from '@/lib/series-length-options';
 import type { DevotionalLength } from '@/lib/series-length';
-import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
+import { useChapteredSeriesSwitch } from '@/hooks/useChapteredSeriesEnabled';
 import { useFrozenWhile } from '@/hooks/useFrozenWhile';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
@@ -787,7 +787,7 @@ export default function OnboardingScreen() {
 
   // Premium gating state for duration/length options in onboarding
   const [premiumGateFeature, setPremiumGateFeature] = useState<'devotionalLength' | 'readingDuration' | null>(null);
-  const chapteredSeriesEnabled = useChapteredSeriesEnabled();
+  const chapteredSeries = useChapteredSeriesSwitch();
 
   // Adaptive-question endpoint is now public (no auth required) — no early auth needed.
 
@@ -1273,8 +1273,8 @@ export default function OnboardingScreen() {
   // The length cards stay put while their step is on screen, even if a config refresh lands.
   // Before the first config answer they follow it, so a cold start cannot lock in "30 days".
   const lengthOptions = useFrozenWhile(
-    currentStepId === 'devotionalLength' && hasRemoteConfigSettled(),
-    seriesLengthOptions(chapteredSeriesEnabled),
+    currentStepId === 'devotionalLength' && chapteredSeries.settled,
+    seriesLengthOptions(chapteredSeries.enabled),
   );
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
 

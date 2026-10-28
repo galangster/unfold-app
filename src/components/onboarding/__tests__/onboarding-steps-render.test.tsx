@@ -509,4 +509,13 @@ describe('onboarding series length cards', () => {
     await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
     expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '4 weeks. Four weekly chapters. Each week is prepared as you go.']);
   });
+  it('freezes on a first "off" answer, so a later refresh cannot swap the cards', async () => {
+    mockConfigSettled = false;
+    const root = await openAt('devotionalLength');
+    mockConfigSettled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    mockChapteredSeriesEnabled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '30 days']);
+  });
 });
