@@ -9,8 +9,8 @@ jest.mock('@/lib/device-credential', () => ({
   authenticatedFetch: (...args: unknown[]) => mockFetch(...args),
 }));
 
-import { renderHook, waitFor } from '@testing-library/react-native';
-import { resetRemoteConfigForTesting } from '@/lib/remote-config';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { refreshRemoteConfig, resetRemoteConfigForTesting } from '@/lib/remote-config';
 import { useChapteredSeriesEnabled } from '../useChapteredSeriesEnabled';
 
 const BODY = {
@@ -34,6 +34,19 @@ describe('useChapteredSeriesEnabled', () => {
     const { result } = renderHook(() => useChapteredSeriesEnabled());
     expect(result.current).toBe(false);
     await waitFor(() => expect(result.current).toBe(true));
+  });
+
+  it('follows a later refresh while the screen stays mounted', async () => {
+    respond({ ...BODY, chapteredSeries: { enabled: false } });
+    const { result } = renderHook(() => useChapteredSeriesEnabled());
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    expect(result.current).toBe(false);
+    respond({ ...BODY, chapteredSeries: { enabled: true } });
+    await act(async () => { await refreshRemoteConfig({ force: true }); });
+    expect(result.current).toBe(true);
+    respond({}, false);
+    await act(async () => { await refreshRemoteConfig({ force: true }); });
+    expect(result.current).toBe(false);
   });
 
   it('stays off when the config is unreadable', async () => {

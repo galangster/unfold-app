@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
-import { readChapteredSeriesEnabled, refreshRemoteConfig } from '@/lib/remote-config';
+import { readChapteredSeriesEnabled, refreshRemoteConfig, subscribeRemoteConfig } from '@/lib/remote-config';
 
-/** The weekly chapters creation switch from /api/config. Unreadable means off. */
+/** The weekly chapters creation switch from /api/config. Unreadable means off. Follows every refresh. */
 export function useChapteredSeriesEnabled(): boolean {
   const [enabled, setEnabled] = useState(() => readChapteredSeriesEnabled(Date.now()));
   useEffect(() => {
-    let live = true;
-    void refreshRemoteConfig().then((next) => {
-      if (live) setEnabled(readChapteredSeriesEnabled(Date.now(), next));
-    });
-    return () => {
-      live = false;
-    };
+    const read = () => setEnabled(readChapteredSeriesEnabled(Date.now()));
+    const unsubscribe = subscribeRemoteConfig(read);
+    // A fetch that finished between the first render and this effect has no listener to tell.
+    read();
+    void refreshRemoteConfig();
+    return unsubscribe;
   }, []);
   return enabled;
 }

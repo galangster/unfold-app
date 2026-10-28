@@ -105,6 +105,7 @@ jest.mock('@/lib/push-notification-helpers', () => ({
 jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(async () => ({ status: 'idle' })),
   readChapteredSeriesEnabled: () => false,
+  subscribeRemoteConfig: () => () => undefined,
 }));
 jest.mock('@/lib/auto-trial-exit', () => ({
   resolveLaterEntryExit: () => ({ kind: 'fallback', reason: 'switch_off' }),

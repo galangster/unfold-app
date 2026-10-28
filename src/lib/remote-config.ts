@@ -36,6 +36,21 @@ const ALLOWED_DAYS = new Set<AllowedTrialDays>([3, 7]);
 
 let state: RemoteConfigState = { status: 'idle' };
 let inflight: Promise<RemoteConfigState> | null = null;
+const listeners = new Set<() => void>();
+
+function setState(next: RemoteConfigState): RemoteConfigState {
+  state = next;
+  listeners.forEach((listener) => listener());
+  return state;
+}
+
+/** Calls the listener after every fetch result, so mounted screens follow a refresh. */
+export function subscribeRemoteConfig(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export function resetRemoteConfigForTesting(): void {
   state = { status: 'idle' };
@@ -83,8 +98,7 @@ function shouldSkip(nowMs: number, force?: boolean): boolean {
 type ConfigFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 function fail(nowMs: number, reason: Extract<RemoteConfigState, { status: 'error' }>['reason']): RemoteConfigState {
-  state = { status: 'error', failedAtMs: nowMs, reason };
-  return state;
+  return setState({ status: 'error', failedAtMs: nowMs, reason });
 }
 
 async function fetchConfig(
@@ -115,8 +129,7 @@ async function fetchConfig(
     const parsed = parseRemoteConfig(body);
     if (!parsed) return fail(nowMs, 'parse');
     if (parsed.source === 'fallback') return fail(nowMs, 'server_fallback');
-    state = { status: 'ok', config: parsed, fetchedAtMs: nowMs };
-    return state;
+    return setState({ status: 'ok', config: parsed, fetchedAtMs: nowMs });
   } catch (error) {
     const aborted = controller.signal.aborted
       || (error instanceof Error && error.name === 'AbortError');
