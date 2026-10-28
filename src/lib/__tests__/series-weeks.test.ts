@@ -3,6 +3,7 @@ import { makeChapteredArc } from './fixtures/chaptered-arc';
 import {
   WEEK_PREPARING_STALE_MS,
   dayFraming,
+  weekProgressLabel,
   findWeekForDay,
   readSeriesWeeks,
   weekCompleteAnnouncement,
@@ -72,24 +73,26 @@ describe('week framing strings', () => {
   it('frames a day inside its week', () => {
     expect(findWeekForDay(weeks, 10)).toMatchObject({ dayInWeek: 3, week: { index: 2 } });
     expect(findWeekForDay(weeks, 29)).toBeNull();
-    expect(dayFraming(weeks, 10, 28, 9)).toEqual({
+    expect(dayFraming(weeks, 10, 28)).toEqual({
       inWeek: true,
       label: 'Week 2 · Day 3 of 7',
       spoken: 'Week 2, day 3 of 7',
       caption: 'Synthetic Week Two',
-      progressLabel: '9 of 28 days complete. Week 2 of 4.',
     });
+    expect(weekProgressLabel(weeks, 9, 28)).toBe('9 of 28 days complete. Week 2 of 4.');
+    expect(weekProgressLabel(weeks, 7, 28)).toBe('7 of 28 days complete. Week 1 of 4.');
+    expect(weekProgressLabel(weeks, 0, 28)).toBe('0 of 28 days complete. Week 1 of 4.');
     expect(dayFraming(weeks, 8, 28).label).toBe('Week 2 · Day 1 of 7');
   });
 
   it('falls back to today\'s day framing without weeks (R6)', () => {
-    expect(dayFraming(null, 10, 28, 9)).toEqual({
+    expect(dayFraming(null, 10, 28)).toEqual({
       inWeek: false,
       label: 'Day 10 of 28',
       spoken: 'day 10 of 28',
       caption: null,
-      progressLabel: undefined,
     });
+    expect(weekProgressLabel(null, 9, 28)).toBeUndefined();
   });
 
   it('captions with the week name only once the week is planned', () => {

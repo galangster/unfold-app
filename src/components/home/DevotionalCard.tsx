@@ -53,7 +53,7 @@ import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { progressFillMotion, shouldAnnounceReadingReady } from '@/lib/meaningful-motion';
 import { useAppForegrounded } from '@/hooks/useAppForegrounded';
 import { getTodayProgressHistory, type ProgressHistoryRef } from '@/lib/today-progress-session';
-import { dayFraming, type DayFraming } from '@/lib/series-weeks';
+import { dayFraming, weekProgressLabel, type DayFraming } from '@/lib/series-weeks';
 
 // ─── Props ──────────────────────────────────────────────────────
 
@@ -980,7 +980,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
   // The visible label leads the spoken one (WCAG 2.5.3), so the words on the
   // button, drawn or fixed, are also the words that activate it by voice.
   const lockedNote = isTomorrowLocked ? ' Tomorrow’s reading is locked.' : '';
-  const framing = dayFraming(state.weeks, dayData.dayNumber, totalDays, daysCompleted);
+  const framing = dayFraming(state.weeks, dayData.dayNumber, totalDays);
   const continueFraming = continueDayNumber === dayData.dayNumber
     ? framing
     : dayFraming(state.weeks, continueDayNumber, totalDays);
@@ -1079,7 +1079,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                     {Math.round(progress)}%
                   </Text>
                 </View>
-                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} accessibilityLabel={framing.progressLabel} />
+                <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} accessibilityLabel={weekProgressLabel(state.weeks, daysCompleted, totalDays)} />
               </View>
             </HeroGround>
 

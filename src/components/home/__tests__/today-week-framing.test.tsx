@@ -182,6 +182,11 @@ describe('Today progress and VoiceOver (rows 14 and 15)', () => {
     expect(screen.getByTestId('devotional-progress-bar').props.accessibilityLabel).toBe('9 of 28 days complete. Week 2 of 4.');
   });
 
+  it('takes the bar week from the days read, not from tomorrow (tomorrow-locked)', () => {
+    const screen = render(<DevotionalCard state={tomorrowLocked()} />);
+    expect(screen.getByTestId('devotional-progress-bar').props.accessibilityLabel).toBe('7 of 28 days complete. Week 1 of 4.');
+  });
+
   it('reads the card as "Week 2, day 3 of 7"', () => {
     const screen = render(<DevotionalCard state={unread()} />);
     expect(screen.getByLabelText(`Continue Reading. ${SERIES}, Week 2, day 3 of 7.`)).toBeTruthy();

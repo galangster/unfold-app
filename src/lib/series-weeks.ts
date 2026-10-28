@@ -127,8 +127,6 @@ export interface DayFraming {
   spoken: string;
   /** The week's name once it is planned, else null: the caller shows the series title. */
   caption: string | null;
-  /** "9 of 28 days complete. Week 2 of 4." for the progress bar, else undefined (R6). */
-  progressLabel: string | undefined;
 }
 
 /**
@@ -140,7 +138,6 @@ export function dayFraming(
   weeks: SeriesWeeks | null | undefined,
   dayNumber: number,
   totalDays: number,
-  daysCompleted = 0,
 ): DayFraming {
   const found = findWeekForDay(weeks, dayNumber);
   if (!found || !weeks) {
@@ -149,7 +146,6 @@ export function dayFraming(
       label: `Day ${dayNumber} of ${totalDays}`,
       spoken: `day ${dayNumber} of ${totalDays}`,
       caption: null,
-      progressLabel: undefined,
     };
   }
   const { week, dayInWeek } = found;
@@ -158,8 +154,22 @@ export function dayFraming(
     label: `Week ${week.index} · Day ${dayInWeek} of ${week.dayCount}`,
     spoken: `Week ${week.index}, day ${dayInWeek} of ${week.dayCount}`,
     caption: week.name,
-    progressLabel: `${daysCompleted} of ${totalDays} days complete. Week ${week.index} of ${weeks.weeks.length}.`,
   };
+}
+
+/**
+ * "9 of 28 days complete. Week 2 of 4." for the progress bar, else undefined (R6).
+ * The week is the one that holds the last day read, so the label follows the
+ * reader's progress and not the day the card shows next.
+ */
+export function weekProgressLabel(
+  weeks: SeriesWeeks | null | undefined,
+  daysCompleted: number,
+  totalDays: number,
+): string | undefined {
+  const found = findWeekForDay(weeks, Math.max(1, daysCompleted));
+  if (!found || !weeks) return undefined;
+  return `${daysCompleted} of ${totalDays} days complete. Week ${found.week.index} of ${weeks.weeks.length}.`;
 }
 
 /** "Week 2 · <name>" once planned, else "Week 2". */
