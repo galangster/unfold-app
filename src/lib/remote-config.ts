@@ -177,21 +177,35 @@ export async function awaitRemoteConfigSettled(
   }
 }
 
+type ConfigSnapshot =
+  | { kind: 'not_fetched' }
+  | { kind: 'fetch_failed'; failedAtMs: number }
+  | { kind: 'stale' | 'fresh'; config: RemoteConfigV1; fetchedAtMs: number };
+
+/** One reading of the cached config: fresh only while within its max age. */
+function readConfigSnapshot(nowMs: number, current: RemoteConfigState): ConfigSnapshot {
+  if (current.status === 'idle') return { kind: 'not_fetched' };
+  if (current.status === 'error') return { kind: 'fetch_failed', failedAtMs: current.failedAtMs };
+  const { config, fetchedAtMs } = current;
+  return { kind: nowMs - fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS ? 'stale' : 'fresh', config, fetchedAtMs };
+}
+
 export function readAutoTrialSwitchSnapshot(
   nowMs: number,
   platform: string,
   current: RemoteConfigState = state,
 ): AutoTrialSwitchSnapshot {
-  if (current.status === 'idle') {
+  const snapshot = readConfigSnapshot(nowMs, current);
+  if (snapshot.kind === 'not_fetched') {
     return { enabled: false, maxTrialDays: 7, fetchedAtMs: null, reason: 'not_fetched' };
   }
-  if (current.status === 'error') {
-    return { enabled: false, maxTrialDays: 7, fetchedAtMs: current.failedAtMs, reason: 'fetch_failed' };
+  if (snapshot.kind === 'fetch_failed') {
+    return { enabled: false, maxTrialDays: 7, fetchedAtMs: snapshot.failedAtMs, reason: 'fetch_failed' };
   }
 
-  const { config, fetchedAtMs } = current;
+  const { config, fetchedAtMs } = snapshot;
   const maxTrialDays = config.autoTrialSeries.maxTrialDays;
-  if (nowMs - fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS) {
+  if (snapshot.kind === 'stale') {
     return { enabled: false, maxTrialDays, fetchedAtMs, reason: 'stale' };
   }
   if (!config.autoTrialSeries.enabled) {
@@ -211,7 +225,6 @@ export function readChapteredSeriesEnabled(
   nowMs: number,
   current: RemoteConfigState = state,
 ): boolean {
-  if (current.status !== 'ok') return false;
-  if (nowMs - current.fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS) return false;
-  return current.config.chapteredSeries.enabled;
+  const snapshot = readConfigSnapshot(nowMs, current);
+  return snapshot.kind === 'fresh' && snapshot.config.chapteredSeries.enabled;
 }
