@@ -162,6 +162,12 @@ describe('Today caption (row 13, Ruled 2 and 6)', () => {
     expect(screen.queryByText(SERIES)).toBeNull();
   });
 
+  it('formats an all-caps series title when the card has no week name', () => {
+    const caps = 'QUIET SYNTHETIC WATERS';
+    expect(render(<DevotionalCard state={Object.assign(revealReady(null), { seriesTitle: caps })} />).getByText('Quiet Synthetic Waters')).toBeTruthy();
+    expect(render(<DevotionalCard state={Object.assign(unread(null), { seriesTitle: caps })} />).getByText('Quiet Synthetic Waters')).toBeTruthy();
+  });
+
   it('shows the series title while the week is not planned', () => {
     const screen = render(<DevotionalCard state={unread(UNPLANNED_WEEKS)} />);
     expect(screen.getByText(SERIES)).toBeTruthy();
