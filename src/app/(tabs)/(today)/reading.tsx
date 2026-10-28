@@ -80,6 +80,7 @@ import {
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   isDevotionalDaySelectable,
+  isPausedSeries,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
@@ -94,8 +95,8 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
-import { getCompletionNextStep, resolveWeekCompletion } from '@/lib/completion-next-step';
-import { readSeriesWeeks, weekCompleteAnnouncement } from '@/lib/series-weeks';
+import { completionAnnouncement, getCompletionNextStep, resolveWeekCompletion } from '@/lib/completion-next-step';
+import { readSeriesWeeks } from '@/lib/series-weeks';
 import { markActOutcome } from '@/lib/act-outcome';
 import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
@@ -983,6 +984,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const canGoBack = viewingDay > 1;
   const canGoForward = viewingDay < availableDays;
   const isLastDay = viewingDay === totalDays;
+  // Week framing of a chaptered series, or null for a legacy series (R6).
+  const seriesWeeks = useMemo(
+    () => readSeriesWeeks(currentDevotional?.seriesArc, { totalDays }),
+    [currentDevotional?.seriesArc, totalDays],
+  );
   const isDayCompleted = currentDayData?.isRead ?? false;
 
   // Tomorrow preview data — next renderable day in the series.
@@ -1569,12 +1575,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
 
       // Announce completion to screen reader
       // Days 7, 14 and 21 of a chaptered series name the finished week (row 20).
-      const weekAnnouncement = completingLastDay
-        ? null
-        : weekCompleteAnnouncement(readSeriesWeeks(currentDevotional?.seriesArc, { totalDays }), viewingDay);
-      const announcement = completingLastDay
-        ? 'Congratulations! You’ve completed this devotional series.'
-        : weekAnnouncement ?? `Day ${viewingDay} completed. Great job!`;
+      const announcement = completionAnnouncement(seriesWeeks, viewingDay, completingLastDay);
       AccessibilityInfo.announceForAccessibility(announcement);
 
       if (viewingDay < expectedTotal) {
@@ -1593,7 +1594,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         justCompletedSeries: completingLastDay,
       };
     }
-  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets]);
+  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, seriesWeeks]);
 
   // Only the open overlay reads the step, so a hidden render skips the draw.
   const completionNextStep = showCelebration
@@ -1601,11 +1602,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     : null;
   // The restrained week moment after day 7, 14 or 21 of a chaptered series.
   // It never replaces the series celebration on the last day.
-  const weekMoment = showCelebration && celebrationType === 'day'
-    ? resolveWeekCompletion(currentDevotional, viewingDay, new Date(), {
-      seriesPaused: !isViewingActiveSeries || premiumPolicy === 'denied',
-    })
-    : null;
+  // Only the current series gets new days, and none while premium is inactive (R4).
+  const weekSeriesPaused = isPausedSeries(currentDevotional, currentDevotionalId) || premiumPolicy === 'denied';
+  const weekMoment = useMemo(
+    () => (showCelebration && celebrationType === 'day'
+      ? resolveWeekCompletion(currentDevotional, seriesWeeks, viewingDay, new Date(), { seriesPaused: weekSeriesPaused })
+      : null),
+    [showCelebration, celebrationType, currentDevotional, seriesWeeks, viewingDay, weekSeriesPaused],
+  );
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
     ? 'Return to Study'

@@ -1,6 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { resolveWeekCompletion } from '../completion-next-step';
+import { completionAnnouncement, resolveWeekCompletion } from '../completion-next-step';
+import { readSeriesWeeks } from '../series-weeks';
 import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 import type { Devotional, DevotionalDay } from '../store';
 import { makeChapteredArc } from './fixtures/chaptered-arc';
@@ -32,8 +31,10 @@ function series(completed: number, over: Partial<Devotional> = {}): Devotional {
   } as Devotional;
 }
 
+const weeksOf = (devotional: Devotional | null) =>
+  readSeriesWeeks(devotional?.seriesArc, { totalDays: devotional?.totalDays, nowMs: now.getTime() });
 const resolve = (devotional: Devotional | null, completed: number, seriesPaused = false) =>
-  resolveWeekCompletion(devotional, completed, now, { seriesPaused });
+  resolveWeekCompletion(devotional, weeksOf(devotional), completed, now, { seriesPaused });
 
 describe('resolveWeekCompletion (spec r2 section 7)', () => {
   it('shows after days 7, 14 and 21 of a chaptered series, never on day 28', () => {
@@ -76,18 +77,17 @@ describe('resolveWeekCompletion (spec r2 section 7)', () => {
   });
 });
 
-describe('reading screen wiring (rows 19-21, 43)', () => {
-  const reading = fs.readFileSync(path.join(__dirname, '../../app/(tabs)/(today)/reading.tsx'), 'utf8');
+describe('completionAnnouncement (row 20)', () => {
+  const weeks = weeksOf(series(7));
 
-  it('announces "Week N complete" on days 7, 14 and 21 and keeps the series and day announcements', () => {
-    expect(reading).toContain("'Congratulations! You’ve completed this devotional series.'");
-    expect(reading).toContain('weekCompleteAnnouncement(readSeriesWeeks(currentDevotional?.seriesArc, { totalDays }), viewingDay)');
-    expect(reading).toContain('`Day ${viewingDay} completed. Great job!`');
+  it('announces "Week N complete" on days 7, 14 and 21 of a chaptered series', () => {
+    expect(completionAnnouncement(weeks, 7, false)).toBe('Week 1 complete');
+    expect(completionAnnouncement(weeks, 21, false)).toBe('Week 3 complete');
   });
 
-  it('passes the week moment only to a day completion, through the existing overlay', () => {
-    expect(reading).toContain("const weekMoment = showCelebration && celebrationType === 'day'");
-    expect(reading).toContain('week={weekMoment}');
-    expect(reading).toContain('title: weekMoment?.nextLine ?? completionNextStep.title,');
+  it('keeps the series and day announcements', () => {
+    expect(completionAnnouncement(weeks, 28, true)).toBe('Congratulations! You’ve completed this devotional series.');
+    expect(completionAnnouncement(weeks, 9, false)).toBe('Day 9 completed. Great job!');
+    expect(completionAnnouncement(null, 7, false)).toBe('Day 7 completed. Great job!');
   });
 });

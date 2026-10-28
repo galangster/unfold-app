@@ -1,7 +1,12 @@
 import { NEXT_STEP_DETAILS, completionVariation } from '@/constants/daily-copy';
 import { getDayMenuPresentation, getSelectableDayLimit } from './devotional-day-access';
-import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
-import { readSeriesWeeks, weekCompleteMoment, type WeekCompleteMoment } from './series-weeks';
+import {
+  weekCompleteAnnouncement,
+  weekCompleteMoment,
+  weekFinishedBy,
+  type SeriesWeeks,
+  type WeekCompleteMoment,
+} from './series-weeks';
 import type { CompletionType } from './completion-dismiss-route';
 import type { Devotional } from './store';
 import { drawCopy } from './variation-bag';
@@ -77,19 +82,25 @@ function nextWeekOpens(
 
 /**
  * The week-complete moment after day 7, 14 or 21 of a chaptered series.
- * Null on any other day, on the last day, and for a legacy series.
+ * Null on any other day, on the last day, and for a legacy series (weeks null).
  */
 export function resolveWeekCompletion(
   devotional: Devotional | null | undefined,
+  weeks: SeriesWeeks | null,
   completedDay: number,
   now: Date,
   { seriesPaused }: { seriesPaused: boolean },
 ): WeekCompleteMoment | null {
-  if (!devotional) return null;
-  const weeks = readSeriesWeeks(devotional.seriesArc, {
-    totalDays: getServerOwnedSeriesTotalDays(devotional) || devotional.totalDays,
-    nowMs: now.getTime(),
-  });
-  if (!weekCompleteMoment(weeks, completedDay, null)) return null;
+  if (!devotional || !weekFinishedBy(weeks, completedDay)) return null;
   return weekCompleteMoment(weeks, completedDay, nextWeekOpens(devotional, completedDay + 1, now, seriesPaused));
+}
+
+/** The screen-reader announcement after a completion (row 20). */
+export function completionAnnouncement(
+  weeks: SeriesWeeks | null,
+  completedDay: number,
+  completingLastDay: boolean,
+): string {
+  if (completingLastDay) return 'Congratulations! You’ve completed this devotional series.';
+  return weekCompleteAnnouncement(weeks, completedDay) ?? `Day ${completedDay} completed. Great job!`;
 }
