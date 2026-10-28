@@ -27,6 +27,7 @@ import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-re
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
 import { getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
+import { readActReminderWriteFailed } from '@/lib/act-reminder-write';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -1054,7 +1055,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       byDay: store.middayCheckInByDay ?? null,
       fallback: MIDDAY_FALLBACK,
       dataType: 'midday-checkin',
-      skipAt: getMiddayActClaim(store, now, useUIState.getState().actReminderWriteFailed),
+      skipAt: getMiddayActClaim(store, now, readActReminderWriteFailed()),
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
       copyFor: (today, variation, previousCue) => getMiddayCheckInCopy(today, today ? carryLine : null, variation, previousCue),

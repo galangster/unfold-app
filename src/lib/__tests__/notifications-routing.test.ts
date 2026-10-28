@@ -53,6 +53,7 @@ const mockLogger = {
 
 jest.mock('@/lib/logger', () => ({ logger: mockLogger }));
 
+jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false) }));
 const mockState = {
   currentDevotionalId: 'dev-1',
   devotionals: [

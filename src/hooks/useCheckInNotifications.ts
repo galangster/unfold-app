@@ -51,6 +51,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
 import { getMiddayActClaim } from '@/lib/act-reminder';
+import { readActReminderWriteFailed } from '@/lib/act-reminder-write';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUIState } from '@/lib/ui-state';
 import { getDeviceTimezone } from '@/lib/device-timezone';
@@ -106,7 +107,8 @@ function useCheckInFingerprint(): string {
   );
   // Reads the clock, so after midnight it holds yesterday's claim until the
   // next store write. Harmless: a past instant matches no occurrence.
-  const actReminderWriteFailed = useUIState((s) => s.actReminderWriteFailed);
+  // Subscribes for the re-render; the read also covers a flag left by an earlier process.
+  const actReminderWriteFailed = useUIState((s) => s.actReminderWriteFailed) || readActReminderWriteFailed();
   const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s, new Date(), actReminderWriteFailed)?.toISOString() ?? '');
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);

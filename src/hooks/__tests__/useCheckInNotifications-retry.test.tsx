@@ -71,6 +71,7 @@ jest.mock('@/lib/trial-notification', () => ({
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), error: jest.fn() },
 }));
+jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false) }));
 
 jest.mock('@/lib/notifications', () => ({
   scheduleMiddayCheckIn: (...args: unknown[]) => mockScheduleMidday(...args),

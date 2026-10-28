@@ -18,24 +18,17 @@ import {
   buildActReminderPlan,
   readActReminderDay,
   type ActReminderPlanInput,
-  type ActReminderWrite,
 } from '@/lib/act-reminder';
-import { mmkvStorage } from '@/lib/mmkv-storage';
+import {
+  markActReminderWriteFailed,
+  readActReminderLastWrite,
+  storeActReminderLastWrite,
+} from '@/lib/act-reminder-write';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 
 const DEBOUNCE_MS = 500;
-const LAST_WRITE_KEY = '@unfold_act_reminder_last_write';
-
-function readLastWrite(): ActReminderWrite | null {
-  try {
-    // MMKV reads are synchronous; the StateStorage type also allows a promise.
-    return JSON.parse((mmkvStorage.getItem(LAST_WRITE_KEY) as string | null) ?? 'null') as ActReminderWrite | null;
-  } catch {
-    return null;
-  }
-}
 
 type StoreState = ReturnType<typeof useUnfoldStore.getState>;
 
@@ -113,11 +106,11 @@ export function useActReminderSync() {
     try {
       const input = readActReminderPlanInput(useUnfoldStore.getState());
       const now = new Date();
-      const lastWrite = readLastWrite();
+      const lastWrite = readActReminderLastWrite();
       // Cancel-then-write: every run clears the pending act reminder so a
       // replan never leaves an orphan for a day that changed. A reminder still
       // ahead is cancelled here, so it never fires and its record goes too.
-      if (lastWrite && Date.parse(lastWrite.fireAt) > now.getTime()) mmkvStorage.removeItem(LAST_WRITE_KEY);
+      if (lastWrite && Date.parse(lastWrite.fireAt) > now.getTime()) storeActReminderLastWrite(null);
       await cancelActReminder();
 
       const notificationsEnabled = await areNotificationsEnabled();
@@ -127,19 +120,20 @@ export function useActReminderSync() {
       if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
         // Leave the run unapplied so the next foreground writes it again, and
         // give today's midday slot back to the check-in until then.
-        useUIState.getState().setActReminderWriteFailed(true);
+        markActReminderWriteFailed(true);
         return;
       }
-      useUIState.getState().setActReminderWriteFailed(false);
+      markActReminderWriteFailed(false);
       if (plan && notificationsEnabled) {
-        const write: ActReminderWrite = { devotionalId: plan.data.devotionalId, dayNumber: plan.data.dayNumber, fireAt: plan.fireAt.toISOString() };
-        mmkvStorage.setItem(LAST_WRITE_KEY, JSON.stringify(write));
+        storeActReminderLastWrite({ devotionalId: plan.data.devotionalId, dayNumber: plan.data.dayNumber, fireAt: plan.fireAt.toISOString() });
       }
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(`[useActReminderSync] ${plan ? `planned ${plan.slot} at ${plan.fireAt.toISOString()}` : 'nothing to plan'} (reason=${reason})`);
     } catch (error) {
       logger.error('[useActReminderSync] Sync failed:', error);
+      // The cancel may have run without a write, so the check-in keeps midday.
+      markActReminderWriteFailed(true);
     } finally {
       inFlightRef.current = false;
       if (pendingRef.current) {

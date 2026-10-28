@@ -247,10 +247,18 @@ describe('useActReminderSync wind-down collision', () => {
     mockScheduleActReminder.mockResolvedValue(null);
     await mountHook();
     expect(useUIState.getState().actReminderWriteFailed).toBe(true);
+    expect(mockMmkv.get('@unfold_act_reminder_write_failed')).toBe('1');
 
     mockScheduleActReminder.mockResolvedValue('act-1');
     await foreground();
     expect(useUIState.getState().actReminderWriteFailed).toBe(false);
+    expect(mockMmkv.has('@unfold_act_reminder_write_failed')).toBe(false);
+  });
+
+  it('marks a thrown write as failed too', async () => {
+    mockScheduleActReminder.mockRejectedValue(new Error('scheduler down'));
+    await mountHook();
+    expect(mockMmkv.get('@unfold_act_reminder_write_failed')).toBe('1');
   });
 
   it('adds no second reminder when a replan comes after the first one fired', async () => {

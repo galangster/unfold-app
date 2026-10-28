@@ -23,6 +23,7 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false) }));
 const mockDeviceTimezone = { value: 'America/New_York' as string | null };
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => mockDeviceTimezone.value }));
 
