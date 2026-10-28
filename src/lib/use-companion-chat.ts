@@ -48,7 +48,7 @@ function announceCompanionReply(content: string) {
   }
 }
 
-/** Speaks the crisis lines ahead of the reply, so the announcement cap cannot cut them off. */
+/** Speaks the crisis lines (or the whole crisis reply) uncapped, ahead of any reply text, which keeps the cap. */
 function announceWithCrisisLines(spoken: string, content: string) {
   const announcement = [spoken, companionReplyAnnouncement(content)].filter(Boolean).join(' ');
   if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
@@ -623,7 +623,7 @@ export function useCompanionChat() {
         updateMessage(companionId, failure.patch, streamConversationId);
         if (failure.kind === 'reply') {
           if (isStreamConversationVisible()) setSuggestions([]);
-          announceCompanionReply(failure.spoken);
+          announceWithCrisisLines(failure.spoken, '');
         }
         return failure;
       };
