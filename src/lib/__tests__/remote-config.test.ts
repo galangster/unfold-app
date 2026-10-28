@@ -5,6 +5,7 @@ jest.mock('../api-config', () => ({
 }));
 
 import {
+  hasRemoteConfigSettled,
   parseRemoteConfig,
   readChapteredSeriesEnabled,
   readAutoTrialSwitchSnapshot,
@@ -31,6 +32,15 @@ function jsonResponse(body: unknown, status = 200) {
 describe('E1 remote-config outcomes', () => {
   beforeEach(() => {
     resetRemoteConfigForTesting();
+  });
+
+  it('reads as settled only once a fetch has answered, ok or failed', async () => {
+    expect(hasRemoteConfigSettled()).toBe(false);
+    await refreshRemoteConfig({ fetchImpl: jest.fn(async () => jsonResponse('err', 500)), nowMs: 1_000 });
+    expect(hasRemoteConfigSettled()).toBe(true);
+    resetRemoteConfigForTesting();
+    await refreshRemoteConfig({ fetchImpl: jest.fn(async () => jsonResponse(VALID_BODY)), nowMs: 1_000 });
+    expect(hasRemoteConfigSettled()).toBe(true);
   });
 
   it('accepts a valid db body and ignores extra keys', async () => {

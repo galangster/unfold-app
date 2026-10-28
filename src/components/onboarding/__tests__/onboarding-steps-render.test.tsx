@@ -16,6 +16,7 @@ const mockFeatureSummaryCarousel = jest.fn((_props: unknown) => null);
 const mockMmkvStore = new Map<string, string>();
 let mockOnboardingSearchParams: Record<string, string> = { startAt: 'hook' };
 let mockChapteredSeriesEnabled = false;
+let mockConfigSettled = true;
 const mockConfigListeners = new Set<() => void>();
 
 jest.mock('react-native-reanimated', () => {
@@ -149,6 +150,7 @@ jest.mock('@/lib/remote-config', () => ({
   awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
   readChapteredSeriesEnabled: () => mockChapteredSeriesEnabled,
+  hasRemoteConfigSettled: () => mockConfigSettled,
   subscribeRemoteConfig: (listener: () => void) => {
     mockConfigListeners.add(listener);
     return () => mockConfigListeners.delete(listener);
@@ -457,6 +459,7 @@ describe('companion name', () => {
 describe('onboarding series length cards', () => {
   afterEach(() => {
     mockChapteredSeriesEnabled = false;
+    mockConfigSettled = true;
   });
 
   type Radio = { props: { accessibilityLabel: string; accessibilityState: { selected: boolean }; onPress: () => void } };
@@ -495,5 +498,15 @@ describe('onboarding series length cards', () => {
     const last = radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!;
     await act(async () => { last.props.onPress(); });
     expect(radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!.props.accessibilityState.selected).toBe(true);
+  });
+
+  it('follows the first config answer when the step opens before it', async () => {
+    mockConfigSettled = false;
+    const root = await openAt('devotionalLength');
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '30 days']);
+    mockChapteredSeriesEnabled = true;
+    mockConfigSettled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '4 weeks. Four weekly chapters. Each week is prepared as you go.']);
   });
 });

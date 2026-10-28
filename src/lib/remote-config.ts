@@ -230,6 +230,11 @@ export function readAutoTrialSwitchSnapshot(
   return { enabled: true, maxTrialDays, fetchedAtMs, reason: 'on' };
 }
 
+/** False until the first fetch has answered, ok or failed. Tells "off" apart from "not known yet". */
+export function hasRemoteConfigSettled(current: RemoteConfigState = state): boolean {
+  return current.status !== 'idle';
+}
+
 /**
  * Whether the reader may start a 4-week chaptered series. Off before a fetch,
  * after a failed or fallback fetch, and once the config is older than its max age.

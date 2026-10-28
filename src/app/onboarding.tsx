@@ -164,7 +164,7 @@ import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success'
 import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
-import { refreshRemoteConfig } from '@/lib/remote-config';
+import { hasRemoteConfigSettled, refreshRemoteConfig } from '@/lib/remote-config';
 import { seriesLengthOptions } from '@/lib/series-length-options';
 import type { DevotionalLength } from '@/lib/series-length';
 import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
@@ -1271,7 +1271,11 @@ export default function OnboardingScreen() {
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
   // The length cards stay put while their step is on screen, even if a config refresh lands.
-  const lengthOptions = useFrozenWhile(currentStepId === 'devotionalLength', seriesLengthOptions(chapteredSeriesEnabled));
+  // Before the first config answer they follow it, so a cold start cannot lock in "30 days".
+  const lengthOptions = useFrozenWhile(
+    currentStepId === 'devotionalLength' && hasRemoteConfigSettled(),
+    seriesLengthOptions(chapteredSeriesEnabled),
+  );
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
 
   // Helper to get the index of current step in STEPS array
