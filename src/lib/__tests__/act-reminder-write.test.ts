@@ -12,19 +12,24 @@ jest.mock('@/lib/mmkv-storage', () => ({
 
 beforeEach(() => {
   mockMmkv.clear();
-  useUIState.setState({ actReminderWriteFailed: false });
+  useUIState.setState({ actReminderWriteEpoch: 0 });
 });
 
 it('reads a failed write left by an earlier process, so a background sync keeps the midday check-in', () => {
-  markActReminderWriteFailed(true);
-  // A fresh process starts with the in-memory flag false.
-  useUIState.setState({ actReminderWriteFailed: false });
+  mockMmkv.set('@unfold_act_reminder_write_failed', '1');
   expect(readActReminderWriteFailed()).toBe(true);
 });
 
-it('clears both copies once a write lands', () => {
+it('clears the flag once a write lands', () => {
   markActReminderWriteFailed(true);
   markActReminderWriteFailed(false);
-  expect(useUIState.getState().actReminderWriteFailed).toBe(false);
   expect(readActReminderWriteFailed()).toBe(false);
+});
+
+it('bumps the epoch on every result, so a hook that read the flag at launch re-reads it after the clear', () => {
+  mockMmkv.set('@unfold_act_reminder_write_failed', '1');
+  markActReminderWriteFailed(false);
+  expect(useUIState.getState().actReminderWriteEpoch).toBe(1);
+  markActReminderWriteFailed(false);
+  expect(useUIState.getState().actReminderWriteEpoch).toBe(2);
 });

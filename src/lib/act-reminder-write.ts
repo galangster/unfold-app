@@ -26,14 +26,15 @@ export function storeActReminderLastWrite(write: ActReminderWrite | null): void 
 /** True while the last act reminder write failed. Today's check-in keeps its midday slot until then. */
 export function readActReminderWriteFailed(): boolean {
   try {
-    return useUIState.getState().actReminderWriteFailed || mmkvStorage.getItem(WRITE_FAILED_KEY) === '1';
+    return mmkvStorage.getItem(WRITE_FAILED_KEY) === '1';
   } catch {
-    return useUIState.getState().actReminderWriteFailed;
+    return false;
   }
 }
 
+/** Records the result and bumps the epoch, so a hook that read an earlier process's flag re-reads it. */
 export function markActReminderWriteFailed(failed: boolean): void {
   if (failed) mmkvStorage.setItem(WRITE_FAILED_KEY, '1');
   else mmkvStorage.removeItem(WRITE_FAILED_KEY);
-  useUIState.getState().setActReminderWriteFailed(failed);
+  useUIState.getState().bumpActReminderWriteEpoch();
 }

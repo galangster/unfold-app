@@ -107,8 +107,9 @@ function useCheckInFingerprint(): string {
   );
   // Reads the clock, so after midnight it holds yesterday's claim until the
   // next store write. Harmless: a past instant matches no occurrence.
-  // Subscribes for the re-render; the read also covers a flag left by an earlier process.
-  const actReminderWriteFailed = useUIState((s) => s.actReminderWriteFailed) || readActReminderWriteFailed();
+  // The epoch re-renders on every write result; the flag itself is read from MMKV.
+  useUIState((s) => s.actReminderWriteEpoch);
+  const actReminderWriteFailed = readActReminderWriteFailed();
   const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s, new Date(), actReminderWriteFailed)?.toISOString() ?? '');
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);

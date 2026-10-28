@@ -121,7 +121,7 @@ describe('useActReminderSync wind-down collision', () => {
     mockScheduleActReminder.mockResolvedValue('act-1');
     mockCancelActReminder.mockResolvedValue(undefined);
     mockAreNotificationsEnabled.mockResolvedValue(true);
-    useUIState.setState({ actReminderWriteFailed: false });
+    useUIState.setState({ actReminderWriteEpoch: 0 });
     mockMmkv.clear();
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => {
       return { remove: jest.fn() };
@@ -246,12 +246,10 @@ describe('useActReminderSync wind-down collision', () => {
     const foreground = captureForegroundHandler();
     mockScheduleActReminder.mockResolvedValue(null);
     await mountHook();
-    expect(useUIState.getState().actReminderWriteFailed).toBe(true);
     expect(mockMmkv.get('@unfold_act_reminder_write_failed')).toBe('1');
 
     mockScheduleActReminder.mockResolvedValue('act-1');
     await foreground();
-    expect(useUIState.getState().actReminderWriteFailed).toBe(false);
     expect(mockMmkv.has('@unfold_act_reminder_write_failed')).toBe(false);
   });
 
