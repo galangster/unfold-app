@@ -8,7 +8,7 @@ import {
   chapterStatusLabel,
   type BookChapter,
 } from '@/lib/book-of-seasons';
-import { weekRowSpokenLabel, weekRowTitle, weeksHeadingLabel, type SeriesWeek } from '@/lib/series-weeks';
+import { weekRowSpokenLabel, weekRowTitle, weeksHeadingLabel, type SeriesWeeks } from '@/lib/series-weeks';
 
 function chapterNumber(index: number): string {
   return String(index + 1).padStart(2, '0');
@@ -20,6 +20,7 @@ export function ChapterJourney({
   canOpenChapter,
   onOpenChapter,
   seriesPaused = false,
+  weeks = null,
 }: {
   chapters: readonly BookChapter[];
   colors: ColorTheme;
@@ -27,14 +28,13 @@ export function ChapterJourney({
   onOpenChapter: (chapter: BookChapter) => void;
   /** A paused series promises no planning (R4). */
   seriesPaused?: boolean;
+  /** The weeks of a chaptered series; null keeps the legacy list (R6). */
+  weeks?: SeriesWeeks | null;
 }) {
   if (chapters.length === 0) return null;
 
-  const weeks = chapters.every((chapter) => chapter.week)
-    ? chapters.map((chapter) => chapter.week as SeriesWeek)
-    : null;
   const countLabel = weeks
-    ? weeksHeadingLabel({ weeks, totalDays: weeks[weeks.length - 1].toDay })
+    ? weeksHeadingLabel(weeks)
     : chapters.length === 1 ? '1 chapter' : `${chapters.length} chapters`;
 
   return (

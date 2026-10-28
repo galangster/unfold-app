@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { firstReadingLabel } from '@/lib/bookshelf';
@@ -42,7 +42,10 @@ export function BookOfSeasonsView({
    */
   spread?: AdaptivePanes | null;
 }) {
-  const model = buildBookOfSeasonsModel(devotional, now, seriesPaused);
+  const model = useMemo(
+    () => buildBookOfSeasonsModel(devotional, now, seriesPaused),
+    [devotional, now, seriesPaused],
+  );
   const today = model?.page;
   const chapters = model?.chapters ?? [];
   const theme = devotional.seriesArc?.overarchingTheme?.trim();
@@ -97,6 +100,7 @@ export function BookOfSeasonsView({
     chapters={chapters}
     colors={colors}
     seriesPaused={seriesPaused}
+    weeks={model?.weeks ?? null}
     canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
     onOpenChapter={(chapter) => {
       const dayNumber = resolveBookOpenDayNumber(devotional, chapter, now);

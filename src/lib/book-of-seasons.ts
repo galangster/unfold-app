@@ -77,11 +77,19 @@ export function buildBookChapters(
   devotional: Devotional | null | undefined,
   now: Date,
 ): BookChapter[] {
-  if (!devotional) return [];
+  return buildChaptersAndWeeks(devotional, now).chapters;
+}
+
+/** The series-detail rows and, for a chaptered series, its weeks, read once. */
+function buildChaptersAndWeeks(
+  devotional: Devotional | null | undefined,
+  now: Date,
+): { chapters: BookChapter[]; weeks: SeriesWeeks | null } {
+  if (!devotional) return { chapters: [], weeks: null };
 
   const totalDays = getServerOwnedSeriesTotalDays(devotional);
   const acts = listSeriesActs(devotional.seriesArc, totalDays);
-  if (acts.length === 0) return [];
+  if (acts.length === 0) return { chapters: [], weeks: null };
   const weeks = readSeriesWeeks(devotional.seriesArc, { totalDays, nowMs: now.getTime() });
 
   const days = listDaysInOrder(devotional.days);
@@ -92,7 +100,7 @@ export function buildBookChapters(
     (act) => todayReaderDayNumber >= act.fromDay && todayReaderDayNumber <= act.toDay,
   ) ?? acts.find((act) => countReadInRange(days, act.fromDay, act.toDay) < Math.max(0, act.toDay - act.fromDay + 1));
 
-  return acts.map((act) => {
+  const chapters = acts.map((act): BookChapter => {
     const fromDay = act.fromDay;
     const toDay = act.toDay;
     const dayCount = Math.max(0, toDay - fromDay + 1);
@@ -121,6 +129,7 @@ export function buildBookChapters(
       ...(week ? { week } : {}),
     };
   });
+  return { chapters, weeks };
 }
 
 function dayInRange(
@@ -165,7 +174,7 @@ export function buildBookOfSeasonsModel(
   devotional: Devotional | null | undefined,
   now: Date,
   seriesPaused: boolean,
-): { page: BookTodayPage; chapters: BookChapter[] } | null {
+): { page: BookTodayPage; chapters: BookChapter[]; weeks: SeriesWeeks | null } | null {
   if (!devotional) return null;
 
   const totalDays = getServerOwnedSeriesTotalDays(devotional) || devotional.totalDays;
@@ -176,7 +185,7 @@ export function buildBookOfSeasonsModel(
     const lastRead = [...days].reverse().find((item) => item.isRead && item.dayNumber <= totalDays);
     dayNumber = lastRead?.dayNumber ?? Math.min(dayNumber, totalDays || dayNumber);
   }
-  const chapters = buildBookChapters(devotional, now);
+  const { chapters, weeks } = buildChaptersAndWeeks(devotional, now);
   const currentChapter = chapters.find(
     (chapter) => dayNumber >= chapter.fromDay && dayNumber <= chapter.toDay,
   );
@@ -224,6 +233,7 @@ export function buildBookOfSeasonsModel(
       eyebrow,
     },
     chapters,
+    weeks,
   };
 }
 
