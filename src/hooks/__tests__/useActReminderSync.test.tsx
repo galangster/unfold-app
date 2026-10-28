@@ -199,6 +199,21 @@ describe('useActReminderSync wind-down collision', () => {
     expect(mockScheduleActReminder.mock.calls.length).toBe(scheduledAfterMount);
   });
 
+  it('writes again when the reader goes back to a time whose reminder a failed replan cancelled', async () => {
+    await mountHook();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(1);
+
+    mockScheduleActReminder.mockResolvedValue(null);
+    mockStoreState.eveningWindDownTime = '21:00';
+    await flushFingerprint();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(2);
+
+    mockScheduleActReminder.mockResolvedValue('act-2');
+    mockStoreState.eveningWindDownTime = '20:30';
+    await flushFingerprint();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(3);
+  });
+
   it('plans again when notification permission is granted later the same day', async () => {
     // Today's midday check-in steps aside for a midday act, so an act
     // reminder skipped for lack of permission must come back once it is granted.

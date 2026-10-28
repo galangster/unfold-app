@@ -111,6 +111,9 @@ export function useActReminderSync() {
       // replan never leaves an orphan for a day that changed. A reminder still
       // ahead is cancelled here, so it never fires and its record goes too.
       if (lastWrite && Date.parse(lastWrite.fireAt) > now.getTime()) storeActReminderLastWrite(null);
+      // Nothing stays applied once the cancel runs, so a failed write never
+      // leaves an earlier fingerprint that would skip the retry.
+      lastAppliedRef.current = '';
       await cancelActReminder();
 
       const notificationsEnabled = await areNotificationsEnabled();
