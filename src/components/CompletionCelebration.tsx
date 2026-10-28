@@ -207,7 +207,9 @@ export function CompletionCelebration({
             {/* Title */}
             <Animated.View style={titleStyle}>
               <Text
-                {...(week ? { ref: weekTitleRef, accessible: true, accessibilityRole: 'header' as const } : {})}
+                ref={weekTitleRef}
+                accessible={week ? true : undefined}
+                accessibilityRole={week ? 'header' : undefined}
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: type === 'series' ? 46 : 43,
@@ -224,7 +226,7 @@ export function CompletionCelebration({
             {/* Subtitle */}
             <Animated.View style={[{ marginTop: Spacing['5'] }, subtitleStyle]}>
               <Text
-                {...(week ? { accessibilityLabel: week.spokenLine } : {})}
+                accessibilityLabel={week?.spokenLine}
                 style={{
                   fontFamily: FontFamily.body,
                   fontSize: 17,
