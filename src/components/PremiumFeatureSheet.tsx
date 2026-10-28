@@ -58,7 +58,8 @@ type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
 interface FeatureConfig {
   icon: React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
   headline: string;
-  description: string;
+  /** Absent only for the length sheet, which reads the chapters switch. */
+  description?: string;
   cta: string;
 }
 
@@ -132,7 +133,6 @@ const FEATURES: Record<string, FeatureConfig> = {
   devotionalLength: {
     icon: CalendarIcon,
     headline: 'Longer devotional series',
-    description: premiumLengthDescription(false),
     cta: 'Unlock Premium',
   },
   readingDuration: {
