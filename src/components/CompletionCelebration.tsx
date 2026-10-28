@@ -178,7 +178,7 @@ export function CompletionCelebration({
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={() => runAction(onDismiss)}>
-      <Animated.View style={[{ flex: 1 }, overlayStyle]} accessibilityViewIsModal={hasWeek || undefined}>
+      <Animated.View style={[{ flex: 1 }, overlayStyle]} accessibilityViewIsModal={hasWeek || undefined} onAccessibilityEscape={hasWeek ? () => runAction(onDismiss) : undefined}>
         <EmberSystem variant="celebration" motes active />
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{
           flexGrow: 1,
@@ -187,7 +187,7 @@ export function CompletionCelebration({
         }}>
       <TouchableOpacity
         disabled={!!nextStep}
-        accessible={!nextStep}
+        accessible={!nextStep && !hasWeek}
         activeOpacity={1}
         style={{ flexGrow: 1 }}
         onPress={() => runAction(onDismiss)}
@@ -287,7 +287,11 @@ export function CompletionCelebration({
               hintStyle,
             ]}
           >
+            {/* The week moment keeps its children reachable, so Continue is its own button. */}
             <Text
+              accessibilityRole={hasWeek ? 'button' : undefined}
+              accessibilityLabel={hasWeek ? 'Continue' : undefined}
+              onPress={hasWeek ? () => runAction(onDismiss) : undefined}
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 13,

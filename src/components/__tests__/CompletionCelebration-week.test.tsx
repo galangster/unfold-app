@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { CompletionCelebration } from '../CompletionCelebration';
 import { completionCopy, completionVariation } from '@/constants/daily-copy';
 import { copySeed } from '@/lib/copy-variation';
@@ -77,6 +77,15 @@ it('is modal, makes the title a header, speaks the line without the separator, a
   expect(focus).toHaveBeenCalledWith(expect.anything(), 'focus');
   focus.mockRestore();
   jest.useRealTimers();
+});
+
+it('keeps the header reachable without a next step and gives VoiceOver a Continue button', () => {
+  const onDismiss = jest.fn();
+  const screen = render(<CompletionCelebration visible type="day" week={WEEK} onDismiss={onDismiss} />);
+  expect(screen.UNSAFE_root.findAll((node) => node.props.accessibilityHint === 'Tap anywhere to continue' && node.props.accessible === true)).toHaveLength(0);
+  expect(screen.getByText('Week 1 complete').props.accessibilityRole).toBe('header');
+  fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+  expect(onDismiss).toHaveBeenCalled();
 });
 
 it('shows without a fade when Reduce Motion is on', () => {
