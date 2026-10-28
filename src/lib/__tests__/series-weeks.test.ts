@@ -4,7 +4,6 @@ import {
   WEEK_PREPARING_STALE_MS,
   findWeekForDay,
   readSeriesWeeks,
-  seriesLengthPhrase,
   weekCaption,
   weekCompleteAnnouncement,
   weekCompleteMoment,
@@ -160,13 +159,5 @@ describe('week-complete moment', () => {
     expect(weekCompleteAnnouncement(planned, 28)).toBeNull();
     expect(weekCompleteAnnouncement(planned, 6)).toBeNull();
     expect(weekCompleteAnnouncement(null, 7)).toBeNull();
-  });
-});
-
-describe('seriesLengthPhrase', () => {
-  it('names a 28-day series in weeks and keeps every other length in days', () => {
-    expect(seriesLengthPhrase(28)).toBe('4-week');
-    expect(seriesLengthPhrase(30)).toBe('30-day');
-    expect(seriesLengthPhrase(7)).toBe('7-day');
   });
 });

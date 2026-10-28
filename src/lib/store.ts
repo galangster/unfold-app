@@ -1,3 +1,4 @@
+import type { DevotionalLength } from './series-length';
 import { useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { InterFontFamily, SourceSerifFontFamily } from '@/constants/fonts';
@@ -210,7 +211,7 @@ export interface UserProfile {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 28 | 30;
+  devotionalLength: DevotionalLength;
   reminderTime: string;
   dailyReminderEnabled: boolean;
   /** ISO time the backend last confirmed it holds this device's push token. */

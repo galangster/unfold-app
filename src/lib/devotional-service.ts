@@ -1,3 +1,4 @@
+import type { DevotionalLength } from './series-length';
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
 import { logger } from '@/lib/logger';
@@ -365,7 +366,7 @@ export interface GenerationContext {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 28 | 30;
+  devotionalLength: DevotionalLength;
   bibleTranslation: BibleTranslation;
   previouslyUsedScriptures?: string[]; // References to avoid repeating (legacy)
   usedScriptureHistory?: UsedScripture[]; // Full scripture objects for variance analysis
@@ -2029,7 +2030,7 @@ export async function continueGeneratingDays(
         faithImpact: devotional.userContext.faithImpact ?? user.faithImpact ?? '',
         spiritualSeeking: user.spiritualSeeking,
         readingDuration: user.readingDuration,
-        devotionalLength: targetDays as GenerationContext['devotionalLength'],
+        devotionalLength: targetDays as DevotionalLength,
         bibleTranslation: user.bibleTranslation,
         themeCategory: devotional.themeCategory,
         devotionalType: devotional.devotionalType,

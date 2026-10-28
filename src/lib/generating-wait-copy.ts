@@ -4,8 +4,8 @@
  * SHORT_SERIES_LONG_RUNNING_AFTER_MS in generation-poll-outcome.ts.
  */
 import { WAIT_LINE_NOTIFY_PROMISE_COPY, type NotifyPromisePlacement } from './generating-notify-state';
-import { isLongSeries, MONTH_SERIES_DAYS, WEEK_SERIES_DAYS } from './generation-poll-outcome';
-import { FOUR_WEEK_SERIES_DAYS } from './series-weeks';
+import { isLongSeries } from './generation-poll-outcome';
+import { FOUR_WEEK_SERIES_DAYS, MONTH_SERIES_DAYS, WEEK_SERIES_DAYS } from './series-length';
 
 function resolveWaitEstimate(totalDays: number): string {
   // Negated comparisons so a non-finite length reads as the shortest series.

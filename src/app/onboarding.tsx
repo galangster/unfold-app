@@ -165,7 +165,8 @@ import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
 import { refreshRemoteConfig } from '@/lib/remote-config';
-import { SERIES_LENGTH_OPTIONS, seriesLengthOptions } from '@/lib/series-length-options';
+import { SERIES_LENGTH_OPTIONS_CHAPTERS_OFF, seriesLengthOptions } from '@/lib/series-length-options';
+import type { DevotionalLength } from '@/lib/series-length';
 import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
@@ -478,9 +479,12 @@ const ALL_STEPS = [
   // UPCOMING EVENT: optional \u2014 reachable from both first-run and new-series flows
   { id: 'upcomingEvent', question: "Anything coming up that's weighing on you, or that you're counting down to?", subtext: "A move, a birth, an anniversary, a court date. We'll walk toward it with you.", type: 'upcomingEvent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: 'Each day is crafted to fit your rhythm.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
-  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [...SERIES_LENGTH_OPTIONS] },
+  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: SERIES_LENGTH_OPTIONS_CHAPTERS_OFF },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
+
+/** One card of a choice step. Only the length cards carry their own VoiceOver label. */
+type ChoiceOption = { value: string | number; label: string; description?: string; time?: string; accessibilityLabel?: string };
 
 type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'keyPeople' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'diagnosticRound' | 'spiritualSeeking' | 'upcomingEvent' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
@@ -562,7 +566,7 @@ export interface OnboardingData {
   relationshipWithGod?: RelationshipWithGod;
   bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 28 | 30;
+  devotionalLength: DevotionalLength;
   reminderTime: string;
   mirrorBackCommitted: boolean;
   /** The mirror-back "working read" shown for ratification, stored whenever displayed. */
@@ -3396,7 +3400,7 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'choice' || step.type === 'timeChoice') {
-      const options = step.hasDynamicOptions && step.id === 'devotionalLength'
+      const options: readonly ChoiceOption[] = step.hasDynamicOptions && step.id === 'devotionalLength'
           ? seriesLengthOptions(chapteredSeriesEnabled)
           : step.options || [];
 
@@ -3465,7 +3469,7 @@ export default function OnboardingScreen() {
                   }, 300);
                 }}
                 accessibilityRole="radio"
-                accessibilityLabel={isLockedOption ? `${option.label}, premium only` : 'accessibilityLabel' in option ? String(option.accessibilityLabel) : option.label}
+                accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.accessibilityLabel ?? option.label}
                 accessibilityState={{ selected: isSelected, disabled: isLockedOption }}
               >
                     <View style={{

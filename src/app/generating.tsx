@@ -44,7 +44,7 @@ import {
   isGenerationSessionInvalidatedError,
   isSyncSessionCurrent,
 } from '@/lib/generation-session';
-import { seriesLengthPhrase } from '@/lib/series-weeks';
+import { seriesLengthPhrase } from '@/lib/series-length-copy';
 import {
   classifyPollFailure,
   countConsecutiveNetworkErrors,

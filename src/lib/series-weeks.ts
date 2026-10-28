@@ -213,11 +213,3 @@ export function weekCompleteAnnouncement(weeks: SeriesWeeks | null | undefined, 
   const week = weekFinishedBy(weeks, completedDay);
   return week ? `Week ${week.index} complete` : null;
 }
-
-/** The four-week length is the one length a reader sees in weeks. */
-export const FOUR_WEEK_SERIES_DAYS = 28;
-
-/** "4-week" for a 28-day series, else "N-day". */
-export function seriesLengthPhrase(totalDays: number): string {
-  return totalDays === FOUR_WEEK_SERIES_DAYS ? '4-week' : `${totalDays}-day`;
-}

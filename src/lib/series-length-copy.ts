@@ -2,7 +2,7 @@
  * Reader-facing length copy for the 4-week series (spec r2 rows 3, 4, 38 and
  * 39). Length 28 is the four-week length; every other length keeps its words.
  */
-import { FOUR_WEEK_SERIES_DAYS } from './series-weeks';
+import { FOUR_WEEK_SERIES_DAYS, MONTH_SERIES_DAYS } from './series-length';
 
 /** Premium sheet description for the series-length feature (row 3). */
 export function premiumLengthDescription(chapteredSeriesEnabled: boolean): string {
@@ -22,9 +22,14 @@ export function pdfCoverSubtitle(totalDays: number): string {
     : `A ${totalDays}-Day Devotional Series`;
 }
 
+/** "4-week" for a 28-day series, else "N-day". */
+export function seriesLengthPhrase(totalDays: number): string {
+  return totalDays === FOUR_WEEK_SERIES_DAYS ? '4-week' : `${totalDays}-day`;
+}
+
 /** The read count that earns the recap's long closing: 28 once the reader holds a 4-week series, else 30 (row 38). */
 export function recapLongRhythmDays(series: readonly { totalDays: number }[]): number {
-  return series.some((item) => item.totalDays === FOUR_WEEK_SERIES_DAYS) ? FOUR_WEEK_SERIES_DAYS : 30;
+  return series.some((item) => item.totalDays === FOUR_WEEK_SERIES_DAYS) ? FOUR_WEEK_SERIES_DAYS : MONTH_SERIES_DAYS;
 }
 
 export function recapClosingMessage(totalDaysRead: number, longRhythmDays: number): string {

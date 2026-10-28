@@ -7,6 +7,7 @@
  * result can't be reconciled is classified as a TERMINAL invalid result rather
  * than being swallowed by the transient-network catch and re-polled forever.
  */
+import { FOUR_WEEK_SERIES_DAYS } from './series-length';
 import {
   reconcileGenerationResultIdentity,
   type GenerationResultPayload,
@@ -183,21 +184,15 @@ export const SHORT_SERIES_LONG_RUNNING_AFTER_MS = 4 * 60 * 1000;
 export const LONG_SERIES_LONG_RUNNING_AFTER_MS = 7 * 60 * 1000;
 /** A series longer than this takes the longer threshold and wait copy. */
 const LONG_SERIES_AFTER_DAYS = 14;
-/** A series this long or shorter takes the shortest wait copy. */
-export const WEEK_SERIES_DAYS = 7;
-/** The one series length the wait copy names. */
-export const MONTH_SERIES_DAYS = 30;
 
 /** A non-finite length reads as a short series. */
 export function isLongSeries(totalDays: number): boolean {
   return totalDays > LONG_SERIES_AFTER_DAYS;
 }
 
-/** A 4-week series writes week 1 only before Day 1 opens, so its wait is a short one (E.8). */
-const FIRST_WEEK_ONLY_SERIES_DAYS = 28;
-
 export function resolveLongRunningAfterMs(totalDays: number): number {
-  if (totalDays === FIRST_WEEK_ONLY_SERIES_DAYS) return SHORT_SERIES_LONG_RUNNING_AFTER_MS;
+  // A 4-week series writes week 1 only before Day 1 opens, so its wait is a short one (E.8).
+  if (totalDays === FOUR_WEEK_SERIES_DAYS) return SHORT_SERIES_LONG_RUNNING_AFTER_MS;
   return isLongSeries(totalDays) ? LONG_SERIES_LONG_RUNNING_AFTER_MS : SHORT_SERIES_LONG_RUNNING_AFTER_MS;
 }
 /**
