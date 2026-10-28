@@ -44,6 +44,7 @@ import {
   isGenerationSessionInvalidatedError,
   isSyncSessionCurrent,
 } from '@/lib/generation-session';
+import { seriesLengthPhrase } from '@/lib/series-length-copy';
 import {
   classifyPollFailure,
   countConsecutiveNetworkErrors,
@@ -1267,7 +1268,7 @@ export default function GeneratingScreen() {
                   textAlign: 'left',
                 }}
               >
-                Your {autoReadyDays ?? user?.devotionalLength}-day series
+                Your {seriesLengthPhrase(autoReadyDays ?? user?.devotionalLength ?? 0)} series
               </Text>
             </Animated.View>
 

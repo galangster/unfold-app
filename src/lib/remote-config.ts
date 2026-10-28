@@ -15,6 +15,8 @@ export interface RemoteConfigV1 {
     platforms: ('ios' | 'android')[];
     maxTrialDays: AllowedTrialDays;
   };
+  /** Weekly chapters creation switch. A missing or malformed field reads as off. */
+  chapteredSeries: { enabled: boolean };
   source: 'db' | 'fallback';
 }
 
@@ -34,6 +36,21 @@ const ALLOWED_DAYS = new Set<AllowedTrialDays>([3, 7]);
 
 let state: RemoteConfigState = { status: 'idle' };
 let inflight: Promise<RemoteConfigState> | null = null;
+const listeners = new Set<() => void>();
+
+function setState(next: RemoteConfigState): RemoteConfigState {
+  state = next;
+  listeners.forEach((listener) => listener());
+  return state;
+}
+
+/** Calls the listener after every fetch result, so mounted screens follow a refresh. */
+export function subscribeRemoteConfig(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export function resetRemoteConfigForTesting(): void {
   state = { status: 'idle' };
@@ -56,6 +73,9 @@ export function parseRemoteConfig(json: unknown): RemoteConfigV1 | null {
   if (typeof series.maxTrialDays !== 'number' || !ALLOWED_DAYS.has(series.maxTrialDays as AllowedTrialDays)) {
     return null;
   }
+  const chaptered = row.chapteredSeries && typeof row.chapteredSeries === 'object'
+    ? (row.chapteredSeries as Record<string, unknown>)
+    : null;
   return {
     version: 1,
     autoTrialSeries: {
@@ -63,6 +83,7 @@ export function parseRemoteConfig(json: unknown): RemoteConfigV1 | null {
       platforms: [...series.platforms],
       maxTrialDays: series.maxTrialDays as AllowedTrialDays,
     },
+    chapteredSeries: { enabled: chaptered?.enabled === true },
     source: row.source,
   };
 }
@@ -77,8 +98,7 @@ function shouldSkip(nowMs: number, force?: boolean): boolean {
 type ConfigFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 function fail(nowMs: number, reason: Extract<RemoteConfigState, { status: 'error' }>['reason']): RemoteConfigState {
-  state = { status: 'error', failedAtMs: nowMs, reason };
-  return state;
+  return setState({ status: 'error', failedAtMs: nowMs, reason });
 }
 
 async function fetchConfig(
@@ -109,8 +129,7 @@ async function fetchConfig(
     const parsed = parseRemoteConfig(body);
     if (!parsed) return fail(nowMs, 'parse');
     if (parsed.source === 'fallback') return fail(nowMs, 'server_fallback');
-    state = { status: 'ok', config: parsed, fetchedAtMs: nowMs };
-    return state;
+    return setState({ status: 'ok', config: parsed, fetchedAtMs: nowMs });
   } catch (error) {
     const aborted = controller.signal.aborted
       || (error instanceof Error && error.name === 'AbortError');
@@ -171,21 +190,35 @@ export async function awaitRemoteConfigSettled(
   }
 }
 
+type ConfigSnapshot =
+  | { kind: 'not_fetched' }
+  | { kind: 'fetch_failed'; failedAtMs: number }
+  | { kind: 'stale' | 'fresh'; config: RemoteConfigV1; fetchedAtMs: number };
+
+/** One reading of the cached config: fresh only while within its max age. */
+function readConfigSnapshot(nowMs: number, current: RemoteConfigState): ConfigSnapshot {
+  if (current.status === 'idle') return { kind: 'not_fetched' };
+  if (current.status === 'error') return { kind: 'fetch_failed', failedAtMs: current.failedAtMs };
+  const { config, fetchedAtMs } = current;
+  return { kind: nowMs - fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS ? 'stale' : 'fresh', config, fetchedAtMs };
+}
+
 export function readAutoTrialSwitchSnapshot(
   nowMs: number,
   platform: string,
   current: RemoteConfigState = state,
 ): AutoTrialSwitchSnapshot {
-  if (current.status === 'idle') {
+  const snapshot = readConfigSnapshot(nowMs, current);
+  if (snapshot.kind === 'not_fetched') {
     return { enabled: false, maxTrialDays: 7, fetchedAtMs: null, reason: 'not_fetched' };
   }
-  if (current.status === 'error') {
-    return { enabled: false, maxTrialDays: 7, fetchedAtMs: current.failedAtMs, reason: 'fetch_failed' };
+  if (snapshot.kind === 'fetch_failed') {
+    return { enabled: false, maxTrialDays: 7, fetchedAtMs: snapshot.failedAtMs, reason: 'fetch_failed' };
   }
 
-  const { config, fetchedAtMs } = current;
+  const { config, fetchedAtMs } = snapshot;
   const maxTrialDays = config.autoTrialSeries.maxTrialDays;
-  if (nowMs - fetchedAtMs > REMOTE_CONFIG_MAX_AGE_MS) {
+  if (snapshot.kind === 'stale') {
     return { enabled: false, maxTrialDays, fetchedAtMs, reason: 'stale' };
   }
   if (!config.autoTrialSeries.enabled) {
@@ -195,4 +228,21 @@ export function readAutoTrialSwitchSnapshot(
     return { enabled: false, maxTrialDays, fetchedAtMs, reason: 'platform_off' };
   }
   return { enabled: true, maxTrialDays, fetchedAtMs, reason: 'on' };
+}
+
+/** False until the first fetch has answered, ok or failed. Tells "off" apart from "not known yet". */
+export function hasRemoteConfigSettled(current: RemoteConfigState = state): boolean {
+  return current.status !== 'idle';
+}
+
+/**
+ * Whether the reader may start a 4-week chaptered series. Off before a fetch,
+ * after a failed or fallback fetch, and once the config is older than its max age.
+ */
+export function readChapteredSeriesEnabled(
+  nowMs: number,
+  current: RemoteConfigState = state,
+): boolean {
+  const snapshot = readConfigSnapshot(nowMs, current);
+  return snapshot.kind === 'fresh' && snapshot.config.chapteredSeries.enabled;
 }

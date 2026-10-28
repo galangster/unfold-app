@@ -76,6 +76,7 @@ jest.mock('expo-router', () => ({
 let mockDevotionals: Devotional[] = [mockSeries];
 let mockCurrentDevotionalId: string | null = null;
 
+jest.mock('@/hooks/usePremiumAccessPolicy', () => ({ usePremiumAccessPolicy: () => 'granted' }));
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({

@@ -15,6 +15,9 @@ const mockReplace = jest.fn();
 const mockFeatureSummaryCarousel = jest.fn((_props: unknown) => null);
 const mockMmkvStore = new Map<string, string>();
 let mockOnboardingSearchParams: Record<string, string> = { startAt: 'hook' };
+let mockChapteredSeriesEnabled = false;
+let mockConfigSettled = true;
+const mockConfigListeners = new Set<() => void>();
 
 jest.mock('react-native-reanimated', () => {
   const { View, Text: RNText } = jest.requireActual('react-native');
@@ -146,6 +149,12 @@ jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(async () => undefined),
   awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
+  readChapteredSeriesEnabled: () => mockChapteredSeriesEnabled,
+  hasRemoteConfigSettled: () => mockConfigSettled,
+  subscribeRemoteConfig: (listener: () => void) => {
+    mockConfigListeners.add(listener);
+    return () => mockConfigListeners.delete(listener);
+  },
 }));
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => 'America/Chicago' }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
@@ -443,5 +452,78 @@ describe('companion name', () => {
 
     expect(profile.companionName).toBeUndefined();
     expect(mockStoreState.setCompanionName).toHaveBeenLastCalledWith(null);
+  });
+});
+
+// Weekly chapters, APP-5: the length card follows the chapteredSeries switch.
+describe('onboarding series length cards', () => {
+  afterEach(() => {
+    mockChapteredSeriesEnabled = false;
+    mockConfigSettled = true;
+  });
+
+  // A tap starts the step's 300 ms auto-advance. Let it run before teardown,
+  // or its Keyboard.dismiss fires inside the next suite on this worker.
+  async function settleAutoAdvance() {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+  }
+
+  type Radio = { props: { accessibilityLabel: string; accessibilityState: { selected: boolean }; onPress: () => void } };
+  function radios(root: Tree): Radio[] {
+    const found = root.root.findAll((n: { props?: { accessibilityRole?: string; onPress?: unknown } }) =>
+      n.props?.accessibilityRole === 'radio' && typeof n.props?.onPress === 'function') as Radio[];
+    // The pressable and its host view both carry the props: keep one per card.
+    return found.filter((radio, index) => found.findIndex((other) => other.props.accessibilityLabel === radio.props.accessibilityLabel) === index);
+  }
+
+  it('shows "30 days" with the switch off or unreadable', async () => {
+    const root = await openAt('devotionalLength');
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '30 days']);
+  });
+
+  it('shows the ruled "4 weeks" card with its label, and selecting it stores length 28', async () => {
+    mockChapteredSeriesEnabled = true;
+    const root = await openAt('devotionalLength');
+    const labels = radios(root).map((radio) => radio.props.accessibilityLabel);
+    expect(labels).toEqual(['3 days', '7 days', '14 days', '4 weeks. Four weekly chapters. Each week is prepared as you go.']);
+    expect(textNodes(root, '4 weeks')).not.toHaveLength(0);
+    expect(textNodes(root, 'Four weekly chapters. Each week is prepared as you go.')).not.toHaveLength(0);
+    const card = () => radios(root).find((radio) => radio.props.accessibilityLabel.startsWith('4 weeks'))!;
+    expect(card().props.accessibilityState.selected).toBe(false);
+    await act(async () => { card().props.onPress(); });
+    expect(card().props.accessibilityState.selected).toBe(true);
+    await settleAutoAdvance();
+  });
+
+  it('keeps the cards in place when the switch changes while the step is shown', async () => {
+    const root = await openAt('devotionalLength');
+    const before = radios(root).map((radio) => radio.props.accessibilityLabel);
+    expect(before).toEqual(['3 days', '7 days', '14 days', '30 days']);
+    mockChapteredSeriesEnabled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(before);
+    const last = radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!;
+    await act(async () => { last.props.onPress(); });
+    expect(radios(root).find((radio) => radio.props.accessibilityLabel === '30 days')!.props.accessibilityState.selected).toBe(true);
+    await settleAutoAdvance();
+  });
+
+  it('follows the first config answer when the step opens before it', async () => {
+    mockConfigSettled = false;
+    const root = await openAt('devotionalLength');
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '30 days']);
+    mockChapteredSeriesEnabled = true;
+    mockConfigSettled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '4 weeks. Four weekly chapters. Each week is prepared as you go.']);
+  });
+  it('freezes on a first "off" answer, so a later refresh cannot swap the cards', async () => {
+    mockConfigSettled = false;
+    const root = await openAt('devotionalLength');
+    mockConfigSettled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    mockChapteredSeriesEnabled = true;
+    await act(async () => { mockConfigListeners.forEach((listener) => listener()); });
+    expect(radios(root).map((radio) => radio.props.accessibilityLabel)).toEqual(['3 days', '7 days', '14 days', '30 days']);
   });
 });

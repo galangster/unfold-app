@@ -9,8 +9,10 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, type StyleProp, type TextStyle } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
+import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
+import { premiumLengthDescription } from '@/lib/series-length-copy';
 import { adaptiveFrameStyle, adaptiveSafeGutterStyle, adaptiveViewportMaxHeight } from '@/lib/adaptive-layout';
 import Animated, {
   FadeIn,
@@ -56,7 +58,8 @@ type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
 interface FeatureConfig {
   icon: React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
   headline: string;
-  description: string;
+  /** Absent only for the length sheet, which reads the chapters switch. */
+  description?: string;
   cta: string;
 }
 
@@ -130,7 +133,6 @@ const FEATURES: Record<string, FeatureConfig> = {
   devotionalLength: {
     icon: CalendarIcon,
     headline: 'Longer devotional series',
-    description: 'Go deeper with 14-day and 30-day series. Free users can create up to 7-day series.',
     cta: 'Unlock Premium',
   },
   readingDuration: {
@@ -161,6 +163,12 @@ interface PremiumFeatureSheetProps {
 const DISMISS_THRESHOLD = 100;
 // Rubber-band factor for drag up (0–1, lower = more resistance)
 const RUBBER_BAND_FACTOR = 0.3;
+
+/** The length row reads the chapters switch, so only this sheet asks for it (rows 3, 4). */
+function SeriesLengthDescription({ style }: { style: StyleProp<TextStyle> }) {
+  const chapteredSeriesEnabled = useChapteredSeriesEnabled();
+  return <Text style={style}>{premiumLengthDescription(chapteredSeriesEnabled)}</Text>;
+}
 
 export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatureSheetProps) {
   const { colors } = useTheme();
@@ -298,9 +306,13 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
                   {config.headline}
                 </Text>
 
-                <Text style={[pfStyles.description, { color: colors.textMuted }]}>
-                  {config.description}
-                </Text>
+                {feature === 'devotionalLength' ? (
+                  <SeriesLengthDescription style={[pfStyles.description, { color: colors.textMuted }]} />
+                ) : (
+                  <Text style={[pfStyles.description, { color: colors.textMuted }]}>
+                    {config.description}
+                  </Text>
+                )}
               </View>
 
               {/* CTA button */}

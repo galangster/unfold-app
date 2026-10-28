@@ -8,11 +8,22 @@
  * the root layout next to the other notification owners.
  */
 import { useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
-import { getCurrentDevotional, getDaysReadToday } from '@/lib/home-devotional-state';
-import { buildActReminderFingerprint, buildActReminderPlan, type ActReminderPlanInput } from '@/lib/act-reminder';
+import { useUIState } from '@/lib/ui-state';
+import { getDeviceTimezone } from '@/lib/device-timezone';
+import {
+  buildActReminderFingerprint,
+  buildActReminderPlan,
+  readActReminderDay,
+  type ActReminderPlanInput,
+} from '@/lib/act-reminder';
+import {
+  markActReminderWriteFailed,
+  readActReminderLastWrite,
+  storeActReminderLastWrite,
+} from '@/lib/act-reminder-write';
 import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
@@ -22,19 +33,14 @@ const DEBOUNCE_MS = 500;
 type StoreState = ReturnType<typeof useUnfoldStore.getState>;
 
 export function readActReminderPlanInput(state: StoreState): ActReminderPlanInput & { enabled: boolean } {
-  const devotional = getCurrentDevotional(state.devotionals, state.currentDevotionalId);
   return {
-    devotional,
-    day: getDaysReadToday(devotional)[0] ?? null,
+    ...readActReminderDay(state),
     middayTime: state.middayCheckInTime,
     eveningTime: state.eveningWindDownTime,
     eveningWindDownEnabled: state.eveningWindDownEnabled,
     eveningWindDownByDay: state.eveningWindDownByDay,
     premiumPolicy: getEffectivePremiumAccessPolicy(),
     morningTime: state.user?.reminderTime,
-    // Rides on the daily-reminder preference: a reader who switched
-    // reminders off asked for silence, not a new kind of nudge.
-    enabled: state.user?.dailyReminderEnabled ?? Boolean(state.user?.reminderTime),
   };
 }
 
@@ -69,7 +75,10 @@ export function useActReminderSync() {
   const premiumPolicy = usePremiumAccessPolicy();
   const selectorRef = useRef(createFingerprintSelector());
   const storeFingerprint = useUnfoldStore(selectorRef.current);
-  const fingerprint = `${storeFingerprint}|${premiumPolicy}`;
+  // A run without permission plans nothing and still counts as applied, so a
+  // later grant must change the fingerprint to plan again.
+  const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
+  const fingerprint = `${storeFingerprint}|${premiumPolicy}|${notificationPermissionEpoch}`;
 
   const lastAppliedRef = useRef('');
   const lastAppliedDayRef = useRef('');
@@ -80,8 +89,11 @@ export function useActReminderSync() {
   latestFingerprintRef.current = fingerprint;
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
-    if (!hasHydrated) return;
-    const target = latestFingerprintRef.current;
+    // Web has no local notifications, so there is nothing to plan or fail.
+    if (!hasHydrated || Platform.OS === 'web') return;
+    // Read live, as withDeviceTimezone does for the daily reminder: a crossing
+    // moves today's slots and re-renders nothing before this foreground run.
+    const target = `${latestFingerprintRef.current}|tz:${getDeviceTimezone() ?? ''}`;
     const todayStr = new Date().toDateString();
     if (reason !== 'hydration' && target === lastAppliedRef.current && todayStr === lastAppliedDayRef.current) {
       return;
@@ -93,22 +105,38 @@ export function useActReminderSync() {
     inFlightRef.current = true;
     try {
       const input = readActReminderPlanInput(useUnfoldStore.getState());
+      const now = new Date();
+      const lastWrite = readActReminderLastWrite();
       // Cancel-then-write: every run clears the pending act reminder so a
-      // replan never leaves an orphan for a day that changed.
+      // replan never leaves an orphan for a day that changed. A reminder still
+      // ahead is cancelled here, so it never fires and its record goes too.
+      if (lastWrite && Date.parse(lastWrite.fireAt) > now.getTime()) storeActReminderLastWrite(null);
+      // Nothing stays applied once the cancel runs, so a failed write never
+      // leaves an earlier fingerprint that would skip the retry.
+      lastAppliedRef.current = '';
       await cancelActReminder();
 
       const notificationsEnabled = await areNotificationsEnabled();
       const plan = input.enabled
-        ? buildActReminderPlan({ ...input, notificationsEnabled })
+        ? buildActReminderPlan({ ...input, now, notificationsEnabled, lastWrite })
         : null;
+      if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
+        // Leave the run unapplied so the next foreground writes it again, and
+        // give today's midday slot back to the check-in until then.
+        markActReminderWriteFailed(true);
+        return;
+      }
+      markActReminderWriteFailed(false);
       if (plan && notificationsEnabled) {
-        await scheduleActReminder(plan);
+        storeActReminderLastWrite({ devotionalId: plan.data.devotionalId, dayNumber: plan.data.dayNumber, fireAt: plan.fireAt.toISOString() });
       }
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(`[useActReminderSync] ${plan ? `planned ${plan.slot} at ${plan.fireAt.toISOString()}` : 'nothing to plan'} (reason=${reason})`);
     } catch (error) {
       logger.error('[useActReminderSync] Sync failed:', error);
+      // The cancel may have run without a write, so the check-in keeps midday.
+      markActReminderWriteFailed(true);
     } finally {
       inFlightRef.current = false;
       if (pendingRef.current) {

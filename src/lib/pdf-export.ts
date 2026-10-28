@@ -5,6 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 import type { Devotional } from './store';
+import { pdfCoverSubtitle } from './series-length-copy';
 import { DISPLAY_SERIF_WOFF2_BASE64 } from './display-font-base64';
 
 const DEFAULT_ACCENT = '#5B8DEF';
@@ -1044,7 +1045,7 @@ export function generateDevotionalHTML(devotional: Devotional, options?: PDFExpo
         <div class="cover-content">
           <div class="cover-accent-line"></div>
           <h1>${escapeHTML(devotional.title)}</h1>
-          <p class="subtitle">A ${devotional.totalDays}-Day Devotional Series</p>
+          <p class="subtitle">${escapeHTML(pdfCoverSubtitle(devotional.totalDays))}</p>
           <div class="accent-divider"></div>
         </div>
         <div class="cover-bottom">

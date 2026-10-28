@@ -20,6 +20,8 @@ export interface CheckInFingerprintInputs {
   hasCompletedOnboarding: boolean;
   todayCarryLine: string;
   todayCompanionNudge: string;
+  /** ISO instant today's midday act reminder takes from the check-in, or ''. */
+  todayMiddayActClaim: string;
   notificationPermissionEpoch: number;
   trialNoticeEpoch: number;
   deviceTimezone: string;
@@ -44,6 +46,7 @@ export function buildCheckInFingerprint(inputs: CheckInFingerprintInputs): strin
     inputs.hasCompletedOnboarding ? '1' : '0',
     inputs.todayCarryLine,
     inputs.todayCompanionNudge,
+    inputs.todayMiddayActClaim,
     inputs.notificationPermissionEpoch,
     inputs.trialNoticeEpoch,
     inputs.deviceTimezone,

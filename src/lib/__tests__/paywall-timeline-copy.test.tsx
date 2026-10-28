@@ -102,7 +102,12 @@ jest.mock('@/lib/trial-notification', () => ({ syncTrialEndingNotification: jest
 jest.mock('@/lib/push-notification-helpers', () => ({
   LEGAL_LINKS: { terms: 'https://example.test/terms', privacy: 'https://example.test/privacy' },
 }));
-jest.mock('@/lib/remote-config', () => ({ refreshRemoteConfig: jest.fn() }));
+jest.mock('@/lib/remote-config', () => ({
+  refreshRemoteConfig: jest.fn(async () => ({ status: 'idle' })),
+  readChapteredSeriesEnabled: () => false,
+  hasRemoteConfigSettled: () => true,
+  subscribeRemoteConfig: () => () => undefined,
+}));
 jest.mock('@/lib/auto-trial-exit', () => ({
   resolveLaterEntryExit: () => ({ kind: 'fallback', reason: 'switch_off' }),
 }));

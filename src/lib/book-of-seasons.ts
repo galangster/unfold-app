@@ -7,6 +7,8 @@ import {
 } from './devotional-day-access';
 import { selectRenderableDevotionalDay } from './devotional-canonical-days';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
+import { listSeriesActs, readSeriesWeeks, weekRowDetail, type SeriesWeek, type SeriesWeeks } from './series-weeks';
+
 
 export type BookChapterStatus = 'done' | 'current' | 'available' | 'upcoming';
 
@@ -18,6 +20,8 @@ export type BookChapter = {
   dayCount: number;
   readCount: number;
   status: BookChapterStatus;
+  /** Set only for a chaptered series: the act is a week (Ruled 2). */
+  week?: SeriesWeek;
 };
 
 export type BookTodayPage = {
@@ -60,24 +64,6 @@ export function isSeriesComplete(devotional: Devotional | null | undefined): boo
   return countReadDays(devotional.days, 1, totalDays) === totalDays;
 }
 
-export function listSeriesActs(
-  seriesArc: SeriesArc | null | undefined,
-  totalDays = seriesArc?.totalDaysPlanned ?? 0,
-): NonNullable<SeriesArc['acts']> {
-  if (!Array.isArray(seriesArc?.acts)) return [];
-  const valid = seriesArc.acts.every((act) => act && typeof act.name === 'string' && act.name.trim().length > 0
-    && Number.isInteger(act.fromDay) && Number.isInteger(act.toDay)
-    && act.fromDay >= 1 && act.toDay >= act.fromDay && act.toDay <= totalDays);
-  if (!valid) return [];
-  const acts = [...seriesArc.acts].sort((a, b) => a.fromDay - b.fromDay);
-  let nextDay = 1;
-  for (const act of acts) {
-    if (act.fromDay !== nextDay) return [];
-    nextDay = act.toDay + 1;
-  }
-  return nextDay === totalDays + 1 ? acts : [];
-}
-
 function countReadInRange(
   days: readonly DevotionalDay[],
   fromDay: number,
@@ -90,10 +76,20 @@ export function buildBookChapters(
   devotional: Devotional | null | undefined,
   now: Date,
 ): BookChapter[] {
-  if (!devotional) return [];
+  return buildChaptersAndWeeks(devotional, now).chapters;
+}
 
-  const acts = listSeriesActs(devotional.seriesArc, getServerOwnedSeriesTotalDays(devotional));
-  if (acts.length === 0) return [];
+/** The series-detail rows and, for a chaptered series, its weeks, read once. */
+function buildChaptersAndWeeks(
+  devotional: Devotional | null | undefined,
+  now: Date,
+): { chapters: BookChapter[]; weeks: SeriesWeeks | null } {
+  if (!devotional) return { chapters: [], weeks: null };
+
+  const totalDays = getServerOwnedSeriesTotalDays(devotional);
+  const acts = listSeriesActs(devotional.seriesArc, totalDays);
+  if (acts.length === 0) return { chapters: [], weeks: null };
+  const weeks = readSeriesWeeks(devotional.seriesArc, { totalDays, nowMs: now.getTime() });
 
   const days = listDaysInOrder(devotional.days);
   const seriesComplete = isSeriesComplete(devotional);
@@ -103,7 +99,7 @@ export function buildBookChapters(
     (act) => todayReaderDayNumber >= act.fromDay && todayReaderDayNumber <= act.toDay,
   ) ?? acts.find((act) => countReadInRange(days, act.fromDay, act.toDay) < Math.max(0, act.toDay - act.fromDay + 1));
 
-  return acts.map((act) => {
+  const chapters = acts.map((act): BookChapter => {
     const fromDay = act.fromDay;
     const toDay = act.toDay;
     const dayCount = Math.max(0, toDay - fromDay + 1);
@@ -120,6 +116,7 @@ export function buildBookChapters(
       status = 'available';
     }
 
+    const week = weeks?.weeks.find((item) => item.fromDay === fromDay);
     return {
       name: act.name,
       function: act.function,
@@ -128,8 +125,10 @@ export function buildBookChapters(
       dayCount,
       readCount,
       status,
+      ...(week ? { week } : {}),
     };
   });
+  return { chapters, weeks };
 }
 
 function dayInRange(
@@ -174,7 +173,7 @@ export function buildBookOfSeasonsModel(
   devotional: Devotional | null | undefined,
   now: Date,
   seriesPaused: boolean,
-): { page: BookTodayPage; chapters: BookChapter[] } | null {
+): { page: BookTodayPage; chapters: BookChapter[]; weeks: SeriesWeeks | null } | null {
   if (!devotional) return null;
 
   const totalDays = getServerOwnedSeriesTotalDays(devotional) || devotional.totalDays;
@@ -185,7 +184,7 @@ export function buildBookOfSeasonsModel(
     const lastRead = [...days].reverse().find((item) => item.isRead && item.dayNumber <= totalDays);
     dayNumber = lastRead?.dayNumber ?? Math.min(dayNumber, totalDays || dayNumber);
   }
-  const chapters = buildBookChapters(devotional, now);
+  const { chapters, weeks } = buildChaptersAndWeeks(devotional, now);
   const currentChapter = chapters.find(
     (chapter) => dayNumber >= chapter.fromDay && dayNumber <= chapter.toDay,
   );
@@ -216,7 +215,8 @@ export function buildBookOfSeasonsModel(
     page: {
       dayNumber,
       totalDays,
-      chapterName: currentChapter?.name,
+      // A week shows its name only once it is planned (Ruled 6).
+      chapterName: currentChapter?.week ? currentChapter.week.name ?? undefined : currentChapter?.name,
       chapterDayNumber: currentChapter
         ? dayNumber - currentChapter.fromDay + 1
         : undefined,
@@ -232,6 +232,7 @@ export function buildBookOfSeasonsModel(
       eyebrow,
     },
     chapters,
+    weeks,
   };
 }
 
@@ -244,6 +245,7 @@ export function buildBookTodayPage(
 }
 
 export function chapterStatusLabel(chapter: BookChapter): string {
+  if (chapter.week) return weekRowDetail(chapter.week, chapter.status, chapter.readCount);
   if (chapter.status === 'done') {
     return chapter.dayCount === 1
       ? '1 day, complete'

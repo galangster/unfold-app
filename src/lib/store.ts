@@ -1,3 +1,4 @@
+import type { DevotionalLength } from './series-length';
 import { useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { InterFontFamily, SourceSerifFontFamily } from '@/constants/fonts';
@@ -210,7 +211,7 @@ export interface UserProfile {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 30;
+  devotionalLength: DevotionalLength;
   reminderTime: string;
   dailyReminderEnabled: boolean;
   /** ISO time the backend last confirmed it holds this device's push token. */
@@ -503,10 +504,33 @@ export interface SeriesArcDay {
   dayNumber: number;
   themeHint: string;
   scriptureRegion: string;
-  narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution';
+  narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution' | 'interlude';
   /** Bible study method ID assigned by arc generator (e.g., 'word_study', 'lectio_divina') */
   studyMethod?: string;
   dayTitle?: string;
+  /** "outline": a one-line plan from the start. "full" or absent: planned in detail. */
+  planDetail?: 'outline' | 'full';
+}
+
+/** One week of a chaptered series. Server-owned; read through series-weeks.ts. */
+export interface SeriesArcChapterPlan {
+  /** 1-based. */
+  index: number;
+  fromDay: number;
+  toDay: number;
+  status: 'planned' | 'outline' | 'preparing' | 'outline_only';
+  plannedAt?: string;
+  /** Set with status "preparing". The app reads a value older than 24 h as "outline". */
+  preparingSince?: string;
+  /** Fresh planning rounds started, at most 2. */
+  rounds?: number;
+}
+
+/** Present only on a chaptered series. Absent means a legacy arc. */
+export interface SeriesArcPlanning {
+  mode: 'chapters';
+  version: 1;
+  chapters: SeriesArcChapterPlan[];
 }
 
 /** High-level series plan generated at onboarding (not the content itself) */
@@ -528,6 +552,7 @@ export interface SeriesArc {
   /** Durable first-reading mark. Synced inside seriesArc, not inferred from title or length. */
   origin?: 'onboarding_first';
   promise?: string;
+  planning?: SeriesArcPlanning;
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */

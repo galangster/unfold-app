@@ -43,7 +43,7 @@ import {
   type RemoteConfigV1,
 } from '../remote-config';
 
-const VALID_BODY: RemoteConfigV1 = {
+const VALID_BODY: Omit<RemoteConfigV1, 'chapteredSeries'> = {
   version: 1,
   autoTrialSeries: { enabled: true, platforms: ['ios'], maxTrialDays: 7 },
   source: 'db',

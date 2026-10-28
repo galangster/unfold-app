@@ -219,6 +219,11 @@ describe('resolveLongRunningAfterMs — the soft threshold follows the series le
   it('reads an unknown length as a short series', () => {
     expect(resolveLongRunningAfterMs(Number.NaN)).toBe(SHORT_SERIES_LONG_RUNNING_AFTER_MS);
   });
+
+  it('softens a 4-week series at 4 minutes, because the first wait covers week 1 only (E.8)', () => {
+    expect(SHORT_SERIES_LONG_RUNNING_AFTER_MS).toBe(4 * 60 * 1000);
+    expect(resolveLongRunningAfterMs(28)).toBe(SHORT_SERIES_LONG_RUNNING_AFTER_MS);
+  });
 });
 
 describe('evaluateGenerationDeadline — the wall clock is never a verdict', () => {

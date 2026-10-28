@@ -176,7 +176,10 @@ jest.mock('@/lib/notification-ask', () => ({
   requestLaterEntryNotifyAsk: (...args: unknown[]) => mockRequestLaterEntryNotifyAsk(...args),
 }));
 jest.mock('@/lib/remote-config', () => ({
-  refreshRemoteConfig: jest.fn(),
+  refreshRemoteConfig: jest.fn(async () => undefined),
+  readChapteredSeriesEnabled: () => false,
+  hasRemoteConfigSettled: () => true,
+  subscribeRemoteConfig: () => () => undefined,
 }));
 const mockSetPendingPaywallGrant = jest.fn();
 jest.mock('@/lib/ui-state', () => ({

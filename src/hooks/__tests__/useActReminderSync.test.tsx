@@ -2,6 +2,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { buildActReminderFingerprint } from '@/lib/act-reminder';
+import { useUIState } from '@/lib/ui-state';
 import { readActReminderPlanInput, useActReminderSync } from '../useActReminderSync';
 
 const ACT =
@@ -32,7 +33,7 @@ const devotional = {
   generationMode: 'progressive' as const,
 };
 
-const mockScheduleActReminder = jest.fn(async (..._args: unknown[]) => 'act-1');
+const mockScheduleActReminder = jest.fn(async (..._args: unknown[]): Promise<string | null> => 'act-1');
 const mockCancelActReminder = jest.fn(async () => undefined);
 const mockAreNotificationsEnabled = jest.fn(async () => true);
 let mockPremiumPolicy: 'granted' | 'denied' | 'unknown' = 'granted';
@@ -50,6 +51,15 @@ const mockStoreState = {
     isPremium: true,
   },
 };
+
+const mockMmkv = new Map<string, string>();
+jest.mock('@/lib/mmkv-storage', () => ({
+  mmkvStorage: {
+    getItem: (key: string) => mockMmkv.get(key) ?? null,
+    setItem: (key: string, value: string) => { mockMmkv.set(key, value); },
+    removeItem: (key: string) => { mockMmkv.delete(key); },
+  },
+}));
 
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: Object.assign(
@@ -111,6 +121,8 @@ describe('useActReminderSync wind-down collision', () => {
     mockScheduleActReminder.mockResolvedValue('act-1');
     mockCancelActReminder.mockResolvedValue(undefined);
     mockAreNotificationsEnabled.mockResolvedValue(true);
+    useUIState.setState({ actReminderWriteEpoch: 0 });
+    mockMmkv.clear();
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => {
       return { remove: jest.fn() };
     });
@@ -185,5 +197,117 @@ describe('useActReminderSync wind-down collision', () => {
 
     expect(mockCancelActReminder.mock.calls.length).toBeGreaterThan(cancelledAfterMount);
     expect(mockScheduleActReminder.mock.calls.length).toBe(scheduledAfterMount);
+  });
+
+  it('writes again when the reader goes back to a time whose reminder a failed replan cancelled', async () => {
+    await mountHook();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(1);
+
+    mockScheduleActReminder.mockResolvedValue(null);
+    mockStoreState.eveningWindDownTime = '21:00';
+    await flushFingerprint();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(2);
+
+    mockScheduleActReminder.mockResolvedValue('act-2');
+    mockStoreState.eveningWindDownTime = '20:30';
+    await flushFingerprint();
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(3);
+  });
+
+  it('plans again when notification permission is granted later the same day', async () => {
+    // Today's midday check-in steps aside for a midday act, so an act
+    // reminder skipped for lack of permission must come back once it is granted.
+    mockAreNotificationsEnabled.mockResolvedValue(false);
+    await mountHook();
+    expect(mockScheduleActReminder).not.toHaveBeenCalled();
+
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    act(() => {
+      useUIState.getState().bumpNotificationPermissionEpoch();
+    });
+    await flushFingerprint();
+
+    expect(mockScheduleActReminder).toHaveBeenCalledTimes(1);
+  });
+
+  function captureForegroundHandler(): () => Promise<void> {
+    let handler: ((state: string) => void) | null = null;
+    (AppState.addEventListener as jest.Mock).mockImplementation((_event: string, next: (state: string) => void) => {
+      handler = next;
+      return { remove: jest.fn() };
+    });
+    return async () => {
+      await act(async () => {
+        handler?.('active');
+      });
+      await flushScheduled();
+    };
+  }
+
+  it('tries again on the next foreground when the OS write failed', async () => {
+    const foreground = captureForegroundHandler();
+    mockScheduleActReminder.mockResolvedValue(null);
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+    expect(attempts).toBeGreaterThan(0);
+
+    mockScheduleActReminder.mockResolvedValue('act-1');
+    await foreground();
+
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts + 1);
+  });
+
+  it('marks a failed write so the check-in keeps its slot, and clears it once a write lands', async () => {
+    const foreground = captureForegroundHandler();
+    mockScheduleActReminder.mockResolvedValue(null);
+    await mountHook();
+    expect(mockMmkv.get('@unfold_act_reminder_write_failed')).toBe('1');
+
+    mockScheduleActReminder.mockResolvedValue('act-1');
+    await foreground();
+    expect(mockMmkv.has('@unfold_act_reminder_write_failed')).toBe(false);
+  });
+
+  it('marks a thrown write as failed too', async () => {
+    mockScheduleActReminder.mockRejectedValue(new Error('scheduler down'));
+    await mountHook();
+    expect(mockMmkv.get('@unfold_act_reminder_write_failed')).toBe('1');
+  });
+
+  it('adds no second reminder when a replan comes after the first one fired', async () => {
+    const foreground = captureForegroundHandler();
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+    expect(attempts).toBeGreaterThan(0);
+
+    // The 20:30 reminder fires, then a timezone change replans at 21:00.
+    jest.setSystemTime(new Date(2026, 8, 8, 21, 0, 0));
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolved,
+      timeZone: resolved.timeZone === 'Pacific/Honolulu' ? 'America/Los_Angeles' : 'Pacific/Honolulu',
+    });
+    await foreground();
+
+    expect(mockCancelActReminder.mock.calls.length).toBeGreaterThan(attempts);
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts);
+  });
+
+  it('plans again on the next foreground after the device timezone changes', async () => {
+    const foreground = captureForegroundHandler();
+    await mountHook();
+    const attempts = mockScheduleActReminder.mock.calls.length;
+
+    await foreground();
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts);
+
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      ...resolved,
+      timeZone: resolved.timeZone === 'Pacific/Honolulu' ? 'America/Los_Angeles' : 'Pacific/Honolulu',
+    });
+    await foreground();
+
+    expect(mockScheduleActReminder.mock.calls.length).toBe(attempts + 1);
   });
 });

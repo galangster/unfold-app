@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { AppState, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { AccessibilityInfo, AppState, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,6 +38,12 @@ interface CompletionCelebrationProps {
    */
   ordinal?: number;
   seriesReflectionSummary?: string;
+  /**
+   * The restrained week-complete moment of a chaptered series (spec r2
+   * section 7). It replaces the drawn day title and line, and keeps every
+   * other part of Day Complete, its motion and its Reduce Motion path.
+   */
+  week?: { title: string; line: string; spokenLine: string } | null;
   nextStep?: {
     title: string;
     detail: string;
@@ -56,6 +62,7 @@ export function CompletionCelebration({
   detail,
   ordinal = 0,
   seriesReflectionSummary,
+  week,
   nextStep,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
@@ -71,6 +78,17 @@ export function CompletionCelebration({
 
   // Drawn for this completion, so every render of one overlay shows the same words.
   const copy = useMemo(() => completionCopy(type, completionVariation(copySeed(), ordinal)), [type, ordinal]);
+
+  // The week moment moves VoiceOver focus to its title once the modal is up.
+  const weekTitleRef = useRef<Text>(null);
+  const hasWeek = Boolean(week);
+  useEffect(() => {
+    if (!visible || !hasWeek) return;
+    const timer = setTimeout(() => {
+      if (weekTitleRef.current) AccessibilityInfo.sendAccessibilityEvent(weekTitleRef.current, 'focus');
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [visible, hasWeek]);
 
   // Overlay + content animation values
   const overlayOpacity = useSharedValue(0);
@@ -153,13 +171,14 @@ export function CompletionCelebration({
 
   if (!visible) return null;
 
-  const { title } = copy;
-  const subtitle = message || copy.message;
+  const title = week?.title ?? copy.title;
+  const subtitle = week?.line ?? (message || copy.message);
+  const spokenSubtitle = week?.spokenLine ?? subtitle;
   const seriesSummaryExcerpt = formatSeriesCompletionSummary(seriesReflectionSummary);
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={() => runAction(onDismiss)}>
-      <Animated.View style={[{ flex: 1 }, overlayStyle]}>
+      <Animated.View style={[{ flex: 1 }, overlayStyle]} accessibilityViewIsModal={hasWeek || undefined} onAccessibilityEscape={hasWeek ? () => runAction(onDismiss) : undefined}>
         <EmberSystem variant="celebration" motes active />
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{
           flexGrow: 1,
@@ -168,12 +187,12 @@ export function CompletionCelebration({
         }}>
       <TouchableOpacity
         disabled={!!nextStep}
-        accessible={!nextStep}
+        accessible={!nextStep && !hasWeek}
         activeOpacity={1}
         style={{ flexGrow: 1 }}
         onPress={() => runAction(onDismiss)}
         accessibilityRole="button"
-        accessibilityLabel={[title, subtitle, detail, seriesSummaryExcerpt, 'Continue'].filter(Boolean).join('. ')}
+        accessibilityLabel={[title, spokenSubtitle, detail, seriesSummaryExcerpt, 'Continue'].filter(Boolean).join('. ')}
         accessibilityHint="Tap anywhere to continue"
       >
           {/* Content — left aligned */}
@@ -188,6 +207,9 @@ export function CompletionCelebration({
             {/* Title */}
             <Animated.View style={titleStyle}>
               <Text
+                ref={weekTitleRef}
+                accessible={week ? true : undefined}
+                accessibilityRole={week ? 'header' : undefined}
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: type === 'series' ? 46 : 43,
@@ -204,6 +226,7 @@ export function CompletionCelebration({
             {/* Subtitle */}
             <Animated.View style={[{ marginTop: Spacing['5'] }, subtitleStyle]}>
               <Text
+                accessibilityLabel={week?.spokenLine}
                 style={{
                   fontFamily: FontFamily.body,
                   fontSize: 17,
@@ -264,7 +287,11 @@ export function CompletionCelebration({
               hintStyle,
             ]}
           >
+            {/* The week moment keeps its children reachable, so Continue is its own button. */}
             <Text
+              accessibilityRole={hasWeek ? 'button' : undefined}
+              accessibilityLabel={hasWeek ? 'Continue' : undefined}
+              onPress={hasWeek ? () => runAction(onDismiss) : undefined}
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 13,

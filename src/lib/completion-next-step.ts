@@ -1,5 +1,12 @@
 import { NEXT_STEP_DETAILS, completionVariation } from '@/constants/daily-copy';
-import { getDayMenuPresentation } from './devotional-day-access';
+import { getDayMenuPresentation, getSelectableDayLimit } from './devotional-day-access';
+import {
+  weekCompleteAnnouncement,
+  weekCompleteMoment,
+  weekFinishedBy,
+  type SeriesWeeks,
+  type WeekCompleteMoment,
+} from './series-weeks';
 import type { CompletionType } from './completion-dismiss-route';
 import type { Devotional } from './store';
 import { drawCopy } from './variation-bag';
@@ -51,4 +58,49 @@ export function getCompletionNextStep(
       ? drawCopy(NEXT_STEP_DETAILS.preparing, variation, 'next-step-preparing')
       : drawCopy(NEXT_STEP_DETAILS.ahead, variation, 'next-step-ahead'),
   };
+}
+
+/**
+ * When the next week's first day opens, by the pacing rule. 'now' when it is
+ * ready to read, 'tomorrow' when the pace holds it one day, else null. A
+ * paused series (not the current one, or premium inactive) gets no new days,
+ * so it promises nothing (R4).
+ */
+function nextWeekOpens(
+  devotional: Devotional,
+  nextDay: number,
+  now: Date,
+  seriesPaused: boolean,
+): 'now' | 'tomorrow' | null {
+  if (seriesPaused) return null;
+  const next = getDayMenuPresentation(devotional, nextDay, now);
+  if (next.kind === 'ready') return 'now';
+  if (next.kind !== 'locked-titled' && next.kind !== 'coming-soon') return null;
+  if (!devotional.seriesStartDate || Number.isNaN(Date.parse(devotional.seriesStartDate))) return null;
+  return nextDay - getSelectableDayLimit(devotional, now) === 1 ? 'tomorrow' : null;
+}
+
+/**
+ * The week-complete moment after day 7, 14 or 21 of a chaptered series.
+ * Null on any other day, on the last day, and for a legacy series (weeks null).
+ */
+export function resolveWeekCompletion(
+  devotional: Devotional | null | undefined,
+  weeks: SeriesWeeks | null,
+  completedDay: number,
+  now: Date,
+  { seriesPaused }: { seriesPaused: boolean },
+): WeekCompleteMoment | null {
+  if (!devotional || !weekFinishedBy(weeks, completedDay)) return null;
+  return weekCompleteMoment(weeks, completedDay, nextWeekOpens(devotional, completedDay + 1, now, seriesPaused));
+}
+
+/** The screen-reader announcement after a completion (row 20). */
+export function completionAnnouncement(
+  weeks: SeriesWeeks | null,
+  completedDay: number,
+  completingLastDay: boolean,
+): string {
+  if (completingLastDay) return 'Congratulations! You’ve completed this devotional series.';
+  return weekCompleteAnnouncement(weeks, completedDay) ?? `Day ${completedDay} completed. Great job!`;
 }

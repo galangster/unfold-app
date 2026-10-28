@@ -94,6 +94,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 
+jest.mock('@/hooks/usePremiumAccessPolicy', () => ({ usePremiumAccessPolicy: () => 'granted' }));
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: (selector: (state: unknown) => unknown) =>
     selector({

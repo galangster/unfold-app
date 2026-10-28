@@ -174,7 +174,6 @@ describe('Today tab motion guardrails', () => {
     expect(mainCardSource).not.toContain('heroScriptureRule');
     expect(mainCardSource).not.toContain('heroScripture');
 
-    expect(revealSource).toContain('const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);');
     expect(revealSource).toContain('{displaySeriesTitle}');
     expect(devotionalCardSource).toContain('function formatHeroSeriesTitle(title: string): string');
     expect(devotionalCardSource).not.toContain('heroSeriesEyebrow');

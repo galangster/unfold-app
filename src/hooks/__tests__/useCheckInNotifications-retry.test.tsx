@@ -46,6 +46,8 @@ jest.mock('@/lib/premium-state', () => ({
 jest.mock('@/lib/home-devotional-state', () => ({
   getTodayCarryLine: () => '',
   getTodayCompanionNudge: () => null,
+  getCurrentDevotional: () => undefined,
+  getDaysReadToday: () => [],
 }));
 
 jest.mock('@/lib/device-timezone', () => ({
@@ -69,6 +71,7 @@ jest.mock('@/lib/trial-notification', () => ({
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), error: jest.fn() },
 }));
+jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false) }));
 
 jest.mock('@/lib/notifications', () => ({
   scheduleMiddayCheckIn: (...args: unknown[]) => mockScheduleMidday(...args),

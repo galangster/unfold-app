@@ -88,6 +88,8 @@ export interface BuildCheckInScheduleArgs {
   fallback: { hour: number; minute: number };
   /** Local "YYYY-MM-DD" the trial flow asked to leave empty, if any. */
   skipLocalDate?: string | null;
+  /** An instant another notification holds. The occurrence at exactly that moment is left out. */
+  skipAt?: Date | null;
   now: Date;
   horizonDays?: number;
 }
@@ -108,6 +110,7 @@ export function buildCheckInSchedule({
   byDay,
   fallback,
   skipLocalDate,
+  skipAt,
   now,
   horizonDays = PRE_ROLL_DAYS,
 }: BuildCheckInScheduleArgs): CheckInOccurrence[] {
@@ -128,6 +131,7 @@ export function buildCheckInSchedule({
     const fireAt = new Date(day);
     fireAt.setHours(hour, minute, 0, 0);
     if (fireAt.getTime() <= now.getTime()) continue;
+    if (skipAt && fireAt.getTime() === skipAt.getTime()) continue;
 
     occurrences.push({
       id: `${idBase}-${occurrences.length}`,
