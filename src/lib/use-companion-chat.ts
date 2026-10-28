@@ -28,7 +28,7 @@ import { pickRegenerateTarget } from './companion-regenerate';
 import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
-import { crisisFailure, type CrisisFailure } from '@/lib/crisis-words';
+import { CRISIS_REPLY, crisisFailure, type CrisisFailure } from '@/lib/crisis-words';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
 import { copySeed } from '@/lib/copy-variation';
 import { getTodayDayNumber } from '@/lib/home-devotional-state';
@@ -953,9 +953,11 @@ export function useCompanionChat() {
       if (options?.companionId && target.companionMessage.id !== options.companionId) return 'noop';
       const { companionMessage } = target;
       // An error row stores an app-authored error string unless it was an
-      // interrupted partial; only real reply text is worth quoting back.
+      // interrupted partial, and the offline crisis reply is app-authored
+      // too; only real reply text is worth quoting back.
       const previousReply =
-        companionMessage.status === 'complete' || companionMessage.interrupted
+        (companionMessage.status === 'complete' || companionMessage.interrupted)
+          && companionMessage.content !== CRISIS_REPLY
           ? companionMessage.content
           : '';
       return runTurn(target.userMessage.content, {

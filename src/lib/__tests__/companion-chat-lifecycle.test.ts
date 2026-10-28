@@ -154,7 +154,8 @@ describe('companion hydration corrections', () => {
       ]),
     ]);
 
-    expect(reconciled.conversations[0].messages[1]).toMatchObject({ status: 'complete', interrupted: false });
+    expect(reconciled.conversations[0].messages[1]).toMatchObject({ status: 'error', interrupted: true });
+    expect(reconciled.conversations[0].messages[1].errorCopy).toBeTruthy();
     expect(reconciled.conversations[0].messages[1].content).toMatch(/\b988\b/);
     expect(reconciled.conversations[1].messages[1]).toMatchObject({ status: 'error', interrupted: true });
     expect(reconciled.conversations[1].messages[1].content.startsWith('I hear you.')).toBe(true);

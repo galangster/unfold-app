@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import type { CompanionMessage } from './companion-chat-store';
+import { COMPANION_ERROR_CONNECTION } from './companion-error-copy';
 
 /**
  * Crisis words in the reader's own writing, and the lines that answer them.
@@ -132,7 +133,8 @@ export type CrisisFailure = {
  * The patch for a failed reply. In a conversation where the reader named
  * suicide, self-harm or abuse, help cannot wait on the network: a partial
  * reply keeps its error state with the crisis lines added ('lines'), and a
- * failure with no text becomes the crisis reply ('reply').
+ * failure with no text becomes the crisis reply ('reply'). Both stay
+ * interrupted errors, so the reply text shows with Retry under it.
  */
 export function crisisFailure(
   messages: readonly CompanionMessage[],
@@ -155,11 +157,13 @@ export function crisisFailure(
     kind: 'reply',
     patch: {
       content: CRISIS_REPLY,
-      status: 'complete',
+      status: 'error',
       suggestions: [],
       deepLinks: [],
-      interrupted: false,
-      errorCopy: undefined,
+      interrupted: true,
+      // Retry shows only under a non-empty error line. A plain error row
+      // stores its error in `content`, which the crisis reply replaces.
+      errorCopy: patch.errorCopy || (patch.interrupted ? undefined : patch.content) || COMPANION_ERROR_CONNECTION,
     },
     spoken: CRISIS_REPLY,
   };

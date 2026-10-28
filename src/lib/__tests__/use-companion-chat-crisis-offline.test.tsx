@@ -171,6 +171,13 @@ const lastReply = () => {
   return [...messages].reverse().find((m) => m.role === 'companion');
 };
 
+/** The crisis reply is an interrupted error row: its text shows as a reply, with Retry under it. */
+function expectCrisisReplyRow(reply: ReturnType<typeof lastReply>) {
+  expect(reply?.status).toBe('error');
+  expect(reply?.interrupted).toBe(true);
+  expect(reply?.errorCopy).toBeTruthy();
+}
+
 async function send(hook: () => ReturnType<typeof useCompanionChat>, text: string) {
   let outcome!: string;
   await act(async () => {
@@ -190,7 +197,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     const reply = lastReply();
     // Not 'sent': the local crisis reply must not use a free daily message.
     expect(outcome).toBe('crisis');
-    expect(reply?.status).toBe('complete');
+    expectCrisisReplyRow(reply);
     expect(reply?.content).toMatch(/\b988\b/);
     expect(reply?.content).toContain('741741');
     expect(reply?.suggestions ?? []).toEqual([]);
@@ -233,7 +240,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     const outcome = await send(hook, 'what do I say when I call');
 
     expect(outcome).toBe('crisis');
-    expect(lastReply()?.status).toBe('complete');
+    expectCrisisReplyRow(lastReply());
     expect(lastReply()?.content).toContain('741741');
   });
 
@@ -244,7 +251,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     const outcome = await send(hook, 'I want to end my own life');
 
     expect(outcome).toBe('crisis');
-    expect(lastReply()?.status).toBe('complete');
+    expectCrisisReplyRow(lastReply());
     expect(lastReply()?.content).toContain('741741');
   });
 
@@ -329,6 +336,28 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     announce.mockRestore();
   });
 
+  it('retries the turn under the crisis reply once the connection is back', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network request failed'));
+    const hook = await renderHook();
+    await send(hook, 'I feel suicidal tonight');
+    const crisisReply = lastReply()!;
+
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"I am here with you. Please call or text 988."}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]) as any);
+    let outcome!: string;
+    await act(async () => {
+      outcome = await hook().regenerateReply({ companionId: crisisReply.id });
+      await wait(50);
+    });
+
+    expect(outcome).toBe('sent');
+    expect(lastReply()).toMatchObject({ id: crisisReply.id, status: 'complete', interrupted: false });
+    const retryBody = (mockFetch.mock.calls.at(-1)?.[1] as { body: string }).body;
+    expect(retryBody).not.toContain("I couldn't send a reply just now");
+  });
+
   it('gives a reply that died while the app was suspended the crisis reply', async () => {
     const addEventListener = AppState.addEventListener as unknown as jest.Mock;
     const before = addEventListener.mock.calls.length;
@@ -345,7 +374,7 @@ describe('crisis lines when a Companion reply fails on the device', () => {
     });
     act(() => { onChange('active'); });
 
-    expect(lastReply()?.status).toBe('complete');
+    expectCrisisReplyRow(lastReply());
     expect(lastReply()?.content).toContain('741741');
   });
 });
