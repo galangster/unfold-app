@@ -24,7 +24,6 @@ import {
   readActReminderLastWrite,
   storeActReminderLastWrite,
 } from '@/lib/act-reminder-write';
-import { getEffectivePremiumAccessPolicy } from '@/lib/premium-state';
 import { areNotificationsEnabled, cancelActReminder, scheduleActReminder } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 
@@ -37,9 +36,6 @@ export function readActReminderPlanInput(state: StoreState): ActReminderPlanInpu
     ...readActReminderDay(state),
     middayTime: state.middayCheckInTime,
     eveningTime: state.eveningWindDownTime,
-    eveningWindDownEnabled: state.eveningWindDownEnabled,
-    eveningWindDownByDay: state.eveningWindDownByDay,
-    premiumPolicy: getEffectivePremiumAccessPolicy(),
     morningTime: state.user?.reminderTime,
   };
 }
@@ -57,8 +53,6 @@ function createFingerprintSelector(): (state: StoreState) => string {
       state.currentDevotionalId,
       state.middayCheckInTime,
       state.eveningWindDownTime,
-      state.eveningWindDownEnabled,
-      state.eveningWindDownByDay,
       state.user?.reminderTime,
       state.user?.dailyReminderEnabled,
       state.user?.isPremium,
@@ -118,18 +112,20 @@ export function useActReminderSync() {
 
       const notificationsEnabled = await areNotificationsEnabled();
       const plan = input.enabled
-        ? buildActReminderPlan({ ...input, now, notificationsEnabled, lastWrite })
+        ? buildActReminderPlan({ ...input, now, lastWrite })
         : null;
       if (plan && notificationsEnabled && !(await scheduleActReminder(plan))) {
         // Leave the run unapplied so the next foreground writes it again, and
-        // give today's midday slot back to the check-in until then.
+        // give today's check-in slot back to the check-in until then.
         markActReminderWriteFailed(true);
         return;
       }
-      markActReminderWriteFailed(false);
+      // Record the write before the epoch bump, so the check-in claims that
+      // re-render on the bump read this run's last write.
       if (plan && notificationsEnabled) {
         storeActReminderLastWrite({ devotionalId: plan.data.devotionalId, dayNumber: plan.data.dayNumber, fireAt: plan.fireAt.toISOString() });
       }
+      markActReminderWriteFailed(false);
       lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
       logger.log(`[useActReminderSync] ${plan ? `planned ${plan.slot} at ${plan.fireAt.toISOString()}` : 'nothing to plan'} (reason=${reason})`);

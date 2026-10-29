@@ -7,7 +7,6 @@
  * Local-only by design: it works for every reader with permission, token or
  * not, and it never repeats — one act, one nudge, then silence.
  */
-import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay, UserProfile } from './store';
 import { truncateNotificationBody } from './daily-reminder-content';
 import { getCurrentDevotional, getDaysReadToday, localDayKey, localDayKeyFromIso } from './home-devotional-state';
@@ -51,14 +50,6 @@ export interface ActReminderPlanInput {
   middayTime?: string | null;
   /** "HH:mm" store value for the evening wind-down. */
   eveningTime?: string | null;
-  /** Master toggle for the evening wind-down check-in. */
-  eveningWindDownEnabled?: boolean;
-  /** Per-weekday wind-down times. null means every weekday uses eveningTime. */
-  eveningWindDownByDay?: Record<string, string | null> | null;
-  /** OS permission, from the sync owner at plan time. */
-  notificationsEnabled?: boolean;
-  /** Check-in slots only write when this is granted. */
-  premiumPolicy?: PremiumAccessPolicy;
   /** "h:mm AM" reminder time from the profile. */
   morningTime?: string | null;
 }
@@ -110,58 +101,19 @@ function atClock(base: Date, clock: { hour: number; minute: number }, dayOffset 
   return date;
 }
 
-/** JS Date.getDay() (Sun=0) to the key `eveningWindDownByDay` is written with. */
-const JS_DAY_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-
 /**
- * Whether the evening wind-down check-in will write an occurrence at `fireAt`.
- * Mirrors the gates in `scheduleCheckInSlot` / `buildCheckInSchedule` for
- * today's evening slot only: permission, premium, master toggle, weekday,
- * and a still-ahead clock that matches the act reminder.
+ * Whether a check-in slot was far enough out when the day was read. Counted
+ * from the read, not from now, so a later replan keeps the slot the first
+ * plan chose, and the check-in claims agree with the planner.
  */
-function isEveningWindDownScheduledAt(
-  fireAt: Date,
-  now: Date,
-  {
-    eveningWindDownEnabled,
-    eveningWindDownByDay,
-    eveningTime,
-    notificationsEnabled,
-    premiumPolicy,
-  }: Pick<
-    ActReminderPlanInput,
-    | 'eveningWindDownEnabled'
-    | 'eveningWindDownByDay'
-    | 'eveningTime'
-    | 'notificationsEnabled'
-    | 'premiumPolicy'
-  >,
-): boolean {
-  if (!notificationsEnabled) return false;
-  if (premiumPolicy !== 'granted') return false;
-  if (!eveningWindDownEnabled) return false;
-  const time =
-    eveningWindDownByDay == null
-      ? (eveningTime || '20:30')
-      : eveningWindDownByDay[JS_DAY_TO_KEY[fireAt.getDay()]];
-  if (time == null) return false;
-  const windDownAt = atClock(fireAt, parseReminderClock(time, DEFAULT_EVENING));
-  if (windDownAt.getTime() <= now.getTime()) return false;
-  return windDownAt.getTime() === fireAt.getTime();
-}
-
-/**
- * Whether the midday slot was far enough out when the day was read. Counted
- * from the read, not from now, so a replan later in the morning keeps the
- * slot the first plan chose, and the check-in claim agrees with the planner.
- */
-function middayLeadMet(midday: Date, readAt: string | undefined): boolean {
-  return midday.getTime() >= Date.parse(readAt ?? '') + MIN_LEAD_MS;
+function slotLeadMet(slotAt: Date, readAt: string | undefined): boolean {
+  return slotAt.getTime() >= Date.parse(readAt ?? '') + MIN_LEAD_MS;
 }
 
 /**
  * Picks the fire time for a slot, or null when the moment has passed for
- * good (a midnight nudge helps nobody). `readAt` anchors the midday lead.
+ * good (a midnight nudge helps nobody). `readAt` anchors the midday and
+ * evening leads.
  */
 export function getActReminderFireAt(
   slot: ActSlot,
@@ -175,12 +127,13 @@ export function getActReminderFireAt(
   }
   if (slot === 'midday') {
     const midday = atClock(now, clocks.midday);
-    const leadMet = readAt ? middayLeadMet(midday, readAt) : midday >= earliest;
+    const leadMet = readAt ? slotLeadMet(midday, readAt) : midday >= earliest;
     if (leadMet && midday > now) return midday;
     // Missed midday: fall through to the evening slot.
   }
   const evening = atClock(now, clocks.evening);
-  if (evening >= earliest) return evening;
+  const eveningLeadMet = readAt ? slotLeadMet(evening, readAt) : evening >= earliest;
+  if (eveningLeadMet && evening > now) return evening;
   const cutoff = atClock(now, { hour: LATE_EVENING_CUTOFF_HOUR, minute: 0 });
   const late = new Date(now.getTime() + LATE_EVENING_DELAY_MS);
   return late <= cutoff ? late : null;
@@ -192,6 +145,7 @@ export interface ActReminderStoreSlice {
   currentDevotionalId: string | null;
   user: Pick<UserProfile, 'dailyReminderEnabled' | 'reminderTime'> | null;
   middayCheckInTime?: string | null;
+  eveningWindDownTime?: string | null;
 }
 
 // Rides on the daily-reminder preference: a reader who switched reminders
@@ -221,11 +175,32 @@ function actToRemind(day: DevotionalDay, now: Date): string | null {
   return localDayKeyFromIso(day.readAt) === localDayKey(now) ? act : null;
 }
 
+/** Whether the act reminder for this day already fired. One nudge, then silence. */
+function firedForDay(lastWrite: ActReminderWrite | null | undefined, devotionalId: string, day: DevotionalDay, now: Date): boolean {
+  return lastWrite != null
+    && lastWrite.devotionalId === devotionalId
+    && lastWrite.dayNumber === day.dayNumber
+    && Date.parse(lastWrite.fireAt) <= now.getTime();
+}
+
+/** Today's act that a check-in slot could step aside for, or null. */
+function claimingAct(
+  state: ActReminderStoreSlice,
+  now: Date,
+  actWriteFailed: boolean,
+): { devotional: Devotional; day: DevotionalDay; slot: ActSlot } | null {
+  if (actWriteFailed || !actRemindersEnabled(state.user)) return null;
+  const { devotional, day } = readActReminderDay(state, now);
+  const act = day ? actToRemind(day, now) : null;
+  if (!devotional || !day || !act) return null;
+  return { devotional, day, slot: inferActSlot(act, day.actSlot) };
+}
+
 /**
  * The midday instant today's act reminder takes from the midday check-in, or
  * null. One banner per moment: the act is the day's one thing and its tap
  * opens what it names, so today's check-in steps aside, as it does for the
- * trial notice. (At evening the wind-down carries the act instead.)
+ * trial notice. `getEveningActClaim` does the same at the evening slot.
  *
  * Shares the planner's midday lead, counted from the read: a midday act read
  * too late rolls to the evening and leaves the check-in alone, and the claim
@@ -233,12 +208,37 @@ function actToRemind(day: DevotionalDay, now: Date): string | null {
  * goes back to the check-in, so the reader still gets one banner.
  */
 export function getMiddayActClaim(state: ActReminderStoreSlice, now = new Date(), actWriteFailed = false): Date | null {
-  if (actWriteFailed || !actRemindersEnabled(state.user)) return null;
-  const { day } = readActReminderDay(state, now);
-  const act = day ? actToRemind(day, now) : null;
-  if (!day || !act || inferActSlot(act, day.actSlot) !== 'midday') return null;
+  const claim = claimingAct(state, now, actWriteFailed);
+  if (!claim || claim.slot !== 'midday') return null;
   const midday = atClock(now, parseReminderClock(state.middayCheckInTime, DEFAULT_MIDDAY));
-  return middayLeadMet(midday, day.readAt) ? midday : null;
+  return slotLeadMet(midday, claim.day.readAt) ? midday : null;
+}
+
+/**
+ * The evening instant today's act reminder takes from the evening wind-down,
+ * or null. The midday claim's rule at the evening slot: an evening act, or a
+ * midday act that rolled to the evening, fires at the wind-down clock, and
+ * today's wind-down steps aside. The planner picks the instant, with its
+ * lead counted from the read, so the claim agrees with it on every replan.
+ * A reminder that already fired today claims nothing more. While the act
+ * reminder write is failing, the slot goes back to the wind-down.
+ */
+export function getEveningActClaim(
+  state: ActReminderStoreSlice,
+  now = new Date(),
+  actWriteFailed = false,
+  lastWrite: ActReminderWrite | null = null,
+): Date | null {
+  const claim = claimingAct(state, now, actWriteFailed);
+  if (!claim || firedForDay(lastWrite, claim.devotional.id, claim.day, now)) return null;
+  const evening = parseReminderClock(state.eveningWindDownTime, DEFAULT_EVENING);
+  const fireAt = getActReminderFireAt(claim.slot, now, {
+    midday: parseReminderClock(state.middayCheckInTime, DEFAULT_MIDDAY),
+    evening,
+    morning: DEFAULT_MORNING,
+  }, claim.day.readAt);
+  const eveningAt = atClock(now, evening);
+  return fireAt?.getTime() === eveningAt.getTime() ? eveningAt : null;
 }
 
 /**
@@ -252,10 +252,6 @@ export function buildActReminderPlan({
   now = new Date(),
   middayTime,
   eveningTime,
-  eveningWindDownEnabled,
-  eveningWindDownByDay,
-  notificationsEnabled,
-  premiumPolicy,
   morningTime,
   lastWrite,
 }: ActReminderPlanInput): ActReminderPlan | null {
@@ -265,14 +261,7 @@ export function buildActReminderPlan({
   // One nudge, then silence: a reminder for this day already fired, so a
   // later replan (timezone, settings) adds no second one. A write that failed
   // or was cancelled before its time leaves no fired record.
-  if (
-    lastWrite
-    && lastWrite.devotionalId === devotional.id
-    && lastWrite.dayNumber === day.dayNumber
-    && Date.parse(lastWrite.fireAt) <= now.getTime()
-  ) {
-    return null;
-  }
+  if (firedForDay(lastWrite, devotional.id, day, now)) return null;
 
   const slot = inferActSlot(act, day.actSlot);
   const fireAt = getActReminderFireAt(slot, now, {
@@ -280,22 +269,9 @@ export function buildActReminderPlan({
     evening: parseReminderClock(eveningTime, DEFAULT_EVENING),
     morning: parseReminderClock(morningTime, DEFAULT_MORNING),
   }, day.readAt);
+  // At the midday or evening check-in instant the act fires and today's
+  // check-in steps aside (getMiddayActClaim, getEveningActClaim).
   if (!fireAt) return null;
-  // The wind-down body already carries the act. Two banners at the same
-  // instant is the collision. A missed midday that rolled into the evening
-  // clock collides the same way, so the guard keys off the fire time, not
-  // the slot name. Morning-next never matches an evening clock.
-  if (
-    isEveningWindDownScheduledAt(fireAt, now, {
-      eveningWindDownEnabled,
-      eveningWindDownByDay,
-      eveningTime,
-      notificationsEnabled,
-      premiumPolicy,
-    })
-  ) {
-    return null;
-  }
 
   return {
     fireAt,
@@ -326,10 +302,6 @@ export function buildActReminderFingerprint(input: ActReminderPlanInput & { enab
     day?.actOutcome ?? '',
     input.middayTime ?? '',
     input.eveningTime ?? '',
-    input.eveningWindDownEnabled ? '1' : '0',
-    input.eveningWindDownByDay ?? null,
-    input.notificationsEnabled ? '1' : '0',
-    input.premiumPolicy ?? '',
     input.morningTime ?? '',
   ]);
 }

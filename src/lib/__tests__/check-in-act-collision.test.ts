@@ -6,7 +6,9 @@
  * life update). Both read `middayCheckInTime`, so
  * every midday act on a check-in day collided. The evening already had a
  * guard (#142); midday did not. Today's midday check-in now steps aside for
- * a midday act, the way it steps aside for the trial notice.
+ * a midday act, the way it steps aside for the trial notice. Since design
+ * call 1 (2026-10-29) the evening works the same way: the act fires and
+ * today's wind-down steps aside.
  */
 
 import { buildActReminderPlan } from '@/lib/act-reminder';
@@ -24,7 +26,7 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { DATE: 'date', DAILY: 'daily', TIME_INTERVAL: 'time_interval' },
 }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
-jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false) }));
+jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false), readActReminderLastWrite: jest.fn(() => null) }));
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
 jest.mock('@/lib/auto-trial-intent', () => ({ readAutoTrialIntent: jest.fn(() => null) }));
 jest.mock('@/lib/trial-notification', () => ({ readTrialCheckInSkipDate: jest.fn(() => null) }));
@@ -89,7 +91,7 @@ const mockState = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { scheduleMiddayCheckIn } = require('../notifications');
+const { scheduleMiddayCheckIn, scheduleEveningWindDown } = require('../notifications');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { readCheckInFingerprint } = require('../check-in-notification-sync');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -106,9 +108,6 @@ function actPlanFor(today: DevotionalDay) {
     now,
     middayTime: mockState.store.middayCheckInTime,
     eveningTime: mockState.store.eveningWindDownTime,
-    eveningWindDownEnabled: true,
-    notificationsEnabled: true,
-    premiumPolicy: 'granted',
     morningTime: '8:00 AM',
   });
 }
@@ -177,6 +176,86 @@ describe('midday check-in and a midday act reminder', () => {
       mockState.store.devotionals = [devotional([day()])];
       const read = readCheckInFingerprint();
       mockState.store.devotionals = [devotional([day({ actOutcome: 'done' })])];
+      const done = readCheckInFingerprint();
+
+      expect(read).not.toBe(unread);
+      expect(done).not.toBe(read);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('evening wind-down and an evening act reminder (design call 1, 2026-10-29)', () => {
+  const eveningToday = new Date(2026, 8, 8, 20, 30, 0);
+  const eveningTomorrow = new Date(2026, 8, 9, 20, 30, 0);
+  const eveningAct = { act: 'Tonight, write one line of thanks.', actSlot: 'evening' as const };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const writeFailed = require('@/lib/act-reminder-write').readActReminderWriteFailed as jest.Mock;
+
+  beforeEach(() => {
+    mockScheduleNotificationAsync.mockClear();
+    writeFailed.mockReturnValue(false);
+    mockState.store.eveningWindDownTime = '20:30';
+    mockState.store.eveningWindDownByDay = null;
+    mockState.store.user = { hasCompletedOnboarding: true, dailyReminderEnabled: true, reminderTime: '8:00 AM' };
+  });
+
+  it('fires the evening act and skips only today\'s wind-down', async () => {
+    const today = day(eveningAct);
+    mockState.store.devotionals = [devotional([today])];
+
+    expect(actPlanFor(today)?.fireAt.getTime()).toBe(eveningToday.getTime());
+
+    const result = await scheduleEveningWindDown({ localDate: null, now });
+
+    expect(result.complete).toBe(true);
+    expect(middayFireTimes()).not.toContain(eveningToday.getTime());
+    expect(middayFireTimes()).toContain(eveningTomorrow.getTime());
+  });
+
+  it.each([
+    ['a midday act', day()],
+    ['a done evening act', day({ ...eveningAct, actOutcome: 'done' })],
+    ['no act', day({ act: undefined, actSlot: undefined })],
+  ])('keeps today\'s wind-down on a day with %s', async (_kind, today) => {
+    mockState.store.devotionals = [devotional([today])];
+
+    await scheduleEveningWindDown({ localDate: null, now });
+
+    expect(middayFireTimes()).toContain(eveningToday.getTime());
+  });
+
+  it('keeps today\'s wind-down when reminders are off or the act reminder write is failing', async () => {
+    mockState.store.devotionals = [devotional([day(eveningAct)])];
+    mockState.store.user = { hasCompletedOnboarding: true, dailyReminderEnabled: false, reminderTime: '8:00 AM' };
+    await scheduleEveningWindDown({ localDate: null, now });
+    expect(middayFireTimes()).toContain(eveningToday.getTime());
+
+    mockScheduleNotificationAsync.mockClear();
+    mockState.store.user = { hasCompletedOnboarding: true, dailyReminderEnabled: true, reminderTime: '8:00 AM' };
+    writeFailed.mockReturnValue(true);
+    await scheduleEveningWindDown({ localDate: null, now });
+    expect(middayFireTimes()).toContain(eveningToday.getTime());
+  });
+
+  it('keeps today\'s wind-down when its weekday time differs from the act\'s clock', async () => {
+    mockState.store.devotionals = [devotional([day(eveningAct)])];
+    mockState.store.eveningWindDownByDay = { Mon: '20:30', Tue: '21:15', Wed: '20:30', Thu: '20:30', Fri: '20:30', Sat: '20:30', Sun: '20:30' };
+
+    await scheduleEveningWindDown({ localDate: null, now });
+
+    expect(middayFireTimes()).toContain(new Date(2026, 8, 8, 21, 15, 0).getTime());
+  });
+
+  it('rewrites the check-in queue when the evening claim appears and when the act is done', () => {
+    jest.useFakeTimers({ now });
+    try {
+      mockState.store.devotionals = [devotional([day({ ...eveningAct, isRead: false, readAt: undefined })])];
+      const unread = readCheckInFingerprint();
+      mockState.store.devotionals = [devotional([day(eveningAct)])];
+      const read = readCheckInFingerprint();
+      mockState.store.devotionals = [devotional([day({ ...eveningAct, actOutcome: 'done' })])];
       const done = readCheckInFingerprint();
 
       expect(read).not.toBe(unread);

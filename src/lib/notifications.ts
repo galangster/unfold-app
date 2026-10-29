@@ -26,8 +26,8 @@ import {
 import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
-import { getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
-import { readActReminderWriteFailed } from '@/lib/act-reminder-write';
+import { getEveningActClaim, getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
+import { readActReminderLastWrite, readActReminderWriteFailed } from '@/lib/act-reminder-write';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -1070,6 +1070,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
 export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<CheckInWriteResult> {
   const store = useUnfoldStore.getState();
   const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+  const now = clock?.now ?? new Date();
   return scheduleCheckInSlot(
     {
       idBase: NOTIFICATION_IDS.EVENING_WINDDOWN,
@@ -1077,12 +1078,13 @@ export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<Che
       byDay: store.eveningWindDownByDay ?? null,
       fallback: EVENING_FALLBACK,
       dataType: 'evening-winddown',
+      skipAt: getEveningActClaim(store, now, readActReminderWriteFailed(), readActReminderLastWrite()),
       logNoun: 'Evening wind-down',
       eventType: 'evening_winddown',
       copyFor: getEveningWindDownCopy,
     },
     getTodayDayContext(currentDevotional),
-    dayIndexFor(clock?.now ?? new Date()),
+    dayIndexFor(now),
     cancelEveningWindDown,
     clock,
   );

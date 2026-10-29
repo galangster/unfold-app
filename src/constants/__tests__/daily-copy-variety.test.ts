@@ -421,7 +421,7 @@ describe('check-in banners', () => {
       for (const copy of [
         getMiddayCheckInCopy(null, null, day(START + offset)),
         getEveningWindDownCopy(null, day(START + offset)),
-        getEveningWindDownCopy({ act: 'Before you sleep, read Psalm 4 once.' }, day(START + offset)),
+        getEveningWindDownCopy({ eveningScriptureRef: 'Psalm 4:8' }, day(START + offset)),
       ]) {
         expect(echoes(copy.title, copy.body)).toBe(false);
       }
@@ -429,12 +429,12 @@ describe('check-in banners', () => {
   });
 
   it('swaps an echoing title for one outside the bag’s minimum gap', () => {
-    // 'Before you sleep' would echo this act, so it never shows above it,
-    // and the swap brings no title back within 11 days.
-    const act = 'Before you sleep, read Psalm 4 once.';
-    const titles = Array.from({ length: 400 }, (_, offset) => getEveningWindDownCopy({ act }, day(START + offset)).title);
-    expect(titles).not.toContain('Before you sleep');
-    expect(EVENING_TITLES).toContain('Before you sleep');
+    // 'Before rest' would echo the evening scripture line, so it never shows
+    // above it, and the swap brings no title back within 11 days.
+    const eveningScriptureRef = 'Psalm 4:8';
+    const titles = Array.from({ length: 400 }, (_, offset) => getEveningWindDownCopy({ eveningScriptureRef }, day(START + offset)).title);
+    expect(titles).not.toContain('Before rest');
+    expect(EVENING_TITLES).toContain('Before rest');
     expectNoRepeatWithin(titles, 11);
   });
 

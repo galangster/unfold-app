@@ -63,6 +63,7 @@ const baseline: CheckInFingerprintInputs = {
   todayCarryLine: '',
   todayCompanionNudge: '',
   todayMiddayActClaim: '',
+  todayEveningActClaim: '',
   notificationPermissionEpoch: 0,
   trialNoticeEpoch: 0,
   deviceTimezone: 'Pacific/Honolulu',
@@ -198,6 +199,13 @@ describe('useCheckInFingerprint — invariants', () => {
       // Reading a midday act moves today's check-in out of the act's way; marking it done brings it back.
       const a = buildFingerprint(baseline);
       const b = buildFingerprint({ ...baseline, todayMiddayActClaim: new Date(2026, 8, 8, 12, 30).toISOString() });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayEveningActClaim changes', () => {
+      // Reading an evening act moves today's wind-down out of the act's way; marking it done brings it back.
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayEveningActClaim: new Date(2026, 8, 8, 20, 30).toISOString() });
       expect(a).not.toBe(b);
     });
 
