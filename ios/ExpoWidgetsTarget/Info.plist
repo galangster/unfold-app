@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.22</string>
+	<string>1.1.23</string>
 	<key>CFBundleVersion</key>
-	<string>312</string>
+	<string>313</string>
 	<key>ExpoWidgetsAppGroupIdentifier</key>
 	<string>group.com.unfoldapp.ios</string>
 	<key>NSExtension</key>
