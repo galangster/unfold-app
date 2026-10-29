@@ -142,6 +142,29 @@ describe('companion chat retention and pairing', () => {
 });
 
 describe('companion hydration corrections', () => {
+  it('gives a crisis conversation the crisis reply when a cold start finds its reply unfinished', () => {
+    const reconciled = reconcileUnfinishedCompanionReplies([
+      conversation('c1', [
+        userMessage('u1', 'I keep thinking about suicide'),
+        { id: 'empty', role: 'companion', content: '', timestamp: 2, status: 'streaming' },
+      ]),
+      conversation('c2', [
+        userMessage('u2', 'I keep thinking about suicide'),
+        { id: 'partial', role: 'companion', content: 'I hear you.', timestamp: 2, status: 'streaming' },
+      ]),
+    ]);
+
+    expect(reconciled.conversations[0].messages[1]).toMatchObject({ status: 'error', interrupted: true });
+    expect(reconciled.conversations[0].messages[1].errorCopy).toBeTruthy();
+    expect(reconciled.conversations[0].messages[1].content).toMatch(/\b988\b/);
+    expect(reconciled.conversations[1].messages[1]).toMatchObject({ status: 'error', interrupted: true });
+    expect(reconciled.conversations[1].messages[1].content.startsWith('I hear you.')).toBe(true);
+    expect(reconciled.conversations[1].messages[1].content).toContain('741741');
+    expect(reconciled.corrections.map(({ message }) => message.content)).toEqual(
+      reconciled.conversations.map((c) => c.messages[1].content),
+    );
+  });
+
   it('converts unfinished replies to interrupted errors and enqueues terminal corrections', () => {
     mockEnqueuePersonalDataSyncChange.mockClear();
     const reconciled = reconcileUnfinishedCompanionReplies([

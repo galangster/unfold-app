@@ -28,6 +28,7 @@ import { pickRegenerateTarget } from './companion-regenerate';
 import { buildCompanionRequestMessages } from './companion-chat-request';
 import { resolveCompanionDisplayName } from '@/lib/support-clarity';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
+import { CRISIS_REPLY, crisisFailure, type CrisisFailure } from '@/lib/crisis-words';
 import { resolveCompanionPersonality, type CompanionPersonality } from '@/lib/companion-personality';
 import { copySeed } from '@/lib/copy-variation';
 import { getTodayDayNumber } from '@/lib/home-devotional-state';
@@ -47,13 +48,21 @@ function announceCompanionReply(content: string) {
   }
 }
 
+/** Speaks the crisis lines (or the whole crisis reply) uncapped, ahead of any reply text, which keeps the cap. */
+function announceWithCrisisLines(spoken: string, content: string) {
+  const announcement = [spoken, companionReplyAnnouncement(content)].filter(Boolean).join(' ');
+  if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
+}
+
 /**
  * Outcome of a sendMessage call:
  *  'sent'  — a companion response was received (including a user-stopped partial)
  *  'noop'  — early return (empty text or already streaming)
  *  'error' — no usable companion response was received
+ *  'crisis' — no response arrived, and the app showed its own crisis reply.
+ *             It is not a companion response, so it uses no daily message.
  */
-export type SendOutcome = 'sent' | 'noop' | 'error';
+export type SendOutcome = 'sent' | 'noop' | 'error' | 'crisis';
 
 /**
  * A regenerate turn rewrites an existing companion reply under its own id
@@ -475,7 +484,7 @@ export function useCompanionChat() {
             // `interrupted` keeps whatever partial text arrived rendering as
             // reply text; the other error paths store an error string in
             // `content` instead.
-            update(m.id, { status: 'error', interrupted: true }, conv.id);
+            update(m.id, crisisFailure(conv.messages ?? [], { status: 'error', interrupted: true }, m.content).patch, conv.id);
           }
         }
       }
@@ -602,6 +611,23 @@ export function useCompanionChat() {
       const isStreamConversationVisible = () =>
         useCompanionChatStore.getState().activeConversationId === streamConversationId;
 
+      // Records a failed reply, with the crisis lines or the crisis reply in
+      // a crisis conversation (see crisisFailure).
+      const failReply = (patch: Partial<CompanionMessage>): CrisisFailure => {
+        const messages = useCompanionChatStore.getState().conversations
+          .find((conversation) => conversation.id === streamConversationId)?.messages ?? [];
+        const partial = patch.interrupted
+          ? patch.content ?? messages.find((message) => message.id === companionId)?.content ?? ''
+          : '';
+        const failure = crisisFailure(messages, patch, partial);
+        updateMessage(companionId, failure.patch, streamConversationId);
+        if (failure.kind === 'reply') {
+          if (isStreamConversationVisible()) setSuggestions([]);
+          announceWithCrisisLines(failure.spoken, '');
+        }
+        return failure;
+      };
+
       try {
         const streamConversation = useCompanionChatStore.getState().conversations
           .find((conversation) => conversation.id === streamConversationId);
@@ -721,24 +747,22 @@ export function useCompanionChat() {
           if (isStreamConversationVisible()) setIsSearching(false);
           if (accumulatedText) {
             // Preserve the partial text and its classified cause across launches.
-            updateMessage(companionId, {
+            const crisis = failReply({
               content: accumulatedText,
               status: 'error',
               interrupted: true,
               errorCopy: serverErrorMessage,
-            }, streamConversationId);
+            });
             if (isStreamConversationVisible()) {
               setError(`${serverErrorMessage} Your reply may be incomplete.`);
             }
-            AccessibilityInfo.announceForAccessibility(
-              `Companion reply interrupted. ${serverErrorMessage}`,
-            );
+            announceWithCrisisLines(crisis.spoken, `Companion reply interrupted. ${serverErrorMessage}`);
             return 'sent';
           }
-          updateMessage(companionId, {
+          if (failReply({
             status: 'error',
             content: serverErrorMessage,
-          }, streamConversationId);
+          }).kind === 'reply') return 'crisis';
           if (isStreamConversationVisible()) setError(serverErrorMessage);
           AccessibilityInfo.announceForAccessibility(
             `Companion reply failed. ${serverErrorMessage}`,
@@ -752,16 +776,16 @@ export function useCompanionChat() {
           // Preserve partial text without issuing a second provider request.
           cancelThrottle();
           if (isStreamConversationVisible()) setIsSearching(false);
-          updateMessage(companionId, {
+          const crisis = failReply({
             content: accumulatedText,
             status: 'error',
             interrupted: true,
             errorCopy: COMPANION_ERROR_CONNECTION,
-          }, streamConversationId);
+          });
           if (isStreamConversationVisible()) {
             setError(`${COMPANION_ERROR_CONNECTION} Your reply may be incomplete.`);
           }
-          announceCompanionReply(accumulatedText);
+          announceWithCrisisLines(crisis.spoken, accumulatedText);
           streamSucceeded = true; // partial kept — skip the fallback below
         }
 
@@ -843,7 +867,7 @@ export function useCompanionChat() {
             .find((c) => c.id === streamConversationId);
           const current = (streamConv?.messages ?? []).find((m) => m.id === companionId);
           const hasPartial = Boolean(current?.content);
-          updateMessage(companionId, {
+          const crisis = failReply({
             status: 'error',
             interrupted: hasPartial,
             // User-stop must not invent a connection error. Other aborts
@@ -851,8 +875,9 @@ export function useCompanionChat() {
             errorCopy: inFlightRequest.stoppedByUser || !hasPartial
               ? undefined
               : COMPANION_ERROR_CONNECTION,
-          }, streamConversationId);
-          return hasPartial ? 'sent' : 'error';
+          });
+          if (hasPartial) return 'sent';
+          return crisis.kind === 'reply' ? 'crisis' : 'error';
         } else {
           const analyzed = analyzeNetworkError(err);
           // The budget copy (with its reset estimate) beats the generic classifier.
@@ -863,25 +888,26 @@ export function useCompanionChat() {
           logger.warn('[CompanionChat] Error:', err, analyzed.type);
           if (accumulatedText) {
             // Preserve partial text with a durable interruption flag and retry control.
-            updateMessage(companionId, {
+            const crisis = failReply({
               content: accumulatedText,
               status: 'error',
               interrupted: true,
               errorCopy: userFriendlyMessage,
-            }, streamConversationId);
+            });
             if (isStreamConversationVisible()) {
               setError(`${userFriendlyMessage} Your reply may be incomplete.`);
             }
-            AccessibilityInfo.announceForAccessibility(
+            announceWithCrisisLines(
+              crisis.spoken,
               `Connection interrupted. ${userFriendlyMessage} Your reply may be incomplete.`,
             );
             return 'sent';
           }
-          if (isStreamConversationVisible()) setError(userFriendlyMessage);
-          updateMessage(companionId, {
+          if (failReply({
             status: 'error',
             content: userFriendlyMessage,
-          }, streamConversationId);
+          }).kind === 'reply') return 'crisis';
+          if (isStreamConversationVisible()) setError(userFriendlyMessage);
           AccessibilityInfo.announceForAccessibility(
             `Companion reply failed. ${userFriendlyMessage}`,
           );
@@ -927,9 +953,11 @@ export function useCompanionChat() {
       if (options?.companionId && target.companionMessage.id !== options.companionId) return 'noop';
       const { companionMessage } = target;
       // An error row stores an app-authored error string unless it was an
-      // interrupted partial; only real reply text is worth quoting back.
+      // interrupted partial, and the offline crisis reply is app-authored
+      // too; only real reply text is worth quoting back.
       const previousReply =
-        companionMessage.status === 'complete' || companionMessage.interrupted
+        (companionMessage.status === 'complete' || companionMessage.interrupted)
+          && companionMessage.content !== CRISIS_REPLY
           ? companionMessage.content
           : '';
       return runTurn(target.userMessage.content, {
