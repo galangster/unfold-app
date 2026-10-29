@@ -87,6 +87,16 @@ export function namesCrisis(mentions: CrisisMentions): boolean {
   return mentions.selfHarm || mentions.abuse;
 }
 
+/** The crisis words in everything the reader wrote in a conversation. */
+export function conversationCrisis(
+  messages: readonly Pick<CompanionMessage, 'role' | 'content'>[],
+): CrisisMentions {
+  return crisisMentions(messages
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content)
+    .join('\n'));
+}
+
 export const CRISIS_LINES =
   'If you are thinking about ending your life or harming yourself, please call or text 988 (Suicide and Crisis Lifeline) or text HOME to 741741 (Crisis Text Line).';
 export const ABUSE_LINE =
@@ -141,10 +151,7 @@ export function crisisFailure(
   patch: Partial<CompanionMessage>,
   partial: string,
 ): CrisisFailure {
-  const crisis = crisisMentions(messages
-    .filter((message) => message.role === 'user')
-    .map((message) => message.content)
-    .join('\n'));
+  const crisis = conversationCrisis(messages);
   if (!namesCrisis(crisis)) return { kind: 'none', patch, spoken: '' };
   if (partial) {
     return {
