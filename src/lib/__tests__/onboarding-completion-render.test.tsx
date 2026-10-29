@@ -358,6 +358,33 @@ describe('new series from Today', () => {
     });
   }
 
+  function selectedLengthCards(): string[] {
+    // The touchable and its host view both carry the props: count each label once.
+    return [...new Set<string>(tree.root.findAll(
+      (node: { props?: { accessibilityRole?: string; accessibilityState?: { selected?: boolean }; onPress?: unknown } }) =>
+        node.props?.accessibilityRole === 'radio'
+        && node.props?.accessibilityState?.selected === true
+        && typeof node.props?.onPress === 'function',
+    ).map((node: { props: { accessibilityLabel: string } }) => node.props.accessibilityLabel))];
+  }
+
+  it('the length step starts on the reader\'s last chosen duration', async () => {
+    mockStoreState.user = { ...mockStoreState.user, readingDuration: 30 };
+    await openAt('readingDuration');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(selectedLengthCards()).toEqual(['30 minutes']);
+  });
+
+  it('the length step starts on 15 minutes when the reader never chose a duration', async () => {
+    await openAt('readingDuration');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(selectedLengthCards()).toEqual(['15 minutes']);
+  });
+
   // Presses, then lets step transitions (up to 350 ms) and completion settle.
   async function tap(target: { label?: string; text?: string }) {
     const node = target.label

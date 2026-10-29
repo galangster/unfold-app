@@ -726,7 +726,8 @@ export default function OnboardingScreen() {
     obstacles: existingUser?.obstacles ?? [],
     relationshipWithGod: existingUser?.relationshipWithGod,
     bibleFrequency: existingUser?.bibleFrequency,
-    readingDuration: 15,
+    // A new series starts on the reader's last chosen duration.
+    readingDuration: existingUser?.readingDuration ?? 15,
     devotionalLength: 7,
     reminderTime: existingUser?.reminderTime || '8:00 AM',
     mirrorBackCommitted: false,
