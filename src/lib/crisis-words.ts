@@ -11,7 +11,11 @@ import { COMPANION_ERROR_CONNECTION } from './companion-error-copy';
  * letters undone. Keep the two lists in step. Spaced letters give two forms,
  * as in the backend since PR #141: the whole run joined ("s u i c i d e"), and
  * the letters joined in pairs, which keeps spelled-out two-letter words apart
- * ("o f m y" reads "of my").
+ * ("o f m y" reads "of my"). Since the backend's spelled-phrase fix, an
+ * underscore separates letters like a space ("s_u_i_c_i_d_e"), and a phrase
+ * also counts when its letters alone appear inside one spelled-out run
+ * ("k i l l m y s e l f"). Only spelled runs get that letters-only check,
+ * never the whole text.
  */
 
 const SELF_HARM_WORDS = [
@@ -50,13 +54,19 @@ const ABUSE_WORDS = [
 /** Curly and other apostrophes the keyboard can type for "don't". */
 const APOSTROPHES = /[‘’ʼ`´＇]| ́/g;
 
+/** The text forms to search, and each spelled-out run as letters alone. */
+type Normalized = { forms: string[]; spelledRuns: string[] };
+
 /**
  * Undoes leet speak ("su1c1de") and spaced-out letters ("s u i c i d e").
  * Spaced letters give two forms, because a space can split a word or end one.
  */
-function normalize(text: string): string[] {
+function normalize(text: string): Normalized {
   const normalized = text
     .toLowerCase()
+    // "_" is a word character, so "s_u_i_c_i_d_e" and "want_2_die" have no
+    // word breaks without this. It goes before the leet map for the "2".
+    .replace(/_/g, ' ')
     .replace(/[1!|]/g, 'i')
     .replace(/[3]/g, 'e')
     .replace(/[0@]/g, 'o')
@@ -69,7 +79,12 @@ function normalize(text: string): string[] {
     .replace(/ph/g, 'f')
     .replace(/vv/g, 'w');
   // A run of single letters spells one word: "s u i c i d e", "s.u.i.c.i.d.e".
-  const runs = normalized.replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => run.replace(/[.\-_\s]+/g, ''));
+  const spelledRuns: string[] = [];
+  const runs = normalized.replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => {
+    const joined = run.replace(/[.\-_\s]+/g, '');
+    if (/^[a-z]+$/.test(joined)) spelledRuns.push(joined);
+    return joined;
+  });
   // Joined in pairs, spelled-out two-letter words stay apart: "o f m y" reads "of my".
   let pairs = normalized;
   let prev;
@@ -77,8 +92,11 @@ function normalize(text: string): string[] {
     prev = pairs;
     pairs = pairs.replace(/\b(\w)[.\-_\s]+(\w)\b/g, '$1$2');
   } while (pairs !== prev);
-  return [runs, pairs].map((form) => form.replace(/\s+/g, ' ').trim());
+  return { forms: [runs, pairs].map((form) => form.replace(/\s+/g, ' ').trim()), spelledRuns };
 }
+
+/** A phrase as letters alone: "don't want to live" reads "dontwanttolive". */
+const compact = (word: string) => word.replace(/[^a-z]/g, '');
 
 export type CrisisMentions = { selfHarm: boolean; abuse: boolean };
 
@@ -87,9 +105,12 @@ export const NO_CRISIS: CrisisMentions = { selfHarm: false, abuse: false };
 export function crisisMentions(text: string): CrisisMentions {
   if (!text) return NO_CRISIS;
   const lower = text.replace(APOSTROPHES, "'").toLowerCase();
-  const forms = [lower, ...normalize(lower)];
+  const { forms, spelledRuns } = normalize(lower);
+  const all = [lower, ...forms];
+  // A whole phrase spelled out joins into one run: "k i l l m y s e l f".
   const names = (words: readonly string[]) =>
-    words.some((word) => forms.some((form) => form.includes(word)));
+    words.some((word) => all.some((form) => form.includes(word))
+      || spelledRuns.some((run) => run.includes(compact(word))));
   return { selfHarm: names(SELF_HARM_WORDS), abuse: names(ABUSE_WORDS) };
 }
 
