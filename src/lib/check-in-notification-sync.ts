@@ -49,6 +49,8 @@ export type CheckInSyncOutcome =
 export function readCheckInFingerprintInputs(): CheckInFingerprintInputs {
   const state = useUnfoldStore.getState();
   const ui = useUIState.getState();
+  const now = new Date();
+  const actWriteFailed = readActReminderWriteFailed();
   return {
     policy: getEffectivePremiumAccessPolicy(),
     middayEnabled: state.middayCheckInEnabled,
@@ -60,8 +62,8 @@ export function readCheckInFingerprintInputs(): CheckInFingerprintInputs {
     hasCompletedOnboarding: !!state.user?.hasCompletedOnboarding,
     todayCarryLine: getTodayCarryLine(state.devotionals, state.currentDevotionalId) ?? '',
     todayCompanionNudge: getTodayCompanionNudge(state.devotionals, state.currentDevotionalId) ?? '',
-    todayMiddayActClaim: getMiddayActClaim(state, new Date(), readActReminderWriteFailed())?.toISOString() ?? '',
-    todayEveningActClaim: getEveningActClaim(state, new Date(), readActReminderWriteFailed(), readActReminderLastWrite())?.toISOString() ?? '',
+    todayMiddayActClaim: getMiddayActClaim(state, now, actWriteFailed)?.toISOString() ?? '',
+    todayEveningActClaim: getEveningActClaim(state, now, actWriteFailed, readActReminderLastWrite())?.toISOString() ?? '',
     notificationPermissionEpoch: ui.notificationPermissionEpoch,
     trialNoticeEpoch: ui.trialNoticeEpoch,
     deviceTimezone: getDeviceTimezone() ?? '',

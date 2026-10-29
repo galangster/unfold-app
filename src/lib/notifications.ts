@@ -26,8 +26,8 @@ import {
 import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
-import { getEveningActClaim, getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
-import { readActReminderLastWrite, readActReminderWriteFailed } from '@/lib/act-reminder-write';
+import { getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
+import { readActReminderWriteFailed, readEveningActClaim } from '@/lib/act-reminder-write';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -1078,7 +1078,7 @@ export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<Che
       byDay: store.eveningWindDownByDay ?? null,
       fallback: EVENING_FALLBACK,
       dataType: 'evening-winddown',
-      skipAt: getEveningActClaim(store, now, readActReminderWriteFailed(), readActReminderLastWrite()),
+      skipAt: readEveningActClaim(store, now),
       logNoun: 'Evening wind-down',
       eventType: 'evening_winddown',
       copyFor: getEveningWindDownCopy,

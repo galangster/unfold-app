@@ -175,6 +175,15 @@ function actToRemind(day: DevotionalDay, now: Date): string | null {
   return localDayKeyFromIso(day.readAt) === localDayKey(now) ? act : null;
 }
 
+/** The midday, evening and morning clocks the planner reads, parsed once. */
+function actClocks(middayTime?: string | null, eveningTime?: string | null, morningTime?: string | null) {
+  return {
+    midday: parseReminderClock(middayTime, DEFAULT_MIDDAY),
+    evening: parseReminderClock(eveningTime, DEFAULT_EVENING),
+    morning: parseReminderClock(morningTime, DEFAULT_MORNING),
+  };
+}
+
 /** Whether the act reminder for this day already fired. One nudge, then silence. */
 function firedForDay(lastWrite: ActReminderWrite | null | undefined, devotionalId: string, day: DevotionalDay, now: Date): boolean {
   return lastWrite != null
@@ -231,13 +240,9 @@ export function getEveningActClaim(
 ): Date | null {
   const claim = claimingAct(state, now, actWriteFailed);
   if (!claim || firedForDay(lastWrite, claim.devotional.id, claim.day, now)) return null;
-  const evening = parseReminderClock(state.eveningWindDownTime, DEFAULT_EVENING);
-  const fireAt = getActReminderFireAt(claim.slot, now, {
-    midday: parseReminderClock(state.middayCheckInTime, DEFAULT_MIDDAY),
-    evening,
-    morning: DEFAULT_MORNING,
-  }, claim.day.readAt);
-  const eveningAt = atClock(now, evening);
+  const clocks = actClocks(state.middayCheckInTime, state.eveningWindDownTime, state.user?.reminderTime);
+  const fireAt = getActReminderFireAt(claim.slot, now, clocks, claim.day.readAt);
+  const eveningAt = atClock(now, clocks.evening);
   return fireAt?.getTime() === eveningAt.getTime() ? eveningAt : null;
 }
 
@@ -264,11 +269,7 @@ export function buildActReminderPlan({
   if (firedForDay(lastWrite, devotional.id, day, now)) return null;
 
   const slot = inferActSlot(act, day.actSlot);
-  const fireAt = getActReminderFireAt(slot, now, {
-    midday: parseReminderClock(middayTime, DEFAULT_MIDDAY),
-    evening: parseReminderClock(eveningTime, DEFAULT_EVENING),
-    morning: parseReminderClock(morningTime, DEFAULT_MORNING),
-  }, day.readAt);
+  const fireAt = getActReminderFireAt(slot, now, actClocks(middayTime, eveningTime, morningTime), day.readAt);
   // At the midday or evening check-in instant the act fires and today's
   // check-in steps aside (getMiddayActClaim, getEveningActClaim).
   if (!fireAt) return null;

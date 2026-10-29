@@ -1413,11 +1413,11 @@ export default function HomeScreen() {
   );
 
   // Evening deliberately still takes the content-aware path only. Its
-  // notification leads with the day's `act` — a task — and that is the right
-  // lead for a banner at 20:30 but not obviously right for a card the reader
-  // is already looking at. Aligning it is a product call, not a cleanup, and
-  // it has not been made. The midday divergence above was a plain defect: a
-  // card named for the companion nudge that never showed it.
+  // notification leads with the evening scripture line when the day has one
+  // (getEveningWindDownBody); the act has its own reminder. Aligning the card
+  // with that banner is a product call, not a cleanup, and it has not been
+  // made. The midday divergence above was a plain defect: a card named for
+  // the companion nudge that never showed it.
   const eveningMessage = useMemo(
     () => getContentAwareEveningMessage(dayCopyContext, variation),
     [dayCopyContext, variation],

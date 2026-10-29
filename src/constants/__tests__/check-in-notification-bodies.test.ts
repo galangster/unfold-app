@@ -32,10 +32,11 @@ describe('truncateNotificationBody', () => {
 
 describe('getEveningWindDownBody', () => {
   it('never returns the day\'s act, which has its own reminder (design call 1, 2026-10-29)', () => {
-    expect(getEveningWindDownBody({ title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' }, V)).toBe(
-      'Before rest, sit with Psalm 132:1-5 for a minute.',
-    );
-    const withoutScripture = getEveningWindDownBody({ title: 'The Unfinished House', act: LONG_ACT }, V);
+    // A stored day still carries its act. The wind-down context has no act field, so nothing can lead with it.
+    const withScripture = { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' };
+    const actOnly = { title: 'The Unfinished House', act: LONG_ACT };
+    expect(getEveningWindDownBody(withScripture, V)).toBe('Before rest, sit with Psalm 132:1-5 for a minute.');
+    const withoutScripture = getEveningWindDownBody(actOnly, V);
     expect(withoutScripture).not.toContain('Tonight after your toddler is down');
     expect(withoutScripture).toBe(getEveningWindDownBody({ title: 'The Unfinished House' }, V));
   });

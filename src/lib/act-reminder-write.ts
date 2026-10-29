@@ -4,7 +4,7 @@
  */
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
-import type { ActReminderWrite } from '@/lib/act-reminder';
+import { getEveningActClaim, type ActReminderStoreSlice, type ActReminderWrite } from '@/lib/act-reminder';
 
 const LAST_WRITE_KEY = '@unfold_act_reminder_last_write';
 const WRITE_FAILED_KEY = '@unfold_act_reminder_write_failed';
@@ -16,6 +16,11 @@ export function readActReminderLastWrite(): ActReminderWrite | null {
   } catch {
     return null;
   }
+}
+
+/** Today's evening act claim, read with the stored write state (getEveningActClaim). */
+export function readEveningActClaim(state: ActReminderStoreSlice, now = new Date()): Date | null {
+  return getEveningActClaim(state, now, readActReminderWriteFailed(), readActReminderLastWrite());
 }
 
 export function storeActReminderLastWrite(write: ActReminderWrite | null): void {

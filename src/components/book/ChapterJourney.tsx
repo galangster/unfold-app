@@ -57,9 +57,9 @@ export function ChapterJourney({
         const openable = canOpenChapter(chapter);
         const current = chapter.status === 'current';
         const week = weeks ? chapter.week : undefined;
-        const title = week ? weekRowTitle(week, { seriesPaused: withholdsPromise }) : chapter.name;
+        const title = week ? weekRowTitle(week, { withholdsPromise }) : chapter.name;
         const label = week
-          ? weekRowSpokenLabel(week, chapter.status, chapter.readCount, { seriesPaused: withholdsPromise })
+          ? weekRowSpokenLabel(week, chapter.status, chapter.readCount, { withholdsPromise })
           : `${chapter.name}, ${chapterStatusLabel(chapter)}`;
         return (
           <View

@@ -553,7 +553,6 @@ export interface DayContext {
   scriptureReference?: string;
   quotableLine?: string;
   checkInQuestion?: string;
-  act?: string;
   eveningScriptureRef?: string;
   companionNudge?: string;
 }

@@ -26,7 +26,16 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { DATE: 'date', DAILY: 'daily', TIME_INTERVAL: 'time_interval' },
 }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
-jest.mock('@/lib/act-reminder-write', () => ({ readActReminderWriteFailed: jest.fn(() => false), readActReminderLastWrite: jest.fn(() => null) }));
+jest.mock('@/lib/act-reminder-write', () => {
+  const readActReminderWriteFailed = jest.fn(() => false);
+  const readActReminderLastWrite = jest.fn(() => null);
+  return {
+    readActReminderWriteFailed,
+    readActReminderLastWrite,
+    readEveningActClaim: (state: never, now: Date) =>
+      jest.requireActual('@/lib/act-reminder').getEveningActClaim(state, now, readActReminderWriteFailed(), readActReminderLastWrite()),
+  };
+});
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
 jest.mock('@/lib/auto-trial-intent', () => ({ readAutoTrialIntent: jest.fn(() => null) }));
 jest.mock('@/lib/trial-notification', () => ({ readTrialCheckInSkipDate: jest.fn(() => null) }));
