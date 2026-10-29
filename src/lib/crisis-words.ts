@@ -8,8 +8,10 @@ import { COMPANION_ERROR_CONNECTION } from './companion-error-copy';
  * The word lists and the matching mirror the backend's Companion check
  * (`src/routes/companion.ts` in unfold-backend, PR #137): a phrase counts when
  * it appears in the lowercase text or in a copy with leet-speak and spaced-out
- * letters undone. Keep the two lists in step. The backend's spaced-letter step
- * only joins pairs, so it misses "s u i c i d e"; this one joins the whole run.
+ * letters undone. Keep the two lists in step. Spaced letters give two forms,
+ * as in the backend since PR #141: the whole run joined ("s u i c i d e"), and
+ * the letters joined in pairs, which keeps spelled-out two-letter words apart
+ * ("o f m y" reads "of my").
  */
 
 const SELF_HARM_WORDS = [
@@ -48,8 +50,11 @@ const ABUSE_WORDS = [
 /** Curly and other apostrophes the keyboard can type for "don't". */
 const APOSTROPHES = /[‘’ʼ`´＇]| ́/g;
 
-/** Undoes leet speak ("su1c1de") and spaced-out letters ("s u i c i d e"). */
-function normalize(text: string): string {
+/**
+ * Undoes leet speak ("su1c1de") and spaced-out letters ("s u i c i d e").
+ * Spaced letters give two forms, because a space can split a word or end one.
+ */
+function normalize(text: string): string[] {
   const normalized = text
     .toLowerCase()
     .replace(/[1!|]/g, 'i')
@@ -63,11 +68,16 @@ function normalize(text: string): string {
     .replace(/\b2\b/g, 'to')
     .replace(/ph/g, 'f')
     .replace(/vv/g, 'w');
-  return normalized
-    // A run of single letters spells one word: "s u i c i d e", "s.u.i.c.i.d.e".
-    .replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => run.replace(/[.\-_\s]+/g, ''))
-    .replace(/\s+/g, ' ')
-    .trim();
+  // A run of single letters spells one word: "s u i c i d e", "s.u.i.c.i.d.e".
+  const runs = normalized.replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => run.replace(/[.\-_\s]+/g, ''));
+  // Joined in pairs, spelled-out two-letter words stay apart: "o f m y" reads "of my".
+  let pairs = normalized;
+  let prev;
+  do {
+    prev = pairs;
+    pairs = pairs.replace(/\b(\w)[.\-_\s]+(\w)\b/g, '$1$2');
+  } while (pairs !== prev);
+  return [runs, pairs].map((form) => form.replace(/\s+/g, ' ').trim());
 }
 
 export type CrisisMentions = { selfHarm: boolean; abuse: boolean };
@@ -77,9 +87,9 @@ export const NO_CRISIS: CrisisMentions = { selfHarm: false, abuse: false };
 export function crisisMentions(text: string): CrisisMentions {
   if (!text) return NO_CRISIS;
   const lower = text.replace(APOSTROPHES, "'").toLowerCase();
-  const normalized = normalize(lower);
+  const forms = [lower, ...normalize(lower)];
   const names = (words: readonly string[]) =>
-    words.some((word) => lower.includes(word) || normalized.includes(word));
+    words.some((word) => forms.some((form) => form.includes(word)));
   return { selfHarm: names(SELF_HARM_WORDS), abuse: names(ABUSE_WORDS) };
 }
 
