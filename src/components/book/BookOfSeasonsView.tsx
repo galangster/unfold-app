@@ -16,7 +16,6 @@ import { ActiveSeriesBookHero } from './ActiveSeriesBookHero';
 import { ChapterJourney } from './ChapterJourney';
 import { BookDayList } from './BookDayList';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
-import { withholdsWeekPromise } from '@/lib/series-weeks';
 
 export function BookOfSeasonsView({
   devotional,
@@ -104,7 +103,8 @@ export function BookOfSeasonsView({
   const contents = chapters.length > 0 && !showAllReadings ? <ChapterJourney
     chapters={chapters}
     colors={colors}
-    seriesPaused={withholdsWeekPromise(seriesPaused, premiumPolicy)}
+    seriesPaused={seriesPaused}
+    premiumPolicy={premiumPolicy}
     weeks={model?.weeks ?? null}
     canOpenChapter={(chapter) => resolveBookOpenDayNumber(devotional, chapter, now) != null}
     onOpenChapter={(chapter) => {

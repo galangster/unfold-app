@@ -7,10 +7,6 @@
  *
  * Allowed, each with its reason:
  * - The ruled option subtitle (Ruled 4), the one exception R3 names.
- * - Three legacy strings that render only for an arc without `planning`.
- *   Nick's ruling keeps the flag-off series unchanged and R6 holds it with a
- *   snapshot; the chaptered render tests prove they never reach a chaptered
- *   series. Retiring them for legacy arcs is an owner call.
  * - The returning empty state "Begin the next quiet chapter." on Today. It
  *   predates the feature, shows only with no current series, and is brand copy.
  *   Rewording it is an owner call.
@@ -57,8 +53,6 @@ const ALLOWED: Record<string, string[]> = {
     'Four weekly chapters. Each week is prepared as you go.',
     '4 weeks. Four weekly chapters. Each week is prepared as you go.',
   ],
-  'lib/book-of-seasons.ts': ['Your current chapter'],
-  'components/book/ChapterJourney.tsx': ['1 chapter', ' chapters', 'Current chapter'],
   'components/home/DevotionalCard.tsx': ['Begin the next quiet chapter.'],
 };
 

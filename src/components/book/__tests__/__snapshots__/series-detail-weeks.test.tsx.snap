@@ -49,7 +49,7 @@ exports[`R6: a legacy arc renders as today keeps the legacy chapter list 1`] = `
         ]
       }
     >
-      2 chapters
+      2 parts
     </Text>
   </View>
   <View
@@ -173,7 +173,7 @@ exports[`R6: a legacy arc renders as today keeps the legacy chapter list 1`] = `
         </Text>
       </View>
       <View
-        accessibilityLabel="Current chapter"
+        accessibilityLabel="Current part"
         style={
           [
             {
