@@ -363,7 +363,7 @@ export const MIDDAY_TITLES: string[] = [
 /**
  * Titles for the evening wind-down banner. Same rule as the midday pool:
  * a frame, not a claim and not a question. These lean on closure and rest,
- * because the body is usually the day's "act" or its evening scripture.
+ * because the body is usually the day's evening scripture.
  */
 export const EVENING_TITLES: string[] = [
   'Winding down',
@@ -553,7 +553,6 @@ export interface DayContext {
   scriptureReference?: string;
   quotableLine?: string;
   checkInQuestion?: string;
-  act?: string;
   eveningScriptureRef?: string;
   companionNudge?: string;
 }
@@ -609,7 +608,7 @@ export const MIDDAY_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
   (ctx) => `What does ${ctx.scriptureReference} ask of you today?`,
 ];
 
-/** Frames for the evening card body, and the evening banner when the day has no act. */
+/** Frames for the evening card body, and the evening banner when the day has no evening scripture. */
 export const EVENING_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
   (ctx) => `How did "${ctx.title}" shape your day?`,
   (ctx) => `Before rest, one thought about "${ctx.title}."`,
@@ -713,15 +712,15 @@ export function getMiddayCheckInBody(
 }
 
 /**
- * Selected evening wind-down sentence. Same choice as the notification.
- * Truncation belongs only on the OS banner.
+ * Selected evening wind-down sentence: the evening scripture line, else the
+ * content-aware evening message. Never the day's act: the act has its own
+ * reminder, and on its day the wind-down steps aside for it (design call 1,
+ * 2026-10-29). Truncation belongs only on the OS banner.
  */
 export function getEveningWindDownBody(
   day: DayContext | null | undefined,
   variation: CopyVariation,
 ): string {
-  const act = day?.act?.trim();
-  if (act) return act;
   const ref = day?.eveningScriptureRef?.trim();
   if (ref) return `Before rest, sit with ${ref} for a minute.`;
   return getContentAwareEveningMessage(day, variation);

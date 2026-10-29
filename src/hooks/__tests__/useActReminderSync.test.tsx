@@ -93,15 +93,11 @@ function Harness() {
 }
 
 describe('readActReminderPlanInput', () => {
-  it('includes wind-down enablement and time in the plan input and fingerprint', () => {
-    mockStoreState.eveningWindDownEnabled = true;
+  it('includes the wind-down time in the plan input and fingerprint', () => {
     mockStoreState.eveningWindDownTime = '20:30';
     const input = readActReminderPlanInput(mockStoreState as never);
-    expect(input.eveningWindDownEnabled).toBe(true);
     expect(input.eveningTime).toBe('20:30');
-    const enabled = buildActReminderFingerprint(input);
-    const disabled = buildActReminderFingerprint({ ...input, eveningWindDownEnabled: false });
-    expect(enabled).not.toBe(disabled);
+    expect(buildActReminderFingerprint(input)).not.toBe(buildActReminderFingerprint({ ...input, eveningTime: '21:00' }));
   });
 });
 
@@ -168,17 +164,8 @@ describe('useActReminderSync wind-down collision', () => {
     await flushScheduled();
   }
 
-  it('schedules the evening act reminder when wind-down is disabled for that day', async () => {
+  it('schedules the evening act reminder at the wind-down clock, where the wind-down steps aside', async () => {
     mockStoreState.eveningWindDownEnabled = true;
-    mockStoreState.eveningWindDownByDay = {
-      Mon: '20:30',
-      Tue: null,
-      Wed: '20:30',
-      Thu: '20:30',
-      Fri: '20:30',
-      Sat: '20:30',
-      Sun: '20:30',
-    };
     await mountHook();
     expect(mockScheduleActReminder).toHaveBeenCalled();
     expect(mockScheduleActReminder.mock.calls[0][0]).toEqual(
@@ -186,7 +173,7 @@ describe('useActReminderSync wind-down collision', () => {
     );
   });
 
-  it('cancels an already scheduled evening act reminder when wind-down becomes scheduled', async () => {
+  it('keeps a scheduled evening act reminder when wind-down is switched on', async () => {
     await mountHook();
     expect(mockScheduleActReminder).toHaveBeenCalled();
     const scheduledAfterMount = mockScheduleActReminder.mock.calls.length;
@@ -195,7 +182,7 @@ describe('useActReminderSync wind-down collision', () => {
     mockStoreState.eveningWindDownEnabled = true;
     await flushFingerprint();
 
-    expect(mockCancelActReminder.mock.calls.length).toBeGreaterThan(cancelledAfterMount);
+    expect(mockCancelActReminder.mock.calls.length).toBe(cancelledAfterMount);
     expect(mockScheduleActReminder.mock.calls.length).toBe(scheduledAfterMount);
   });
 

@@ -200,7 +200,6 @@ export function getTodayDayContext(
     scriptureReference: day.scriptureReference,
     quotableLine: day.quotableLine,
     checkInQuestion: day.checkInQuestion,
-    act: day.act,
     eveningScriptureRef: day.eveningScriptureRef,
     companionNudge: getDaysReadToday(devotional, now).length > 0 ? day.companionNudge : undefined,
   };

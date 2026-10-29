@@ -187,13 +187,13 @@ export function weekLabel(week: SeriesWeek): string {
 }
 
 /** Only an unplanned week of a series with a worker behind it says when it is planned. */
-function promisesPlanning(week: SeriesWeek, seriesPaused: boolean): boolean {
-  return !seriesPaused && (week.status === 'outline' || week.status === 'preparing');
+function promisesPlanning(week: SeriesWeek, withholdsPromise: boolean): boolean {
+  return !withholdsPromise && (week.status === 'outline' || week.status === 'preparing');
 }
 
 /** "Week 2 · <name>", "Week 3 · Planned when you reach it", or "Week 3". */
-export function weekRowTitle(week: SeriesWeek, { seriesPaused }: { seriesPaused: boolean }): string {
-  if (!week.name && promisesPlanning(week, seriesPaused)) return `Week ${week.index} · Planned when you reach it`;
+export function weekRowTitle(week: SeriesWeek, { withholdsPromise }: { withholdsPromise: boolean }): string {
+  if (!week.name && promisesPlanning(week, withholdsPromise)) return `Week ${week.index} · Planned when you reach it`;
   return weekLabel(week);
 }
 
@@ -214,11 +214,11 @@ export function weekRowSpokenLabel(
   week: SeriesWeek,
   progress: WeekRowProgress,
   readCount: number,
-  { seriesPaused }: { seriesPaused: boolean },
+  { withholdsPromise }: { withholdsPromise: boolean },
 ): string {
   const parts = [`Week ${week.index}`];
   if (week.name) parts.push(week.name);
-  else if (promisesPlanning(week, seriesPaused)) parts.push('planned when you reach it');
+  else if (promisesPlanning(week, withholdsPromise)) parts.push('planned when you reach it');
   parts.push(`days ${week.fromDay} to ${week.toDay}`);
   parts.push(progress === 'current' ? 'current week' : progressPhrase(week, progress, readCount).toLowerCase());
   return parts.join(', ');

@@ -39,7 +39,7 @@ jest.mock('@/lib/theme', () => ({
 
 import { BookOfSeasonsView } from '../BookOfSeasonsView';
 import { ChapterJourney } from '../ChapterJourney';
-import { buildBookChapters } from '@/lib/book-of-seasons';
+import { buildBookChapters, type BookChapter } from '@/lib/book-of-seasons';
 import { canonicalGeneratedDayId } from '@/lib/devotional-canonical-days';
 import type { ColorTheme } from '@/constants/colors';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
@@ -258,10 +258,10 @@ describe('R6: a legacy arc renders as today', () => {
     const devotional = legacy();
     const chapters = buildBookChapters(devotional, NOW);
     const screen = render(
-      <ChapterJourney chapters={chapters} colors={colors} canOpenChapter={() => true} onOpenChapter={jest.fn()} />,
+      <ChapterJourney chapters={chapters} colors={colors} premiumPolicy="granted" canOpenChapter={() => true} onOpenChapter={jest.fn()} />,
     );
     expect(screen.toJSON()).toMatchSnapshot();
-    expect(screen.getByText('2 chapters')).toBeTruthy();
+    expect(screen.getByText('2 parts')).toBeTruthy();
     expect(screen.getByText('Synthetic Movement One')).toBeTruthy();
     expect(screen.getByText('01')).toBeTruthy();
   });
@@ -270,7 +270,45 @@ describe('R6: a legacy arc renders as today', () => {
     const devotional = chaptered(['planned', 'planned', 'outline', 'outline']);
     devotional.seriesArc!.planning!.chapters[1].fromDay = 9;
     const screen = view(devotional);
-    expect(screen.getByText('4 chapters')).toBeTruthy();
+    expect(screen.getByText('4 parts')).toBeTruthy();
     expect(screen.queryByText('4 weeks · 28 days')).toBeNull();
+  });
+});
+
+describe('design call 3 (2026-10-29): a legacy series says "part"', () => {
+  const journey = (chapters: readonly BookChapter[]) => render(
+    <ChapterJourney chapters={chapters} colors={colors} premiumPolicy="granted" canOpenChapter={() => true} onOpenChapter={jest.fn()} />,
+  );
+
+  it('counts parts and names the current part', () => {
+    const chapters = buildBookChapters(legacy(), NOW);
+    const screen = journey(chapters);
+    expect(screen.getByText('2 parts')).toBeTruthy();
+    expect(screen.getByLabelText('Current part')).toBeTruthy();
+    expect(journey(chapters.slice(0, 1)).getByText('1 part')).toBeTruthy();
+  });
+
+  it('says "Your current part" before the first read of the part', () => {
+    const [first] = buildBookChapters(legacy(), NOW);
+    const screen = journey([{ ...first, status: 'current', readCount: 0 }]);
+    expect(screen.getByText('Your current part')).toBeTruthy();
+    expect(readerFacingStrings(screen).filter((text) => /chapter/i.test(text))).toEqual([]);
+  });
+});
+
+describe('design call 4 (2026-10-29): no current marker on a paused series', () => {
+  const MARKER = /^Current (week|part|chapter)$/;
+
+  it.each([
+    ['legacy', legacy, 'Current part'],
+    ['chaptered', () => chaptered(['planned', 'planned', 'outline', 'outline']), 'Current week'],
+  ] as const)('hides the %s marker and its label while paused', (_kind, make, label) => {
+    expect(view(make()).getByLabelText(label)).toBeTruthy();
+    expect(view(make(), { seriesPaused: true }).queryByLabelText(MARKER)).toBeNull();
+  });
+
+  it('keeps the marker on a current series while premium is not granted', () => {
+    const screen = view(chaptered(['planned', 'planned', 'outline', 'outline']), { premiumPolicy: 'denied' });
+    expect(screen.getByLabelText('Current week')).toBeTruthy();
   });
 });

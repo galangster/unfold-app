@@ -50,8 +50,8 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { getTodayCarryLine, getTodayCompanionNudge } from '@/lib/home-devotional-state';
-import { getMiddayActClaim } from '@/lib/act-reminder';
-import { readActReminderWriteFailed } from '@/lib/act-reminder-write';
+import { getEveningActClaim, getMiddayActClaim } from '@/lib/act-reminder';
+import { readActReminderLastWrite, readActReminderWriteFailed } from '@/lib/act-reminder-write';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useUIState } from '@/lib/ui-state';
 import { getDeviceTimezone } from '@/lib/device-timezone';
@@ -111,6 +111,12 @@ function useCheckInFingerprint(): string {
   useUIState((s) => s.actReminderWriteEpoch);
   const actReminderWriteFailed = readActReminderWriteFailed();
   const todayMiddayActClaim = useUnfoldStore((s) => getMiddayActClaim(s, new Date(), actReminderWriteFailed)?.toISOString() ?? '');
+  // The evening claim also reads the last write, so a reminder that already
+  // fired today gives the wind-down back. The epoch covers that write too.
+  const actReminderLastWrite = readActReminderLastWrite();
+  const todayEveningActClaim = useUnfoldStore(
+    (s) => getEveningActClaim(s, new Date(), actReminderWriteFailed, actReminderLastWrite)?.toISOString() ?? '',
+  );
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
   const trialNoticeEpoch = useUIState((s) => s.trialNoticeEpoch);
   // INCLUDED: the device timezone. Occurrences are written as absolute
@@ -134,6 +140,7 @@ function useCheckInFingerprint(): string {
     todayCarryLine,
     todayCompanionNudge,
     todayMiddayActClaim,
+    todayEveningActClaim,
     notificationPermissionEpoch,
     trialNoticeEpoch,
     deviceTimezone,

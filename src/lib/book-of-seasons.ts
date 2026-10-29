@@ -255,7 +255,7 @@ export function chapterStatusLabel(chapter: BookChapter): string {
     if (chapter.readCount > 0) {
       return `${chapter.readCount} of ${chapter.dayCount} days complete`;
     }
-    return 'Your current chapter';
+    return 'Your current part';
   }
   if (chapter.status === 'available') {
     return `${chapter.readCount} of ${chapter.dayCount} days complete`;

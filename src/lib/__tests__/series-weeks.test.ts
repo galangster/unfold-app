@@ -105,14 +105,14 @@ describe('week framing strings', () => {
   it('titles series detail rows by week state (Ruled 6)', () => {
     const all = readSeriesWeeks(makeChapteredArc(['planned', 'outline', 'preparing', 'outline_only']), { nowMs: NOW_MS })!;
     all.weeks[2].status = 'preparing';
-    expect(all.weeks.map((week) => weekRowTitle(week, { seriesPaused: false }))).toEqual([
+    expect(all.weeks.map((week) => weekRowTitle(week, { withholdsPromise: false }))).toEqual([
       'Week 1 · Synthetic Week One',
       'Week 2 · Planned when you reach it',
       'Week 3 · Planned when you reach it',
       'Week 4',
     ]);
     // A paused series promises nothing (R4).
-    expect(all.weeks.map((week) => weekRowTitle(week, { seriesPaused: true }))).toEqual([
+    expect(all.weeks.map((week) => weekRowTitle(week, { withholdsPromise: true }))).toEqual([
       'Week 1 · Synthetic Week One',
       'Week 2',
       'Week 3',
@@ -131,12 +131,12 @@ describe('week framing strings', () => {
 
   it('speaks each row without the separator', () => {
     const [w1, w2, w3] = weeks.weeks;
-    expect(weekRowSpokenLabel(w2, 'current', 0, { seriesPaused: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
-    expect(weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
-    expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: false })).toBe('Week 3, planned when you reach it, days 15 to 21, still to come');
-    expect(weekRowSpokenLabel(w3, 'upcoming', 0, { seriesPaused: true })).toBe('Week 3, days 15 to 21, still to come');
-    expect(weekRowSpokenLabel(w1, 'done', 7, { seriesPaused: false })).toBe('Week 1, Synthetic Week One, days 1 to 7, complete');
-    for (const label of [weekRowSpokenLabel(w2, 'current', 3, { seriesPaused: false }), dayFraming(weeks, 10, 28).spoken]) {
+    expect(weekRowSpokenLabel(w2, 'current', 0, { withholdsPromise: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
+    expect(weekRowSpokenLabel(w2, 'current', 3, { withholdsPromise: false })).toBe('Week 2, Synthetic Week Two, days 8 to 14, current week');
+    expect(weekRowSpokenLabel(w3, 'upcoming', 0, { withholdsPromise: false })).toBe('Week 3, planned when you reach it, days 15 to 21, still to come');
+    expect(weekRowSpokenLabel(w3, 'upcoming', 0, { withholdsPromise: true })).toBe('Week 3, days 15 to 21, still to come');
+    expect(weekRowSpokenLabel(w1, 'done', 7, { withholdsPromise: false })).toBe('Week 1, Synthetic Week One, days 1 to 7, complete');
+    for (const label of [weekRowSpokenLabel(w2, 'current', 3, { withholdsPromise: false }), dayFraming(weeks, 10, 28).spoken]) {
       expect(label).not.toContain('·');
     }
   });

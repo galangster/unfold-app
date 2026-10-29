@@ -8,7 +8,8 @@ import {
   chapterStatusLabel,
   type BookChapter,
 } from '@/lib/book-of-seasons';
-import { weekRowSpokenLabel, weekRowTitle, weeksHeadingLabel, type SeriesWeeks } from '@/lib/series-weeks';
+import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
+import { weekRowSpokenLabel, weekRowTitle, weeksHeadingLabel, withholdsWeekPromise, type SeriesWeeks } from '@/lib/series-weeks';
 
 function chapterNumber(index: number): string {
   return String(index + 1).padStart(2, '0');
@@ -20,22 +21,27 @@ export function ChapterJourney({
   canOpenChapter,
   onOpenChapter,
   seriesPaused = false,
+  premiumPolicy,
   weeks = null,
 }: {
   chapters: readonly BookChapter[];
   colors: ColorTheme;
   canOpenChapter: (chapter: BookChapter) => boolean;
   onOpenChapter: (chapter: BookChapter) => void;
-  /** A paused series promises no planning (R4). */
+  /** A paused series promises no planning (R4) and marks no current row. */
   seriesPaused?: boolean;
+  /** Week promises need granted premium (R4). The current marker does not. */
+  premiumPolicy: PremiumAccessPolicy;
   /** The weeks of a chaptered series; null keeps the legacy list (R6). */
   weeks?: SeriesWeeks | null;
 }) {
   if (chapters.length === 0) return null;
 
+  const withholdsPromise = withholdsWeekPromise(seriesPaused, premiumPolicy);
+
   const countLabel = weeks
     ? weeksHeadingLabel(weeks)
-    : chapters.length === 1 ? '1 chapter' : `${chapters.length} chapters`;
+    : chapters.length === 1 ? '1 part' : `${chapters.length} parts`;
 
   return (
     <View testID="book-chapter-journey" accessibilityLabel="In this season">
@@ -51,9 +57,9 @@ export function ChapterJourney({
         const openable = canOpenChapter(chapter);
         const current = chapter.status === 'current';
         const week = weeks ? chapter.week : undefined;
-        const title = week ? weekRowTitle(week, { seriesPaused }) : chapter.name;
+        const title = week ? weekRowTitle(week, { withholdsPromise }) : chapter.name;
         const label = week
-          ? weekRowSpokenLabel(week, chapter.status, chapter.readCount, { seriesPaused })
+          ? weekRowSpokenLabel(week, chapter.status, chapter.readCount, { withholdsPromise })
           : `${chapter.name}, ${chapterStatusLabel(chapter)}`;
         return (
           <View
@@ -104,10 +110,10 @@ export function ChapterJourney({
                   {chapterStatusLabel(chapter)}
                 </Text>
               </View>
-              {current ? (
+              {current && !seriesPaused ? (
                 <View
                   style={[styles.marker, { backgroundColor: colors.accent }]}
-                  accessibilityLabel={week ? 'Current week' : 'Current chapter'}
+                  accessibilityLabel={week ? 'Current week' : 'Current part'}
                 />
               ) : openable ? (
                 <CaretRightIcon
