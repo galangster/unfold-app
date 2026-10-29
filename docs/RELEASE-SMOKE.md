@@ -28,7 +28,7 @@ and signing checks. Step 8 also binds the reviewed native source to the build.
 ## Rules
 
 - **Smoke simulator.** Use only the simulator named `Unfold Release Smoke`.
-  Clear its app data only at the start of a new release, in step 2. Ask Nick
+  Erase it only at the start of a new release, in step 2. Ask Nick
   before you use another simulator or a physical device.
 - **QA Smoke reader.** Create one production reader per release, named
   "QA Smoke", only after Nick explicitly approves the production smoke.
@@ -58,10 +58,16 @@ and signing checks. Step 8 also binds the reviewed native source to the build.
    workspace's `.worktrees/` folder. Name it `release-smoke-<version>-<yyyymmdd>`.
    Use `git worktree add --detach <path> <release commit>`.
    Done when `git rev-parse HEAD` there prints the release commit.
-2. **Fresh app data.** For a new release, clear the app data on the smoke
-   simulator with `flowdeck ui simulator clear-state com.unfoldapp.ios -S "Unfold Release Smoke"`.
+2. **Fresh simulator.** For a new release, erase the smoke simulator.
+   Clearing app data is not enough: the Keychain survives it, so the last
+   release's QA Smoke reader comes back. Find the UDID of the device named
+   exactly `Unfold Release Smoke` in `flowdeck simulator list`. Do not use
+   the `retained` copy. Run `flowdeck simulator shutdown <udid>`, then
+   `flowdeck simulator erase <udid>`.
    Skip this step on a rerun for the same release, so its QA Smoke reader stays.
-   Done when the command succeeds or reports that the app is not installed.
+   Done when the erase succeeds. If it says the device cannot be located
+   on disk, its data volume is not mounted. Mount `Mac-Offload` with
+   `diskutil mount Mac-Offload` and run the step again.
 3. **Build and capture.** In the worktree, run `node scripts/release-smoke.mjs`
    in the background. Keep its log. A run takes about 10 minutes.
    Done when it prints `[release-smoke] PASS`. The PASS line holds the
