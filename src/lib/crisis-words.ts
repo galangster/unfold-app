@@ -64,6 +64,9 @@ type Normalized = { forms: string[]; spelledRuns: string[] };
 function normalize(text: string): Normalized {
   const normalized = text
     .toLowerCase()
+    // "_" is a word character, so "s_u_i_c_i_d_e" and "want_2_die" have no
+    // word breaks without this. It goes before the leet map for the "2".
+    .replace(/_/g, ' ')
     .replace(/[1!|]/g, 'i')
     .replace(/[3]/g, 'e')
     .replace(/[0@]/g, 'o')
@@ -74,9 +77,7 @@ function normalize(text: string): Normalized {
     .replace(/[9]/g, 'g')
     .replace(/\b2\b/g, 'to')
     .replace(/ph/g, 'f')
-    .replace(/vv/g, 'w')
-    // "_" is a word character, so "s_u_i_c_i_d_e" has no word breaks without this.
-    .replace(/_/g, ' ');
+    .replace(/vv/g, 'w');
   // A run of single letters spells one word: "s u i c i d e", "s.u.i.c.i.d.e".
   const spelledRuns: string[] = [];
   const runs = normalized.replace(/\b\w(?:[.\-_\s]+\w\b)+/g, (run) => {

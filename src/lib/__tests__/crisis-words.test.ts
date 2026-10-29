@@ -18,6 +18,7 @@ describe('crisisMentions', () => {
     'I want to e n d m y l i f e',
     'I want to d o n t w a n t t o l i v e',
     'thinking about s_u_i_c_i_d_e',
+    'some nights I want_2_die',
     'I feel s_u_i_c_i_d_a_l',
   ])('finds self-harm words in %p', (text) => {
     expect(crisisMentions(text)).toEqual({ selfHarm: true, abuse: false });
