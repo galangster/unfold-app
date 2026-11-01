@@ -164,20 +164,23 @@ const REVEAL_TIMEOUT_MS = 1500;
 // Room left between a revealed target and the edge of the visible area.
 const REVEAL_MARGIN = 24;
 
-/**
- * How far Today must scroll so a target sits between `top` and `bottom`.
- * Negative scrolls up. A target taller than the gap keeps its top in view.
- */
+
 export function sameTargetRect(a: TargetRect | null, b: TargetRect | null): boolean {
   if (!a || !b) return a === b;
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
+/**
+ * How far Today must scroll so a target sits between `top` and `bottom`.
+ * Negative scrolls up. A target taller than the gap keeps its top in view,
+ * REVEAL_MARGIN below `top`, the same spot a scroll up lands it. Landing
+ * exactly on `top` let a fractional scroll offset flip between the two.
+ */
 function revealDistance(rect: TargetRect, top: number, bottom: number): number {
   if (rect.y < top) return rect.y - top - REVEAL_MARGIN;
   const below = rect.y + rect.height - bottom;
   if (below <= 0) return 0;
-  return Math.min(below + REVEAL_MARGIN, rect.y - top);
+  return Math.min(below + REVEAL_MARGIN, rect.y - top - REVEAL_MARGIN);
 }
 
 interface HomeOnboardingTooltipsProps {

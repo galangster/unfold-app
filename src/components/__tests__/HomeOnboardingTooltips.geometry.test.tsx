@@ -148,6 +148,20 @@ describe('HomeOnboardingTooltips', () => {
     expect(tall.y - distance).toBeGreaterThanOrEqual(59);
   });
 
+  it('settles a tall target instead of scrolling it up and down', () => {
+    const onRevealTarget = jest.fn();
+    const tall = { x: 24, y: 300, width: 392, height: 900 };
+    const view = startTour({ ...NO_RECTS, rhythm: tall }, { onRevealTarget });
+    const distance = onRevealTarget.mock.calls[0][0];
+
+    // The scroll lands a quarter point short, as rounded offsets can.
+    view.rerender(
+      <HomeOnboardingTooltips layoutRects={{ ...NO_RECTS, rhythm: { ...tall, y: tall.y - distance - 0.25 } }} onRevealTarget={onRevealTarget} />,
+    );
+
+    expect(onRevealTarget).toHaveBeenCalledTimes(1);
+  });
+
   it('waits for the tab bar to report where the tabs sit', () => {
     useUIState.setState({ tabBarRowRect: null });
     startTour(NO_RECTS);

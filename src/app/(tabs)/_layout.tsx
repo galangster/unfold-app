@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -140,13 +140,22 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
 
   // The first-run Today tour points at the real tabs, so publish where they sit.
+  // A hidden bar is translated off its row, so it is not measured then.
   const tabRowRef = useRef<View>(null);
-  const publishTabRowRect = () => {
+  const publishTabRowRect = useCallback(() => {
+    if (useUIState.getState().tabBarHidden) return;
     tabRowRef.current?.measureInWindow((x, y, width, height) => {
       if (width <= 0 || height <= 0) return;
       useUIState.getState().setTabBarRowRect({ x, y, width, height });
     });
-  };
+  }, []);
+  // Showing the bar moves only its transform, which fires no layout, so measure
+  // again once the slide back has settled.
+  useEffect(() => {
+    if (tabBarHidden) return;
+    const timer = setTimeout(publishTabRowRect, Duration.normal);
+    return () => clearTimeout(timer);
+  }, [publishTabRowRect, tabBarHidden]);
 
   // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
