@@ -10,6 +10,11 @@ import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
+import { STREAK_STARTS_TOMORROW_COPY, startsTomorrow } from '@/lib/streak-helpers';
+import { rhythmLine } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 
 interface DayData {
   day: string;
@@ -27,12 +32,10 @@ const DISPLAY_TEXT_MAX_SCALE = 1.16;
 const BODY_TEXT_MAX_SCALE = 1.24;
 const LABEL_TEXT_MAX_SCALE = 1.14;
 
-function getRhythmCopy(streak: number): string {
-  if (streak === 0) return 'Begin with today’s reading.';
-  if (streak === 1) return 'One faithful day at a time.';
-  if (streak < 7) return 'Your rhythm is taking root.';
-  if (streak < 30) return 'A steady devotional rhythm.';
-  return 'A long obedience, one morning at a time.';
+/** A line per streak tier, drawn by local day so a long streak keeps finding new words. */
+function getRhythmCopy(streak: number, hasReadToday: boolean, dayIndex: number): string {
+  if (startsTomorrow(streak, hasReadToday)) return STREAK_STARTS_TOMORROW_COPY;
+  return rhythmLine(streak, { seed: copySeed(), dayIndex });
 }
 
 /** Local calendar-day key (not a UTC one) — matches how a person thinks about "today". */
@@ -105,8 +108,18 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
     () => generateDaysData(streakCount, hasReadToday, readDayKeys),
     [streakCount, hasReadToday, readDayKeys],
   );
-  const rhythmCopy = useMemo(() => getRhythmCopy(streakCount), [streakCount]);
+  // The local day moves at midnight and on resume, so a Today left mounted
+  // overnight draws the next day's line even when the streak stays put.
+  const calendarNow = useCalendarNow();
+  const rhythmDay = dayIndexFor(calendarNow);
+  const rhythmCopy = useMemo(
+    () => getRhythmCopy(streakCount, hasReadToday, rhythmDay),
+    [streakCount, hasReadToday, rhythmDay],
+  );
   const streakLabel = streakCount === 1 ? 'day' : 'days';
+  const todayStatus = startsTomorrow(streakCount, hasReadToday)
+    ? STREAK_STARTS_TOMORROW_COPY
+    : hasReadToday ? 'Today is complete.' : 'Today is not complete yet.';
 
   return (
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(260).easing(Ease.out)}>
@@ -114,7 +127,7 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
         activeOpacity={0.74}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${streakCount} ${streakLabel} devotional rhythm. ${hasReadToday ? 'Today is complete.' : 'Today is not complete yet.'} Open streak settings`}
+        accessibilityLabel={`${streakCount} ${streakLabel} devotional rhythm. ${todayStatus} Open streak settings`}
       >
         <GlassSurface radius={Radius.lg} style={styles.card}>
           <View style={styles.headerRow}>

@@ -77,6 +77,8 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('missingDevotionalHydrationAttemptRef');
     expect(readingSource).toContain('pullDevotionalContent(devotionalId)');
     expect(readingSource).toContain('hydrated-missing-devotional-from-sync-pull');
+    // A hydrated series takes an empty Today only when no live series outranks it.
+    expect(readingSource).toContain('canPulledSeriesTakeEmptyToday(devotionalId, useUnfoldStore.getState().devotionals, pulled.canonicalSeries)');
     // While hydrating, the reader shows a serif-toned loading skeleton (PR4 #24).
     // After hydration finishes empty, the fallback names the miss and how to leave.
     expect(readingSource).toContain('<ReaderLoadingSkeleton colors={colors} />');

@@ -32,6 +32,8 @@ import {
   nearestPrecedingUserMessage,
   shouldEnqueueCompanionMessage,
 } from './companion-chat-request';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { crisisFailure } from './crisis-words';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -106,10 +108,11 @@ export function reconcileUnfinishedCompanionReplies(
       ...conversation,
       messages: messages.map((message) => {
         if (message.status !== 'streaming') return message;
+        // A crisis conversation gets the crisis lines or reply here too: the
+        // hook never sees this reply as streaming after a cold start.
         const corrected: CompanionMessage = {
           ...message,
-          status: 'error',
-          interrupted: true,
+          ...crisisFailure(messages, { status: 'error', interrupted: true }, message.content).patch,
         };
         corrections.push({ conversationId: conversation.id, message: corrected });
         return corrected;
@@ -415,7 +418,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                   feedback,
                   messageContent: msg.content?.slice(0, 5000),
                   userMessage: prevMsg?.content?.slice(0, 5000),
-                  model: 'claude-haiku-4-5-20251001',
+                  model: HAIKU_REQUEST_MODEL,
                   companionName: null,
                   contextSummary: activeConv?.topicTags?.join(', '),
                   reason: feedback === 'negative' ? reason ?? null : null,
@@ -703,3 +706,6 @@ AppState.addEventListener('change', (status) => {
 
 /** Test/maintenance hook: force any pending coalesced persist write to disk. */
 export const flushCompanionChatPersist = () => companionPersistStorage.flushPendingWrites();
+
+/** Await the pending write; rejects when it fails. */
+export const flushCompanionChatPersistAsync = () => companionPersistStorage.flushPendingWritesAsync();

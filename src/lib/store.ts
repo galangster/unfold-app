@@ -1,3 +1,4 @@
+import type { DevotionalLength } from './series-length';
 import { useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { InterFontFamily, SourceSerifFontFamily } from '@/constants/fonts';
@@ -23,23 +24,32 @@ import {
   getServerOwnedSeriesTotalDays,
 } from './devotional-series-boundary';
 import { newId } from './sync-ids';
+import { recordReplacedSeries } from './series-replacement';
 import { allocateBibleReadingId } from './bible-reading-ids';
-import { canonicalJournalEntryId } from './journal-entry-merge';
+import { answerDecidedAt, canonicalJournalEntryId } from './journal-entry-merge';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { canEarnPremiumMilestone } from './premium-access-policy';
 import { repairRehydratedState } from './store-rehydrate-repair';
-import { enqueueSyncChanges } from './sync-outbox';
-import type { SyncTable } from './sync-types';
+import { drainSyncChange, enqueueSyncChanges, peekSyncOutbox } from './sync-outbox';
+import { rememberDeletedSeries } from './deleted-series';
+import type { SyncPushChange, SyncTable } from './sync-types';
 import type { WordStudy } from './word-study';
 import { flushCheckInToServer } from './check-in-flush';
 import { isOnboardingFirstReading, isOnboardingSampleDevotionalId, withOnboardingFirstReadingArc } from './auto-trial-series';
 import { isUsableSampleDevotionalDay } from './onboarding-sample-day-shape';
-import { applyArchiveIntent, applyUnarchiveIntent, isDevotionalArchived, lifecycleTimestampMs } from './devotional-lifecycle';
-import { selectSyncedCurrentDevotionalId } from './devotional-resume-selection';
-import { isStrictActiveSeriesWinner } from './devotional-active-selection';
+import {
+  applyArchiveIntent,
+  applyArchiveLifecycle,
+  devotionalLifecycleSyncFields,
+  isDevotionalArchived,
+  lifecycleTimestampMs,
+} from './devotional-lifecycle';
+import { selectSyncedCurrentDevotionalId, type ResumeSelectionSeries } from './devotional-resume-selection';
+import { isSeriesComplete } from './book-of-seasons';
+import { isProgressiveSeriesCandidate, isStrictActiveSeriesWinner } from './devotional-active-selection';
 import { bookmarkIdentityEquals, type BookmarkIdentity, type BookmarkKind } from './bookmark-identity';
 import {
   bibleHighlightSyncData,
@@ -54,6 +64,7 @@ import {
   methodUsageSyncData,
   noteFolderSyncData,
   noteSyncData,
+  queuedJournalEntries,
   seriesPersonaSyncData,
   usedScriptureSyncData,
 } from './personal-data-sync-records';
@@ -200,15 +211,16 @@ export interface UserProfile {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 30;
+  devotionalLength: DevotionalLength;
   reminderTime: string;
   dailyReminderEnabled: boolean;
   /** ISO time the backend last confirmed it holds this device's push token. */
   pushRegisteredAt?: string;
   /**
-   * Whether a local daily reminder is currently in the OS queue. Mirrored to
-   * the backend so it never double-notifies the morning slot and only takes
-   * it over when the client has handed it off.
+   * Whether the local queue holds the morning the next day opens. Mirrored
+   * to the backend, which skips its ready push only then, so that morning
+   * never gets two banners. A handed-off morning keeps later local mornings
+   * queued; those do not count.
    */
   localDailyReminderScheduled?: boolean;
   /** A reminder-time suggestion the reader turned down ("h:mm AM"). */
@@ -364,6 +376,8 @@ export interface PrayerRequest {
   text: string;
   isAnswered: boolean;
   answeredAt?: string;
+  /** When the reader last marked it answered or not answered. */
+  answerChangedAt?: string;
   createdAt: string;
 }
 
@@ -490,10 +504,33 @@ export interface SeriesArcDay {
   dayNumber: number;
   themeHint: string;
   scriptureRegion: string;
-  narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution';
+  narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution' | 'interlude';
   /** Bible study method ID assigned by arc generator (e.g., 'word_study', 'lectio_divina') */
   studyMethod?: string;
   dayTitle?: string;
+  /** "outline": a one-line plan from the start. "full" or absent: planned in detail. */
+  planDetail?: 'outline' | 'full';
+}
+
+/** One week of a chaptered series. Server-owned; read through series-weeks.ts. */
+export interface SeriesArcChapterPlan {
+  /** 1-based. */
+  index: number;
+  fromDay: number;
+  toDay: number;
+  status: 'planned' | 'outline' | 'preparing' | 'outline_only';
+  plannedAt?: string;
+  /** Set with status "preparing". The app reads a value older than 24 h as "outline". */
+  preparingSince?: string;
+  /** Fresh planning rounds started, at most 2. */
+  rounds?: number;
+}
+
+/** Present only on a chaptered series. Absent means a legacy arc. */
+export interface SeriesArcPlanning {
+  mode: 'chapters';
+  version: 1;
+  chapters: SeriesArcChapterPlan[];
 }
 
 /** High-level series plan generated at onboarding (not the content itself) */
@@ -515,6 +552,7 @@ export interface SeriesArc {
   /** Durable first-reading mark. Synced inside seriesArc, not inferred from title or length. */
   origin?: 'onboarding_first';
   promise?: string;
+  planning?: SeriesArcPlanning;
 }
 
 /** Full context snapshot for a recently completed day (Layer 1) */
@@ -673,7 +711,19 @@ interface UnfoldState {
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   activateAcknowledgedDevotionalResume: (id: string, expectedActiveId: string | null, previousClock: string | undefined, acknowledgedClock: string) => boolean;
+  /**
+   * "Start a new series": records the current series as the one the new
+   * series replaces. It stays current, and the server keeps writing it, until
+   * the new series lands (series-replacement.ts).
+   */
   archiveCurrentDevotional: () => void;
+  /**
+   * Ends a replaced series once its replacement has landed. Never a series
+   * already ended. When it was current, a replacement already in the store
+   * (a sync pull landed it first) takes its place on Today. `endedAt` dates
+   * the end; it defaults to now.
+   */
+  archiveReplacedDevotional: (id: string, replacementId?: string, endedAt?: string) => void;
   hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number, readAt?: string) => void;
@@ -1025,6 +1075,13 @@ const initialState = {
 // WR-23: session-scoped flags are reset on every launch (see
 // onRehydrateStorage) — no reason to serialize them on every write.
 type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJustReset'>;
+const UNFOLD_STORE_NAME = 'unfold-storage';
+const UNFOLD_STORE_VERSION = 44; // v44: ritual session start clocks for midnight-crossing completions
+
+function partializeUnfoldState(state: UnfoldState): PersistedUnfoldState {
+  const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
+  return persisted;
+}
 
 // WR-23: coalesces persist writes so a burst of store updates (autosave
 // while typing) serializes the full state once per window instead of on
@@ -1035,20 +1092,123 @@ type PersistedUnfoldState = Omit<UnfoldState, 'nudgeShownThisSession' | 'streakJ
 const unfoldPersistStorage = createDebouncedJSONStorage<PersistedUnfoldState>(
   instrumentPersistRead(mmkvStorage),
 );
+// A failed recovery write stays pending even if rehydration sees repaired memory.
+let journalRecoveryNeedsCheckpoint = false;
 
-/** Reconcile pulled content and its current-series selection. */
-export function updateSyncedDevotionals(updater: (devotionals: Devotional[]) => Devotional[]): void {
+/**
+ * Reconcile pulled content and its current-series selection. The updater
+ * gets the current series id. `pulledSeries` is every series row the pull
+ * returned, including rows this device does not hold yet.
+ */
+export function updateSyncedDevotionals(
+  updater: (devotionals: Devotional[], currentDevotionalId: string | null) => Devotional[],
+  pulledSeries?: readonly ResumeSelectionSeries[],
+): void {
   useUnfoldStore.setState((state) => {
-    const devotionals = updater(state.devotionals);
+    const devotionals = updater(state.devotionals, state.currentDevotionalId);
     return {
       devotionals,
       currentDevotionalId: selectSyncedCurrentDevotionalId({
         previousCurrentId: state.currentDevotionalId,
         previous: state.devotionals,
         next: devotionals,
+        pulled: pulledSeries,
+        isFinished: isSeriesComplete,
       }),
     };
   });
+}
+
+/**
+ * Selection never changes a series' lifecycle. An archived series comes back
+ * only through the confirmed continuation (createPausedSeriesResume), so an
+ * incidental open cannot outrank the reader's live series on the server. A
+ * missing id would leave Today pointing at nothing.
+ */
+function logRefusedSeriesSelection(reason: 'archived' | 'missing'): void {
+  void logBugEvent(
+    'store-set-current-devotional-refused',
+    'Refused to make an archived or missing series current',
+    { reason },
+    'warn',
+  );
+}
+
+/** A prayer toggle's time: now, or just past the copy's last decision when this clock is behind it. */
+function laterDecisionTime(previous: string | undefined, now: string): string {
+  if (!previous || previous < now) return now;
+  return new Date(Date.parse(previous) + 1).toISOString();
+}
+
+/**
+ * The clock for a write to a journal entry: now, or just after the entry's
+ * own clock when that is later. A pulled row can be dated ahead of this
+ * phone, and a merge repair is stamped past the rows it folds. A write
+ * stamped before either would lose to it in the outbox and on the server.
+ */
+function journalWriteClock(clock: string | undefined, now: string): string {
+  const after = clock ? Date.parse(clock) + 1 : Number.NaN;
+  if (!Number.isFinite(after)) return now;
+  const next = new Date(after).toISOString();
+  return next > now ? next : now;
+}
+
+/** The later of a journal row's clock and the clock of a change still queued for it. */
+function latestJournalClock(rowClock: string | undefined, queuedClock: string | undefined): string | undefined {
+  return queuedClock && queuedClock > (rowClock ?? '') ? queuedClock : rowClock;
+}
+
+/**
+ * The clock for the reader's write to a journal entry: past the entry's own
+ * clock and past any change still queued for it, live or a delete, as the
+ * series delete stamps its journal tombstones. A change reaches the outbox
+ * before the store reaches disk, so it can be the newer of the two.
+ */
+function journalEditClock(entry: { id: string; updatedAt?: string }, now: string): string {
+  const queued = peekSyncOutbox()
+    .find((change) => change.table === 'journal_entries' && change.id === entry.id)?.clientUpdatedAt;
+  return journalWriteClock(latestJournalClock(entry.updatedAt, queued), now);
+}
+
+/**
+ * The journal rows with each newer live change still queued for them. The
+ * outbox takes a change at once and the store's disk a moment later, so a
+ * crash in between leaves the disk with an older row, or none. Every screen
+ * loads its draft from the store and every write builds on it, so the queued
+ * copy goes back in before a screen reads the day. It keeps the row's
+ * createdAt. A day keeps one entry, and an entry needs its series.
+ */
+function restoreQueuedJournalEntries(entries: JournalEntry[], devotionals: Devotional[]): JournalEntry[] {
+  const devotionalIds = new Set(devotionals.map((devotional) => devotional.id));
+  const dayKey = (entry: JournalEntry) => `${entry.devotionalId}:${entry.dayNumber}`;
+  const indexById = new Map<string, number>();
+  const entriesPerDay = new Map<string, number>();
+  const countDay = (entry: JournalEntry, delta: number) => {
+    entriesPerDay.set(dayKey(entry), (entriesPerDay.get(dayKey(entry)) ?? 0) + delta);
+  };
+  entries.forEach((entry, index) => {
+    if (!indexById.has(entry.id)) indexById.set(entry.id, index);
+    countDay(entry, 1);
+  });
+  const result = [...entries];
+  let restored = false;
+  for (const queued of queuedJournalEntries()) {
+    if (!devotionalIds.has(queued.devotionalId)) continue;
+    const index = indexById.get(queued.id);
+    if (index !== undefined) {
+      const current = result[index];
+      if ((current.updatedAt ?? current.createdAt ?? '') >= queued.updatedAt) continue;
+      result[index] = { ...queued, createdAt: current.createdAt };
+      countDay(current, -1);
+    } else {
+      if (entriesPerDay.get(dayKey(queued))) continue;
+      indexById.set(queued.id, result.length);
+      result.push(queued);
+    }
+    countDay(queued, 1);
+    restored = true;
+  }
+  return restored ? result : entries;
 }
 
 function enqueueDevotionalRow(devotional: Devotional): void {
@@ -1059,6 +1219,26 @@ function enqueueDevotionalRow(devotional: Devotional): void {
   enqueueSyncChanges([
     buildPersonalDataSyncChange('devotionals', devotional.id, devotionalSyncData(devotional), clientUpdatedAt),
   ]);
+}
+
+/**
+ * Queues an archive or resume decision without promoting the row's content.
+ * The server sets archivedStateAt by compare-and-set, apart from content
+ * last-write-wins, so the change keeps the content clock and newer progress
+ * from another device stays newer. The outbox holds one change per row and
+ * drops an older one, so a write still waiting for this row carries the
+ * decision on its own clock. Returns the queued change, or null when a delete
+ * still waiting for this row stays as it is.
+ */
+function enqueueDevotionalLifecycle(devotional: Devotional): SyncPushChange | null {
+  const lifecycle = devotionalLifecycleSyncFields(devotional);
+  const pending = peekSyncOutbox().find((change) => change.table === 'devotionals' && change.id === devotional.id);
+  if (pending?.deleted) return null;
+  const change = pending
+    ? { ...pending, data: { ...pending.data, ...lifecycle } }
+    : buildPersonalDataSyncChange('devotionals', devotional.id, lifecycle, devotional.updatedAt ?? devotional.createdAt);
+  enqueueSyncChanges([change]);
+  return change;
 }
 
 /**
@@ -1132,16 +1312,11 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === devotional.id);
           if (existing) {
-            if (!isDevotionalArchived(existing)) {
-              return { currentDevotionalId: existing.id, hasEverCreatedDevotional: true };
+            if (isDevotionalArchived(existing)) {
+              logRefusedSeriesSelection('archived');
+              return state;
             }
-            const resumed = applyUnarchiveIntent(existing, new Date().toISOString());
-            enqueueDevotionalRow(resumed);
-            return {
-              devotionals: state.devotionals.map((d) => (d.id === existing.id ? resumed : d)),
-              currentDevotionalId: existing.id,
-              hasEverCreatedDevotional: true,
-            };
+            return { currentDevotionalId: existing.id, hasEverCreatedDevotional: true };
           }
 
           const normalizedDevotional = normalizeDevotionalIdentity(devotional);
@@ -1160,6 +1335,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           // journal text under it.
           const devotional = state.devotionals.find((d) => d.id === devotionalId);
           const now = new Date().toISOString();
+          rememberDeletedSeries(devotionalId, now);
           // A delete carries no data: buildPersonalDataSyncChange drops it for
           // tombstones, so the sibling pattern of passing *SyncData(row) here
           // would only be discarded.
@@ -1167,10 +1343,34 @@ export const useUnfoldStore = create<UnfoldState>()(
             buildPersonalDataSyncChange(table, id, {}, now, true);
           const ownedBy = <T extends { id: string; devotionalId: string }>(rows: T[]) =>
             rows.filter((row) => row.devotionalId === devotionalId);
+          // A journal write can sit in the outbox ahead of its row on disk:
+          // with no row after a crash before the store reached disk, or newer
+          // than the row (a clock-ahead repair). Every journal delete is
+          // stamped past both the row and its queued write, so the delete is
+          // what goes out.
+          const queuedJournalWrites = peekSyncOutbox()
+            .filter((change) => change.table === 'journal_entries'
+              && !change.deleted
+              && (change.data as { devotionalId?: unknown } | undefined)?.devotionalId === devotionalId);
+          const queuedClockById = new Map(queuedJournalWrites.map((change) => [change.id, change.clientUpdatedAt]));
+          const journalDelete = (id: string, rowUpdatedAt?: string) => buildPersonalDataSyncChange(
+            'journal_entries',
+            id,
+            {},
+            journalWriteClock(latestJournalClock(rowUpdatedAt, queuedClockById.get(id)), now),
+            true,
+          );
+          const queuedOnlyJournalDeletes = queuedJournalWrites
+            .filter((change) => !state.journalEntries.some((row) => row.id === change.id))
+            .map((change) => journalDelete(change.id));
           enqueueSyncChanges([
             ...(devotional ? [tombstone('devotionals', devotionalId)] : []),
             ...(devotional?.days ?? []).flatMap((day) => (day.id ? [tombstone('devotional_days', day.id)] : [])),
-            ...ownedBy(state.journalEntries).map((row) => tombstone('journal_entries', row.id)),
+            ...queuedOnlyJournalDeletes,
+            // A journal entry can be dated ahead of this phone (a pulled row, or
+            // a merge repair). Its delete is stamped past it, or the outbox and
+            // the server keep the live writing.
+            ...ownedBy(state.journalEntries).map((row) => journalDelete(row.id, row.updatedAt)),
             ...ownedBy(state.checkIns).map((row) => tombstone('check_ins', row.id)),
             ...ownedBy(state.highlights).map((row) => tombstone('highlights', row.id)),
             ...ownedBy(state.bookmarks).map((row) => tombstone('bookmarks', row.id)),
@@ -1294,6 +1494,8 @@ export const useUnfoldStore = create<UnfoldState>()(
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
                   isRevealed: (existingDay.isRevealed ?? false) || (incomingDay.isRevealed ?? false),
+                  // Local-only: a pulled row never carries the reader's act answer.
+                  actOutcome: existingDay.actOutcome ?? incomingDay.actOutcome,
                   updatedAt: now,
                 });
               }
@@ -1333,19 +1535,15 @@ export const useUnfoldStore = create<UnfoldState>()(
       setCurrentDevotional: (id) =>
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
-          if (!existing || !isDevotionalArchived(existing)) {
-            return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
+          if (!existing || isDevotionalArchived(existing)) {
+            logRefusedSeriesSelection(existing ? 'archived' : 'missing');
+            return state;
           }
-          const resumed = applyUnarchiveIntent(existing, new Date().toISOString());
-          enqueueDevotionalRow(resumed);
-          return {
-            devotionals: state.devotionals.map((d) => (d.id === existing.id ? resumed : d)),
-            currentDevotionalId: id,
-            scripturePracticeReturn: null,
-          };
+          return { currentDevotionalId: id, scripturePracticeReturn: state.currentDevotionalId === id ? state.scripturePracticeReturn : null };
         }),
       activateAcknowledgedDevotionalResume: (id, expectedActiveId, previousClock, acknowledgedClock) => {
         let activated = false;
+        let pause = null as SyncPushChange | null;
         set((state) => {
           const existing = state.devotionals.find((d) => d.id === id);
           const exactApplied = existing?.archivedAt === null && existing.archivedStateAt === acknowledgedClock;
@@ -1361,28 +1559,69 @@ export const useUnfoldStore = create<UnfoldState>()(
           };
           if (!isStrictActiveSeriesWinner(id, state.devotionals.map((series) => series.id === id ? resumed : series))) return state;
           activated = true;
+          // The reader confirmed that the previous series "will be paused".
+          // Archive it on the same clock: left unarchived it stays a live
+          // server candidate and takes generation back when this one ends.
+          const previous = expectedActiveId && expectedActiveId !== id
+            ? state.devotionals.find((d) => d.id === expectedActiveId)
+            : undefined;
+          const paused = previous && !isDevotionalArchived(previous) && isProgressiveSeriesCandidate(previous)
+            ? applyArchiveLifecycle(previous, acknowledgedClock)
+            : null;
+          if (paused) pause = enqueueDevotionalLifecycle(paused);
           return {
-            devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d)),
+            devotionals: state.devotionals.map((d) => (d.id === id ? resumed : d.id === paused?.id ? paused : d)),
             currentDevotionalId: id,
             scripturePracticeReturn: null,
           };
         });
+        // The resume already reached the server. A pause left for the next
+        // launch, reconnect or Today focus lets a second device keep this
+        // series until then, so send it now. The outbox keeps it on failure.
+        if (pause) void drainSyncChange(pause);
         return activated;
       },
-      archiveCurrentDevotional: () =>
+      archiveCurrentDevotional: () => {
+        const { currentDevotionalId: currentId, devotionals } = get();
+        if (!currentId) return;
+        if (!devotionals.some((d) => d.id === currentId)) {
+          set({ currentDevotionalId: null, scripturePracticeReturn: null });
+          return;
+        }
+        const current = devotionals.find((d) => d.id === currentId);
+        recordReplacedSeries(currentId, current?.archivedStateAt ?? '');
+      },
+      archiveReplacedDevotional: (id, replacementId, endedAt) => {
+        let ended = null as SyncPushChange | null;
         set((state) => {
-          const currentId = state.currentDevotionalId;
-          if (!currentId) return state;
-          const existing = state.devotionals.find((d) => d.id === currentId);
-          if (!existing) return { currentDevotionalId: null, scripturePracticeReturn: null };
-          const archived = applyArchiveIntent(existing, new Date().toISOString());
-          enqueueDevotionalRow(archived);
+          const existing = state.devotionals.find((d) => d.id === id);
+          if (!existing || isDevotionalArchived(existing)) return state;
+          // Only the archive clock moves: this device's copy can hold older
+          // progress than another device saved, and a full row with a fresh
+          // content clock would win over it.
+          const archived = applyArchiveLifecycle(existing, endedAt ?? new Date().toISOString());
+          ended = enqueueDevotionalLifecycle(archived);
+          const devotionals = state.devotionals.map((d) => (d.id === existing.id ? archived : d));
+          // The replacement becomes current only as the strict active winner,
+          // the series the server writes. Beside a newer live series (one
+          // another device started or resumed) Today holds no series rather
+          // than the wrong one. A replacement ended elsewhere stays off too.
+          const replacement = devotionals.find((d) => d.id === replacementId && !isDevotionalArchived(d));
+          const nextCurrentId = replacement && isStrictActiveSeriesWinner(replacement.id, devotionals)
+            ? replacement.id
+            : null;
           return {
-            devotionals: state.devotionals.map((d) => (d.id === existing.id ? archived : d)),
-            currentDevotionalId: null,
-            scripturePracticeReturn: null,
+            devotionals,
+            ...(state.currentDevotionalId === id
+              ? { currentDevotionalId: nextCurrentId, scripturePracticeReturn: null }
+              : {}),
           };
-        }),
+        });
+        // A change left for the next launch, reconnect or Today focus lets a
+        // second device keep showing the replaced series until then, so send
+        // it now. The outbox keeps it on failure.
+        if (ended) void drainSyncChange(ended);
+      },
       isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber, readAt) =>
@@ -1434,9 +1673,9 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...entry,
             id: resolvedId,
             createdAt: now,
-            updatedAt: now,
+            updatedAt: journalEditClock({ id: resolvedId }, now),
           };
-          enqueuePersonalDataSyncChange('journal_entries', newEntry.id, journalEntrySyncData(newEntry), now);
+          enqueuePersonalDataSyncChange('journal_entries', newEntry.id, journalEntrySyncData(newEntry), newEntry.updatedAt);
           return { journalEntries: [...state.journalEntries, newEntry] };
         });
         return resolvedId;
@@ -1448,11 +1687,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           let changed: JournalEntry | null = null;
           const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== id) return e;
-            changed = { ...e, content, updatedAt: now };
+            changed = { ...e, content, updatedAt: journalEditClock(e, now) };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1462,11 +1701,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           let changed: JournalEntry | null = null;
           const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== id) return e;
-            changed = { ...e, journalMode: mode, updatedAt: now };
+            changed = { ...e, journalMode: mode, updatedAt: journalEditClock(e, now) };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1480,12 +1719,12 @@ export const useUnfoldStore = create<UnfoldState>()(
             changed = {
               ...e,
               soapResponses: { ...soap, [field]: value },
-              updatedAt: now,
+              updatedAt: journalEditClock(e, now),
             };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1507,12 +1746,12 @@ export const useUnfoldStore = create<UnfoldState>()(
                   createdAt: now,
                 },
               ],
-              updatedAt: now,
+              updatedAt: journalEditClock(e, now),
             };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1526,15 +1765,20 @@ export const useUnfoldStore = create<UnfoldState>()(
               ...e,
               prayerRequests: (e.prayerRequests ?? []).map((p) =>
                 p.id === prayerId
-                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? now : undefined }
+                  ? {
+                    ...p,
+                    isAnswered: !p.isAnswered,
+                    answeredAt: !p.isAnswered ? now : undefined,
+                    answerChangedAt: laterDecisionTime(answerDecidedAt(p), now),
+                  }
                   : p
               ),
-              updatedAt: now,
+              updatedAt: journalEditClock(e, now),
             };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1552,11 +1796,11 @@ export const useUnfoldStore = create<UnfoldState>()(
             } else {
               updated = [...existing, { question, response }];
             }
-            changed = { ...e, questionResponses: updated, updatedAt: now };
+            changed = { ...e, questionResponses: updated, updatedAt: journalEditClock(e, now) };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -1566,11 +1810,11 @@ export const useUnfoldStore = create<UnfoldState>()(
           let changed: JournalEntry | null = null;
           const journalEntries = state.journalEntries.map((e) => {
             if (e.id !== entryId) return e;
-            changed = { ...e, deeperQuestions: questions, updatedAt: now };
+            changed = { ...e, deeperQuestions: questions, updatedAt: journalEditClock(e, now) };
             return changed;
           });
           const changedEntry = changed as JournalEntry | null;
-          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), now);
+          if (changedEntry) enqueuePersonalDataSyncChange('journal_entries', changedEntry.id, journalEntrySyncData(changedEntry), changedEntry.updatedAt ?? now);
           return { journalEntries };
         }),
 
@@ -2439,14 +2683,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       reset: () => set(initialState),
     }),
     {
-      name: 'unfold-storage',
+      name: UNFOLD_STORE_NAME,
       storage: unfoldPersistStorage,
-      version: 44, // v44: ritual session start clocks for midnight-crossing completions
+      version: UNFOLD_STORE_VERSION,
       // WR-23: drop session-scoped flags from the persisted blob.
-      partialize: (state): PersistedUnfoldState => {
-        const { nudgeShownThisSession, streakJustReset, ...persisted } = state;
-        return persisted;
-      },
+      partialize: partializeUnfoldState,
       // Validate and migrate persisted state. Migrations work on the loose
       // legacy shape (Record<string, any>); the repaired result is merged
       // into the typed state on rehydrate.
@@ -2471,6 +2712,9 @@ export const useUnfoldStore = create<UnfoldState>()(
 
           if (state) {
             const { repairedKeys } = repairRehydratedState(state, initialState);
+            const restoredJournalEntries = restoreQueuedJournalEntries(state.journalEntries, state.devotionals);
+            journalRecoveryNeedsCheckpoint ||= restoredJournalEntries !== state.journalEntries;
+            state.journalEntries = restoredJournalEntries;
             state.scripturePracticeReturn = resolvePracticeReturn(state.scripturePracticeReturn, state.devotionals, state.currentDevotionalId);
             if (repairedKeys.length > 0) {
               logger.warn('[store] Repaired invalid persisted slices:', repairedKeys.join(', '));
@@ -2528,6 +2772,16 @@ export const useUnfoldStore = create<UnfoldState>()(
                   return bt - at;
                 });
               }
+            }
+            if (journalRecoveryNeedsCheckpoint) {
+              // MMKV writes synchronously. Finish the repair before hydration succeeds.
+              unfoldPersistStorage.setItem(UNFOLD_STORE_NAME, {
+                state: partializeUnfoldState(state), version: UNFOLD_STORE_VERSION,
+              });
+              if (!unfoldPersistStorage.flushPendingWrites()) {
+                throw new Error('Journal recovery checkpoint did not write');
+              }
+              journalRecoveryNeedsCheckpoint = false;
             }
           }
         };

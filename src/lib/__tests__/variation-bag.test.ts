@@ -4,7 +4,7 @@
  * `pool[dayOfYear % pool.length]` selection did not have.
  */
 
-import { dayIndexFor, minimumGapFor, pickFromBag } from '../variation-bag';
+import { dayIndexFor, drawConsecutive, drawsStayApart, minimumGapFor, pickFromBag } from '../variation-bag';
 import {
   EVENING_MESSAGES,
   EVENING_TITLES,
@@ -104,6 +104,41 @@ describe('dayIndexFor', () => {
   it('crosses a month and a year boundary by one', () => {
     expect(dayIndexFor(new Date(2026, 1, 1))).toBe(dayIndexFor(new Date(2026, 0, 31)) + 1);
     expect(dayIndexFor(new Date(2027, 0, 1))).toBe(dayIndexFor(new Date(2026, 11, 31)) + 1);
+  });
+});
+
+describe('drawConsecutive', () => {
+  const poolOf = (n: number) => Array.from({ length: n }, (_, i) => `e${i}`);
+
+  it('takes consecutive picks, so one draw holds no repeat', () => {
+    const pool = poolOf(12);
+    for (let draw = 0; draw < 50; draw += 1) {
+      const entries = drawConsecutive(pool, { seed: 'seed-a', dayIndex: draw }, 'field', 3);
+      expect(entries).toEqual([0, 1, 2].map((k) => pickFromBag(pool, 'seed-a|field', draw * 3 + k)));
+      expect(new Set(entries).size).toBe(3);
+    }
+  });
+
+  it('keeps consecutive draws apart wherever drawsStayApart holds', () => {
+    for (const [n, count] of [[12, 3], [16, 4], [8, 2], [24, 3]] as const) {
+      expect(drawsStayApart(n, count)).toBe(true);
+      const pool = poolOf(n);
+      for (const seed of ['seed-a', 'seed-b', 'seed-c']) {
+        for (let draw = 0; draw < n * 20; draw += 1) {
+          const current = drawConsecutive(pool, { seed, dayIndex: draw }, 'field', count);
+          const next = drawConsecutive(pool, { seed, dayIndex: draw + 1 }, 'field', count);
+          expect(next.filter((entry) => current.includes(entry))).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it('rejects a pool that a draw can straddle or the guard band cannot hold apart', () => {
+    // Nine in threes has a guard band of two, so three at a lap boundary can meet.
+    expect(drawsStayApart(9, 3)).toBe(false);
+    expect(drawsStayApart(13, 3)).toBe(false);
+    expect(drawsStayApart(12, 4)).toBe(false);
+    expect(drawsStayApart(12, 3)).toBe(true);
   });
 });
 

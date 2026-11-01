@@ -5,6 +5,10 @@ import {
 } from '@/lib/devotional-pulled-content';
 import type { PulledDevotionalContent } from '@/lib/devotional-sync-pull';
 import type { Devotional, DevotionalDay } from '@/lib/store';
+import { replaceSyncOutbox } from '@/lib/sync-outbox';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '@/lib/deleted-series';
+
+jest.mock('@/lib/full-sync-pull', () => ({ triggerUserDataPullAfterInFlight: jest.fn(async () => undefined) }));
 
 const dayTwo: DevotionalDay = {
   id: 'day-devotional-1-2',
@@ -53,6 +57,87 @@ function pulledContent(overrides: Partial<PulledDevotionalContent> = {}): Pulled
 }
 
 describe('pulled devotional content application', () => {
+  afterEach(() => {
+    replaceSyncOutbox([]);
+    resetDeletedSeriesForTesting();
+  });
+
+  // 2026-10-09 release audit round 7: a sync applied another device's delete
+  // while a pull of the same series was out, and the pull then restored it.
+  it('applies nothing for a series a sync deleted while the pull was out', () => {
+    rememberDeletedSeries('devotional-1', '2026-04-25T13:30:00.000Z');
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
+
+  // 2026-10-09 release audit sweep: a phone that stayed open never applied
+  // another device's delete, and its next read revived the series.
+  it('leaves a series another device deleted to the full sync, which applies the delete', () => {
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+    const { triggerUserDataPullAfterInFlight } = jest.requireMock('@/lib/full-sync-pull') as { triggerUserDataPullAfterInFlight: jest.Mock };
+    triggerUserDataPullAfterInFlight.mockClear();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent({ devotional: undefined, days: [], seriesDeleted: true }),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+    expect(triggerUserDataPullAfterInFlight).toHaveBeenCalledWith('series-deleted');
+  });
+
+  // Round 7 again: a delete that lost to a newer server row left the series
+  // blocked from every later pull.
+  it('applies a copy the server kept past a delete that lost', () => {
+    rememberDeletedSeries('devotional-1', '2026-04-25T13:00:00.000Z');
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).toHaveBeenCalledTimes(1);
+    expect(updateDevotionalDays).toHaveBeenCalledTimes(1);
+  });
+
+  // 2026-10-09 release audit round 6: an old ready push pulled a series the
+  // reader had deleted, before the delete reached the server, and restored it.
+  it('applies nothing for a series whose delete still waits in the outbox', () => {
+    replaceSyncOutbox([{
+      table: 'devotionals', id: 'devotional-1', data: {}, clientUpdatedAt: '2026-04-25T12:30:00.000Z', deleted: true,
+    }]);
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent(),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionals).not.toHaveBeenCalled();
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+  });
+
   it('applies pulled days and metadata through the shared callbacks', () => {
     const updateDevotionalDays = jest.fn();
     const updateDevotionals = jest.fn();

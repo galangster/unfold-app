@@ -8,6 +8,7 @@ import {
   createNotificationNavigationCoordinator,
   getCompletedUserRedirectDisposition,
   normalizePreferredNotificationTime,
+  notificationResponseKey,
   shouldHandleNotificationData,
   shouldHydrateNotificationResponse,
   shouldMarkNotificationNavigationReady,
@@ -182,6 +183,10 @@ describe('push notification helpers', () => {
       expect(buildNotificationNavigationRoute({ type: 'lapse_reentry' })).toEqual({ pathname: '/(tabs)/(today)' });
     });
 
+    it('routes a daily reminder for a day the device does not hold yet to Today', () => {
+      expect(buildNotificationNavigationRoute({ type: 'daily_reminder' })).toEqual({ pathname: '/(tabs)/(today)' });
+    });
+
     it('routes an act reminder to its day, scrolled to the act', () => {
       expect(
         buildNotificationNavigationRoute({ type: 'act_reminder', devotionalId: 'dev-1', dayNumber: 4 }),
@@ -254,6 +259,41 @@ describe('push notification helpers', () => {
         buildNotificationNavigationRoute(
           { type: 'generation_failed', jobType: 'initial_arc', jobId: 'job-auto', devotionalId: 'dev-auto' },
           intent,
+        ),
+      ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
+    });
+
+    // 2026-10-09 release audit sweep: a landed trial still diverted every ready
+    // push to /generating, so a day 2 push showed "Begin Day 1" instead of that
+    // day's reveal.
+    it('opens the reveal for a later-day ready push once the trial series has landed', () => {
+      const landed = {
+        intentId: 'intent-1',
+        status: 'landed',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      } as never;
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 2 },
+          landed,
+        ),
+      ).toMatchObject({ pathname: '/reveal', params: { devotionalId: 'dev-auto', dayNumber: '2' } });
+    });
+
+    // 2026-10-09 release audit sweep: the later-day reveal must not take the
+    // day 1 push away from /generating, where the reader begins Day 1.
+    it('still sends a day 1 ready push to generating once the trial series has landed', () => {
+      const landed = {
+        intentId: 'intent-1',
+        status: 'landed',
+        jobId: 'job-auto',
+        devotionalId: 'dev-auto',
+      } as never;
+      expect(
+        buildNotificationNavigationRoute(
+          { type: 'devotional_ready', devotionalId: 'dev-auto', jobId: 'job-auto', dayNumber: 1 },
+          landed,
         ),
       ).toEqual({ pathname: '/generating', params: { jobId: 'job-auto', devotionalId: 'dev-auto' } });
     });
@@ -551,5 +591,46 @@ describe('shouldPostPushRegistration (NET-15)', () => {
   it('session dedupe', () => {
     expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: true })).toBe(false);
     expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: false })).toBe(true);
+  });
+});
+
+describe('notificationResponseKey', () => {
+  const actReminder = (date: number, dayNumber: number) => ({
+    notification: {
+      date,
+      request: {
+        identifier: 'unfold-act-reminder',
+        content: { data: { type: 'act_reminder', devotionalId: 'devotional-1', dayNumber } },
+      },
+    },
+  });
+
+  it('opens the next delivery of a reminder that reuses its identifier', () => {
+    const replace = jest.fn();
+    const coordinator = createNotificationNavigationCoordinator({ replace });
+    coordinator.setNavigationReady(true);
+
+    for (const response of [actReminder(1_760_000_000_000, 3), actReminder(1_760_086_400_000, 4)]) {
+      coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
+    }
+
+    expect(replace.mock.calls.map(([route]) => route.params?.dayNumber)).toEqual(['3', '4']);
+  });
+
+  it('opens one delivery once when the launch response is reported twice', () => {
+    const replace = jest.fn();
+    const coordinator = createNotificationNavigationCoordinator({ replace });
+    coordinator.setNavigationReady(true);
+    const response = actReminder(1_760_000_000_000, 3);
+
+    coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
+    coordinator.queueFromData(response.notification.request.content.data, notificationResponseKey(response));
+
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the identifier when a response has no delivery date', () => {
+    expect(notificationResponseKey({ notification: { request: { identifier: 'unfold-act-later' } } })).toBe('unfold-act-later');
+    expect(notificationResponseKey(null)).toBeUndefined();
   });
 });

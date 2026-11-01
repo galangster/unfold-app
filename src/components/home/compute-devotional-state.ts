@@ -7,9 +7,11 @@
  */
 
 import type { DevotionalDay, Devotional } from '@/lib/store';
+import { seriesDisplayNames } from '@/lib/auto-trial-series';
 import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 import type { ReflectionStatus } from '@/lib/reflection-status';
 import type { DailyGenerationRecoveryState } from '@/lib/daily-generation-recovery';
+import { readSeriesWeeks, type SeriesWeeks } from '@/lib/series-weeks';
 
 export type { ReflectionStatus } from '@/lib/reflection-status';
 
@@ -36,6 +38,8 @@ export type DevotionalCardState =
     }
   | {
       type: 'unread';
+      /** Week framing of a chaptered series. Absent for a legacy series (R6). */
+      weeks?: SeriesWeeks;
       dayData: DevotionalDay;
       dayLabel: DayLabel;
       seriesTitle: string;
@@ -48,6 +52,8 @@ export type DevotionalCardState =
     }
   | {
       type: 'complete-today';
+      /** Week framing of a chaptered series. Absent for a legacy series (R6). */
+      weeks?: SeriesWeeks;
       dayData: DevotionalDay;
       dayLabel: DayLabel;
       seriesTitle: string;
@@ -65,6 +71,8 @@ export type DevotionalCardState =
     }
   | {
       type: 'tomorrow-locked';
+      /** Week framing of a chaptered series. Absent for a legacy series (R6). */
+      weeks?: SeriesWeeks;
       devotionalId: string;
       /** Tomorrow's reading — the locked day the card previews. */
       dayData: DevotionalDay;
@@ -88,6 +96,8 @@ export type DevotionalCardState =
     }
   | {
       type: 'reveal-ready';
+      /** Week framing of a chaptered series. Absent for a legacy series (R6). */
+      weeks?: SeriesWeeks;
       dayData: DevotionalDay;
       dayLabel: DayLabel;
       seriesTitle: string;
@@ -95,7 +105,13 @@ export type DevotionalCardState =
       totalDays: number;
       onReveal: () => void;
     }
-  | { type: 'journey-complete'; seriesTitle: string; onCreateNew: () => void };
+  | {
+      type: 'journey-complete';
+      seriesTitle: string;
+      /** The finished sentence under the series name. */
+      subtitle: string;
+      onCreateNew: () => void;
+    };
 
 // ─── Input shape ────────────────────────────────────────────────
 
@@ -242,14 +258,26 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     return { type: 'empty', onCreateNew };
   }
 
-  const seriesTitle = currentDevotional.title;
+  // One source for the series name in every state, so the first reading
+  // reads the same whichever writer set its stored title.
+  const { seriesName: seriesTitle, devotionalTitle, isFirstReading } = seriesDisplayNames(currentDevotional);
+  const weeks = readSeriesWeeks(currentDevotional.seriesArc, { totalDays });
+  const weekFraming = weeks ? { weeks } : {};
 
   // Auto trial: journey-complete wins over premium-denied (TS-6).
   if (
     isJourneyComplete
     && (autoTrialActive || hasReadToday || currentDayData != null || premiumPolicy !== 'denied')
   ) {
-    return { type: 'journey-complete', seriesTitle, onCreateNew };
+    // The first reading does not count toward the streak, so its sentence
+    // makes no streak claim. The rhythm card below says when the streak starts.
+    const streakLine = isFirstReading ? '' : ' Your streak continues across series.';
+    return {
+      type: 'journey-complete',
+      seriesTitle,
+      subtitle: `${devotionalTitle} is complete.${streakLine} Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+      onCreateNew,
+    };
   }
 
   // 2. Confirmed churned users should not see generation-progress copy for a
@@ -306,6 +334,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       onReflect,
       onCreateNew,
       onSaveFreeWrite,
+      ...weekFraming,
     });
   }
 
@@ -325,6 +354,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       reflectionStatus,
       freeWriteDraft,
       onSaveFreeWrite,
+      ...weekFraming,
     });
   }
 
@@ -339,6 +369,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       dayNumber: currentDayData.dayNumber,
       totalDays,
       onReveal,
+      ...weekFraming,
     });
   }
 
@@ -354,5 +385,6 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onContinue,
     onCreateNew,
     ctaText,
+    ...weekFraming,
   });
 }

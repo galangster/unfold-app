@@ -12,6 +12,7 @@ import {
   personalContextDraftHasChanges,
   isReadableCurrentSeries,
   resolveCompanionDisplayName,
+  resolveCompanionLabel,
   resolveCompanionNameToPersist,
   resolveCreateNewDuringPendingInitial,
   resolveGeneratingCloseCopy,
@@ -34,13 +35,27 @@ const user = {
 describe('companion naming', () => {
   it('treats Grace as a name, not a writing-style change', () => {
     expect(resolveCompanionNameToPersist('Grace')).toBe('Grace');
-    expect(resolveCompanionNameToPersist('  ')).toBe('Grace');
     expect(resolveCompanionDisplayName('Grace', null)).toBe('Grace');
     expect(resolveCompanionDisplayName('Selah', 'Grace')).toBe('Selah');
     expect(resolveCompanionDisplayName(undefined, 'Selah')).toBe('Selah');
     expect(resolveCompanionDisplayName('', '')).toBeNull();
     expect(COMPANION_INTRO_BODY).toContain("talk through Scripture");
     expect(COMPANION_INTRO_BODY).not.toContain("Choose a name");
+  });
+
+  it('saves the name the reader typed and no stand-in name for a blank answer', () => {
+    expect(resolveCompanionNameToPersist('  Selah ')).toBe('Selah');
+    expect(resolveCompanionNameToPersist('  ')).toBe('');
+    expect(resolveCompanionNameToPersist('')).toBe('');
+    expect(applyPersonalContextDraft({ companionName: ' ', aboutMe: 'Hi' }).companionName).toBe('');
+  });
+
+  it('calls the Companion by its saved name, or Companion when none is saved', () => {
+    expect(resolveCompanionLabel('Selah', null)).toBe('Selah');
+    expect(resolveCompanionLabel(undefined, 'Grace')).toBe('Grace');
+    expect(resolveCompanionLabel('Grace', 'Grace')).toBe('Grace');
+    expect(resolveCompanionLabel(undefined, null)).toBe('Companion');
+    expect(resolveCompanionLabel('  ', '')).toBe('Companion');
   });
 });
 
@@ -95,7 +110,12 @@ describe('pending first-series resume after a close', () => {
       generationSessionStatus: 'idle',
       hasReadableCurrentSeries: false,
     })).toBe('offer-resume');
-    expect(resolveCreateNewDuringPendingInitial('offer-resume')).toBe('resume-existing');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: false,
+    })).toBe('resume-existing');
   });
 
   it('offers a nonblocking resume when a readable series or sample already exists', () => {
@@ -106,7 +126,12 @@ describe('pending first-series resume after a close', () => {
       generationSessionStatus: 'idle',
       hasReadableCurrentSeries: true,
     })).toBe('offer-nonblocking-resume');
-    expect(resolveCreateNewDuringPendingInitial('offer-nonblocking-resume')).toBe('resume-existing');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: true,
+    })).toBe('resume-existing');
   });
 
   it('still offers a resume hero after an archived real series when a new request is outstanding', () => {
@@ -150,7 +175,43 @@ describe('pending first-series resume after a close', () => {
       hasReadableCurrentSeries: false,
       autoTrialOwnsFlow: true,
     })).toBe('none');
-    expect(resolveCreateNewDuringPendingInitial('none')).toBe('start-fresh');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: null,
+      requestId: null,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: false,
+    })).toBe('start-fresh');
+  });
+
+  // The banner above stays quiet for a live job, but New Series must not start
+  // the intake over it: /generating would resume the old job and drop the new
+  // answers.
+  it.each([
+    ['still on /generating', { jobId: 'job-1', submittedAt: 1 }],
+    ['after Go home', { jobId: 'job-1', submittedAt: 1, leftForHome: true }],
+  ])('resumes a live job %s instead of starting a new series', (_case, inflight) => {
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight,
+      requestId,
+      generationSessionStatus: 'running',
+      hasReadableCurrentSeries: true,
+    })).toBe('resume-existing');
+  });
+
+  it('starts fresh over a superseded job, or when a purchased auto-trial owns the flow', () => {
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: { jobId: 'job-1', submittedAt: 1, superseded: true },
+      requestId: null,
+      generationSessionStatus: 'idle',
+      hasReadableCurrentSeries: true,
+    })).toBe('start-fresh');
+    expect(resolveCreateNewDuringPendingInitial({
+      inflight: { jobId: 'job-1', submittedAt: 1 },
+      requestId: null,
+      generationSessionStatus: 'running',
+      hasReadableCurrentSeries: true,
+      autoTrialOwnsFlow: true,
+    })).toBe('start-fresh');
   });
 });
 
@@ -163,10 +224,8 @@ describe('copy is wired where the questions arise', () => {
     expect(carousel).toContain('COMPANION_INTRO_BODY');
     expect(carousel).toContain('COMPANION_PERSONALITIES');
     expect(carousel).toContain('accessibilityRole="radiogroup"');
-    expect(carousel).toContain('KeyboardAwareScrollView');
+    expect(carousel).toContain('KeyboardAvoidingView');
     expect(carousel).toContain('flexShrink: 1');
-    expect(carousel).not.toContain('Companion name');
-    expect(carousel).not.toContain('TextInput');
     expect(empty).not.toContain('COMPANION_EMPTY_STATE_NOTE');
     expect(empty).not.toContain('Explore Scripture');
     expect(profile).toContain('PERSONAL_CONTEXT_FUTURE_DAYS_COPY');
@@ -175,7 +234,7 @@ describe('copy is wired where the questions arise', () => {
 
   it('uses neutral close copy until a server job is accepted', () => {
     const generating = readSrc('app/generating.tsx');
-    expect(generating).toContain('resolveAcceptedGenerationExitCopy(notifyControl)');
+    expect(generating).toContain('resolveAcceptedGenerationExitCopy(notifyPromise)');
     expect(generating).toContain('resolveGeneratingCloseCopy(false)');
     expect(GENERATING_CAN_CLOSE_COPY).toBe(
       'You can close Unfold and come back when you are ready.',

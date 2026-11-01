@@ -150,6 +150,8 @@ const mockPurchasePackage = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockWaitForUnfoldPremiumEntitlement = jest.fn();
 const mockSyncTrialEndingNotification = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockAskNotificationPermissionInContext = jest.fn((..._args: unknown[]) => Promise.resolve('granted'));
+const mockReadNotificationPermissionState = jest.fn((..._args: unknown[]) => Promise.resolve('granted'));
 
 jest.mock('@/lib/revenuecatClient', () => ({
   POST_PURCHASE_ENTITLEMENT_WAIT_MS: 10_000,
@@ -161,6 +163,11 @@ jest.mock('@/lib/revenuecatClient', () => ({
 
 jest.mock('@/lib/trial-notification', () => ({
   syncTrialEndingNotification: (...args: unknown[]) => mockSyncTrialEndingNotification(...args),
+}));
+
+jest.mock('@/lib/notification-ask', () => ({
+  askNotificationPermissionInContext: (...args: unknown[]) => mockAskNotificationPermissionInContext(...args),
+  readNotificationPermissionState: (...args: unknown[]) => mockReadNotificationPermissionState(...args),
 }));
 
 jest.mock('@/lib/mmkv-storage', () => ({
@@ -633,6 +640,164 @@ describe('ThreeStepPaywall decide-later exit', () => {
           .some((entry: any) => entry.color === colors.textMuted),
       );
     expect(usesMutedInk).toBe(true);
+  });
+});
+
+/** The label inside the primary CTA. */
+function primaryCTALabel(tree: any): string | undefined {
+  return primaryCTA(tree).findAll((n: any) => typeof n.props?.children === 'string')[0]?.props.children;
+}
+
+// 1.1.18 release smoke (F02): page 1 said "Start Free Trial" but only moved to
+// page 2. The trial starts on the pricing page, so only that page asks for it.
+describe('ThreeStepPaywall CTA copy with a free trial', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+  });
+
+  it('says Continue on page 1 and asks to start the trial only on the last page', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+
+    expect(primaryCTALabel(tree)).toBe('Continue');
+    expect(findText(tree, 'Start Free Trial')).toHaveLength(0);
+
+    await pressPrimaryCTA(tree);
+    expect(primaryCTALabel(tree)).toBe('See your free trial');
+
+    await pressPrimaryCTA(tree);
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+});
+
+/** Spoken labels of the text nodes that carry one. */
+function headlineLabels(tree: any): string[] {
+  return tree.root
+    .findAll(
+      (n: any) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props?.children === 'string',
+      { deep: false },
+    )
+    .map((n: any) => n.props.accessibilityLabel);
+}
+
+// 1.1.18 release smoke (F04): VoiceOver joined the words around each hard line
+// break ("tryUnfold", "beforeyour", "personalBible experiencein").
+describe('ThreeStepPaywall headline labels', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+  });
+
+  it('reads every trial-path headline with normal spaces', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    expect(headlineLabels(tree)).toContain('We want you to try Unfold for free.');
+
+    await pressPrimaryCTA(tree);
+    expect(headlineLabels(tree)).toContain("We'll remind you before your free trial ends");
+
+    await pressPrimaryCTA(tree);
+    expect(headlineLabels(tree)).toContain('The most personal Bible experience in the world');
+  });
+
+  it('reads the no-trial headline with normal spaces', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: false }));
+    expect(headlineLabels(tree)).toContain('Unlock everything Unfold can do.');
+  });
+});
+
+const PERMISSION_REASON = 'Allow notifications to get this reminder.';
+
+// 1.1.18 release smoke (F08): page 2 promised a reminder before the trial
+// ends, but onboarding never asked for notification permission, so the
+// reminder was skipped.
+describe('ThreeStepPaywall trial reminder permission', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsQaToolsEnabled.mockReturnValue(false);
+    mockShouldRenderQaChrome.mockReturnValue(false);
+    mockAskNotificationPermissionInContext.mockResolvedValue('granted');
+    mockReadNotificationPermissionState.mockResolvedValue('undetermined');
+  });
+
+  async function renderOnReminderPage() {
+    const tree = await render(baseProps({ hasFreeTrial: true }));
+    await pressPrimaryCTA(tree);
+    return tree;
+  }
+
+  it('says why it will ask while the permission is undecided', async () => {
+    const tree = await renderOnReminderPage();
+
+    expect(findText(tree, PERMISSION_REASON).length).toBeGreaterThan(0);
+  });
+
+  it('shows no reason when the permission is already decided', async () => {
+    mockReadNotificationPermissionState.mockResolvedValue('granted');
+    const tree = await renderOnReminderPage();
+
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+  });
+
+  it('moves on without asking when the permission is already decided', async () => {
+    mockReadNotificationPermissionState.mockResolvedValue('denied');
+    const tree = await renderOnReminderPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+  });
+
+  it('asks once from the page 2 button and moves to page 3 after any answer', async () => {
+    let answer!: () => void;
+    mockAskNotificationPermissionInContext.mockReturnValue(new Promise<string>((resolve) => {
+      answer = () => resolve('denied');
+    }));
+    const tree = await renderOnReminderPage();
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+
+    await pressPrimaryCTA(tree);
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledTimes(1);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledWith({ trigger: 'trial_reminder', registration: 'background' });
+    expect(primaryCTALabel(tree)).toBe('See your free trial');
+
+    await act(async () => {
+      answer();
+    });
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+  });
+
+  it('opens pricing without a purchase when the permission read fails', async () => {
+    mockReadNotificationPermissionState.mockRejectedValue(new Error('permission read failed'));
+    const tree = await renderOnReminderPage();
+    expect(findText(tree, PERMISSION_REASON)).toHaveLength(0);
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+
+  it('opens pricing without a purchase when the permission ask fails', async () => {
+    mockAskNotificationPermissionInContext.mockRejectedValue(new Error('permission ask failed'));
+    const tree = await renderOnReminderPage();
+
+    await pressPrimaryCTA(tree);
+    expect(mockAskNotificationPermissionInContext).toHaveBeenCalledTimes(1);
+    expect(primaryCTALabel(tree)).toBe('Start My Free Trial');
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+  });
+
+  it('does not ask on the no-trial path, which has no reminder page', async () => {
+    const tree = await render(baseProps({ hasFreeTrial: false }));
+    await pressPrimaryCTA(tree);
+
+    expect(mockAskNotificationPermissionInContext).not.toHaveBeenCalled();
+    expect(mockReadNotificationPermissionState).not.toHaveBeenCalled();
   });
 });
 

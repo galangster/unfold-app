@@ -71,6 +71,7 @@ import { cacheDirectory, deleteAsync, documentDirectory, readDirectoryAsync } fr
 import { OUTBOX_KEY } from '@/lib/sync-outbox';
 import { DEVOTIONAL_PULL_CURSOR_KEY } from '@/lib/devotional-pull-cursor';
 import { LAST_PULLED_AT_KEY } from '@/lib/full-sync-pull';
+import { USER_PROFILE_CONFLICT_KEY } from '@/lib/user-profile-sync';
 import {
   ARC_RECONCILIATION_KEY,
   MIGRATION_KEY as GENERATION_MIGRATION_KEY,
@@ -85,6 +86,9 @@ import {
 import { AUTO_TRIAL_INTENT_KEY } from '@/lib/auto-trial-intent';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 import { INITIAL_GENERATION_REQUEST_ID_KEY } from '@/lib/initial-generation-request';
+import { REPLACED_SERIES_CHOSEN_AT_KEY, REPLACED_SERIES_KEY, REPLACED_SERIES_STATE_KEY, REPLACEMENT_SERIES_KEY } from '@/lib/series-replacement';
+import { clearDeletedSeriesCache, DELETED_SERIES_KEY } from '@/lib/deleted-series';
+import { COPY_MEMORY_KEY_PREFIX } from '@/lib/copy-variation';
 import { RATE_LIMIT_STORAGE_KEY } from '@/lib/rate-limit';
 import {
   beginLocalResetSession,
@@ -117,6 +121,11 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
   INITIAL_GENERATION_REQUEST_ID_KEY,
+  REPLACED_SERIES_KEY,
+  REPLACED_SERIES_STATE_KEY,
+  REPLACED_SERIES_CHOSEN_AT_KEY,
+  REPLACEMENT_SERIES_KEY,
+  DELETED_SERIES_KEY,
   OUTBOX_KEY,
   // Devotional pull cursor is scoped to the device id; rotation below would
   // already invalidate it, but a wiped store must never carry a delta cursor.
@@ -125,6 +134,7 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   // from scratch, re-run the (idempotent) generation migration, never resume
   // a stale onboarding sample job, and drop the cached prompt example.
   LAST_PULLED_AT_KEY,
+  USER_PROFILE_CONFLICT_KEY,
   GENERATION_MIGRATION_KEY,
   ARC_RECONCILIATION_KEY,
   ONBOARDING_SAMPLE_JOB_KEY,
@@ -149,6 +159,9 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
 export const FULL_RESET_MMKV_KEY_PREFIXES: readonly string[] = [
   `${RATE_LIMIT_STORAGE_KEY}_`,
   COMPANION_CHAT_SHARD_PREFIX,
+  // What the copy last showed on this device: the completion order and the
+  // check-in tap cues. A wiped install starts its copy memory fresh.
+  COPY_MEMORY_KEY_PREFIX,
 ] as const;
 
 const REVENUECAT_LOGOUT_TIMEOUT_MS = 5_000;
@@ -332,6 +345,7 @@ async function runFullLocalReset(options: FullResetOptions): Promise<FullResetRe
   clearExamenCache();
   clearScriptureExplainCache();
   clearVerseCache();
+  clearDeletedSeriesCache();
 
   // 5. Trial-notification mirror (the OS notification itself went in step 1)
   clearTrialNotificationMirror();

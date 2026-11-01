@@ -37,6 +37,7 @@ import {
 } from '@/lib/feature-announcements';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { AmbientMusicEntry, AmbientSoundSheet } from './AmbientSoundControls';
 import { AmbientSoundPlayer } from './AmbientSoundPlayer';
@@ -109,6 +110,7 @@ function EnabledAmbientSoundOverlay() {
   const todayReadingAvailable = useAmbientSoundChrome((chrome) => chrome.todayReadingAvailable);
   const setPlayerDockHeight = useAmbientSoundChrome((chrome) => chrome.setPlayerDockHeight);
   const premiumPolicy = usePremiumAccessPolicy();
+  const hasSeenTodayTour = useUnfoldStore((state) => state.hasSeenHomeTooltips);
   const audioEnabled = isAmbientAudioEnabled();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [announcementPages, setAnnouncementPages] = useState<FeatureAnnouncementPage[]>([]);
@@ -189,6 +191,7 @@ function EnabledAmbientSoundOverlay() {
     }).filter((page) => !announcedThisVisit.current.has(page.id));
     if (
       canAnnounceFeatures({
+        hasSeenTodayTour,
         isTodayHome: todayHome,
         todayReadingAvailable,
         soundOff: !audioEnabled || status === 'off',
@@ -212,6 +215,7 @@ function EnabledAmbientSoundOverlay() {
     keyboardVisible,
     narrationActive,
     premiumPolicy,
+    hasSeenTodayTour,
     sheet,
     status,
     timerStatus,

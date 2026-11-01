@@ -20,7 +20,7 @@ const allowedTrialDaysAssignability: MutuallyAssignable<
 > = true;
 const onboardingLengthStillWider: MutuallyAssignable<
   OnboardingData['devotionalLength'],
-  3 | 7 | 14 | 30
+  3 | 7 | 14 | 28 | 30
 > = true;
 
 function entitlement(overrides: Record<string, unknown> = {}) {

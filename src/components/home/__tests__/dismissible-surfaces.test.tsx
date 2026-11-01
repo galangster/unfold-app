@@ -466,7 +466,6 @@ describe('dismissible Today/Home surfaces', () => {
     expect(source).toContain('setHasSeenDay1Review();');
     expect(source).toContain('nudgeDismiss();');
     expect(source).toContain('nudgeAction();');
-    expect(source).toContain("title: 'Preparing today’s thread…'");
     expect(source).not.toContain('Companion is gathering');
   });
 

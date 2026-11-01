@@ -3,8 +3,17 @@ import {
   getDailyReminderContent,
 } from '../daily-reminder-content';
 import type { Devotional, DevotionalDay } from '../store';
+import {
+  FIRST_DAY_TITLES,
+  NEXT_DAY_BODIES,
+  OVERDUE_TITLES,
+  PAST_END_BODIES,
+  PAUSED_NO_SERIES_BODIES,
+  PAUSED_SERIES_BODIES,
+} from '@/constants/reading-reminder-messages';
 
 const now = new Date(2026, 4, 14, 9, 0, 0);
+const seed = 'test-install';
 
 function day(overrides: Partial<DevotionalDay> = {}): DevotionalDay {
   return {
@@ -45,7 +54,7 @@ function devotional(overrides: Partial<Devotional> = {}): Devotional {
 describe('daily reminder content', () => {
   it('keeps an overnight-prepared reading specific when no calendar anchor exists', () => {
     const currentDay = day({ generatedAt: new Date(2026, 4, 13, 23).toISOString() });
-    const content = getDailyReminderContent({ currentDevotional: devotional({ currentDay: 6, days: [currentDay] }), premiumPolicy: 'granted', now });
+    const content = getDailyReminderContent({ currentDevotional: devotional({ currentDay: 6, days: [currentDay] }), premiumPolicy: 'granted', now, seed });
     expect(content.title).toBe(currentDay.title);
     expect(content.body).toBe(currentDay.quotableLine);
   });
@@ -53,8 +62,11 @@ describe('daily reminder content', () => {
   it('uses the series calendar for a reading generated ahead of its reading date', () => {
     const currentDay = day({ generatedAt: new Date(2026, 4, 12, 23).toISOString() });
     const series = devotional({ currentDay: 6, days: [currentDay], seriesStartDate: new Date(2026, 4, 9, 12).toISOString() });
-    expect(getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now }).title).toBe(currentDay.title);
-    expect(getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now: new Date(2026, 4, 16, 9) }).title).toBe('Pick up where you left off');
+    expect(getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now, seed }).title).toBe(currentDay.title);
+    const overdue = getDailyReminderContent({ currentDevotional: series, premiumPolicy: 'granted', now: new Date(2026, 4, 16, 9), seed });
+    expect(OVERDUE_TITLES).toContain(overdue.title);
+    expect(overdue.body).toMatch(/day 6\b/i);
+    expect(overdue.body).toContain('When God Calls You Home');
   });
 
   it('refreshes notification copy when a calendar anchor arrives from sync', () => {
@@ -70,11 +82,31 @@ describe('daily reminder content', () => {
       currentDevotional: devotional({ currentDay: 7, days: [day({ dayNumber: 6, isRead: true })] }),
       premiumPolicy: 'denied',
       now,
+      seed,
     });
 
     expect(`${content.title} ${content.body}`).toMatch(/Bible/i);
     expect(`${content.title} ${content.body}`).toMatch(/Premium/i);
     expect(`${content.title} ${content.body}`).not.toMatch(/generat|prepar|created|next day/i);
+    expect(PAUSED_SERIES_BODIES).toContain(content.body);
+  });
+
+  it('names no series in the paused reminder for a churned reader without one', () => {
+    const content = getDailyReminderContent({ currentDevotional: null, premiumPolicy: 'denied', now, seed });
+
+    expect(PAUSED_NO_SERIES_BODIES).toContain(content.body);
+    expect(content.body).not.toMatch(/series|devotional/i);
+  });
+
+  it('gives an unread Day 1 its own lines, overdue on the device or not there yet', () => {
+    const overdue = devotional({ currentDay: 1, days: [day({ id: 'day-1', dayNumber: 1 })], seriesStartDate: new Date(2026, 4, 9, 12).toISOString() });
+    const pending = devotional({ currentDay: 1, days: [] });
+    for (const currentDevotional of [overdue, pending]) {
+      const content = getDailyReminderContent({ currentDevotional, premiumPolicy: 'granted', now, seed });
+      expect(FIRST_DAY_TITLES).toContain(content.title);
+      expect(content.body).toContain('When God Calls You Home');
+      expect(`${content.title} ${content.body}`).not.toMatch(/left off|stopped|again|back|return/i);
+    }
   });
 
   it('keeps generated unread content reminders specific even if premium is denied', () => {
@@ -82,6 +114,7 @@ describe('daily reminder content', () => {
       currentDevotional: devotional({ currentDay: 6, days: [day({ dayNumber: 6 })] }),
       premiumPolicy: 'denied',
       now,
+      seed,
     });
 
     expect(content.title).toBe('Learning to Return');
@@ -132,10 +165,12 @@ describe('daily reminder content', () => {
       currentDevotional: devotional({ currentDay: 7, days: [day({ dayNumber: 6, isRead: true })] }),
       premiumPolicy: 'granted',
       now,
+      seed,
     });
 
-    expect(content.title).toBe('Day 7 of When God Calls You Home');
-    expect(content.body).toBe('Your next reading is waiting for you.');
+    expect(content.title).toMatch(/\bday 7\b/i);
+    expect(content.title).toContain('When God Calls You Home');
+    expect(NEXT_DAY_BODIES).toContain(content.body);
     expect(`${content.title} ${content.body}`).not.toMatch(/prepar|check back/i);
   });
 
@@ -144,9 +179,22 @@ describe('daily reminder content', () => {
       currentDevotional: devotional({ currentDay: 8, totalDays: 7, days: [day({ dayNumber: 7, isRead: true })] }),
       premiumPolicy: 'unknown',
       now,
+      seed,
     });
 
     expect(content.title).toBe('When God Calls You Home');
     expect(`${content.title} ${content.body}`).not.toMatch(/prepar/i);
+    // Past the end there is no next reading to promise.
+    expect(PAST_END_BODIES).toContain(content.body);
+  });
+
+  it('keeps a paused reminder past the series end from saying the series goes on', () => {
+    const pastEnd = devotional({ currentDay: 8, totalDays: 7, days: [day({ dayNumber: 7, isRead: true })] });
+    for (let offset = 0; offset < 60; offset += 1) {
+      const content = getDailyReminderContent({ currentDevotional: pastEnd, premiumPolicy: 'denied', now: new Date(2026, 4, 14 + offset, 9), seed });
+      expect(`${content.title} ${content.body}`).toMatch(/Bible/i);
+      expect(PAUSED_NO_SERIES_BODIES).toContain(content.body);
+      expect(content.body).not.toMatch(/series|devotional/i);
+    }
   });
 });

@@ -2,6 +2,7 @@
  * Pure decisions behind the "Notify me when it's ready" control on the
  * generating screen. The screen owns the state; these functions own the rule.
  */
+import { isLongSeries } from './generation-poll-outcome';
 import type { PushRegistrationResult } from './push-notifications';
 
 export type NotificationPermission = 'unknown' | 'granted' | 'denied';
@@ -76,10 +77,38 @@ export function getNotifyControlState({
   return 'none';
 }
 
-/** Copy below the accepted-job exit. Only confirmed registration promises a notification. */
-export function resolveAcceptedGenerationExitCopy(state: NotifyControlState): string {
-  if (state === 'confirmed') {
-    return 'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.';
-  }
-  return 'We\u2019ll keep writing your first devotional.\nCome back whenever you\u2019re ready.';
+/**
+ * Where the screen says it will notify the reader. Only a confirmed
+ * registration promises a notification, and the screen says it once: a long
+ * series says it on the wait line, any other series beside the exit.
+ */
+export type NotifyPromisePlacement = 'none' | 'wait-line' | 'exit';
+
+export function resolveNotifyPromisePlacement(
+  state: NotifyControlState,
+  totalDays: number,
+): NotifyPromisePlacement {
+  if (state !== 'confirmed') return 'none';
+  return isLongSeries(totalDays) ? 'wait-line' : 'exit';
+}
+
+/** Notification status below the generation actions. */
+export const NOTIFY_NOTE_COPY: Record<Extract<NotifyControlState, 'pending' | 'denied' | 'registration-failed' | 'registration-unavailable'>, string> = {
+  pending: 'Setting up your notification\u2026',
+  denied: 'Notifications are off. You can turn them on in\u00A0Settings.',
+  'registration-failed': 'We couldn\u2019t set up notifications.',
+  'registration-unavailable': 'Notifications aren\u2019t available here.',
+};
+
+/** The wait line's second sentence when it carries the promise. */
+export const WAIT_LINE_NOTIFY_PROMISE_COPY =
+  'You can leave this screen. We\u2019ll let you know when Day 1 is ready.';
+
+const KEEP_WRITING_COPY = 'We\u2019ll keep writing your first devotional.';
+
+/** Copy below the accepted-job exit. */
+export function resolveAcceptedGenerationExitCopy(placement: NotifyPromisePlacement): string {
+  if (placement === 'exit') return `${KEEP_WRITING_COPY}\nWe\u2019ll notify you when it\u2019s ready.`;
+  if (placement === 'wait-line') return KEEP_WRITING_COPY;
+  return `${KEEP_WRITING_COPY}\nCome back whenever you\u2019re ready.`;
 }

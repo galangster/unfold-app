@@ -31,9 +31,14 @@ describe('truncateNotificationBody', () => {
 });
 
 describe('getEveningWindDownBody', () => {
-  it('leads with the day\'s act, the thing the devotional asked the reader to do', () => {
-    const body = getEveningWindDownBody({ title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' }, V);
-    expect(body.startsWith('Tonight after your toddler is down')).toBe(true);
+  it('never returns the day\'s act, which has its own reminder (design call 1, 2026-10-29)', () => {
+    // A stored day still carries its act. The wind-down context has no act field, so nothing can lead with it.
+    const withScripture = { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' };
+    const actOnly = { title: 'The Unfinished House', act: LONG_ACT };
+    expect(getEveningWindDownBody(withScripture, V)).toBe('Before rest, sit with Psalm 132:1-5 for a minute.');
+    const withoutScripture = getEveningWindDownBody(actOnly, V);
+    expect(withoutScripture).not.toContain('Tonight after your toddler is down');
+    expect(withoutScripture).toBe(getEveningWindDownBody({ title: 'The Unfinished House' }, V));
   });
 
   it('falls back to the evening scripture, then to a template that names the day', () => {
@@ -90,18 +95,14 @@ describe('getMiddayCheckInBody', () => {
 });
 
 describe('notification copy limits', () => {
-  it('truncates the evening banner without changing the 14-day horizon', () => {
-    const selected = getEveningWindDownBody(
-      { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' },
-      V,
-    );
-    const copy = getEveningWindDownCopy(
-      { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' },
-      V,
-    );
+  it('keeps the evening banner inside the limit without changing the 14-day horizon', () => {
+    const day = { title: 'The Unfinished House', act: LONG_ACT, eveningScriptureRef: 'Psalm 132:1-5' };
+    const selected = getEveningWindDownBody(day, V);
+    const copy = getEveningWindDownCopy(day, V);
 
-    expect(selected).toBe(LONG_ACT);
-    expect(copy.body).toBe(truncateNotificationBody(LONG_ACT));
+    expect(selected).toBe('Before rest, sit with Psalm 132:1-5 for a minute.');
+    expect(copy.body.startsWith(selected)).toBe(true);
+    expect(copy.body).not.toContain('Tonight after your toddler is down');
     expect(copy.body.length).toBeLessThanOrEqual(MAX_NOTIFICATION_BODY);
     expect(PRE_ROLL_DAYS).toBe(14);
   });

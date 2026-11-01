@@ -4,14 +4,20 @@
  * wait there instead: same devotional shell, same scripture bookkeeping, same
  * session bookkeeping, whichever screen sees the job finish.
  */
-import { useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
-import { readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
-import { clearInflightGenerationJob } from '@/lib/inflight-generation-job';
-import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { flushUnfoldStorePersist, useUnfoldStore, type Devotional, type DevotionalDay, type SeriesArc, type UserProfile } from '@/lib/store';
+import { abandonAutoTrialIntentForDeletedSeries, readAutoTrialIntent, settleLandedAutoTrialSeries, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { isOnboardingFirstReading, isOnboardingSampleDevotionalId } from '@/lib/auto-trial-series';
+import { isSeriesComplete } from '@/lib/book-of-seasons';
+import { isDevotionalArchived } from '@/lib/devotional-lifecycle';
+import { isStrictActiveSeriesWinner } from '@/lib/devotional-active-selection';
+import { clearInflightGenerationJob, readInflightGenerationJob, requestAnsweredByInflightJob } from '@/lib/inflight-generation-job';
+import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import { extractBookFromReference } from '@/lib/devotional-service';
 import type { InflightInitialArcWatchOutcome } from '@/lib/inflight-initial-arc-watch';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import { wasSeriesDeleted } from '@/lib/deleted-series';
+import { bindReplacementSeries, clearReplacedSeries, readBoundReplacementSeries, readReplacedSeries, readReplacedSeriesChosenAt, readReplacedSeriesState } from '@/lib/series-replacement';
 import {
   assertSyncSessionCurrent,
   isGenerationSessionInvalidatedError,
@@ -34,6 +40,11 @@ interface InitialArcResultContext {
   devotionalLength: number;
   /** Originating reset session. Required so a late apply cannot recapture. */
   session: number;
+  /**
+   * The job answered the stored generation request, so a waiting "Start a
+   * new series" choice is waiting for this series.
+   */
+  answersCurrentRequest?: boolean;
 }
 
 interface AppliedInitialArcResult {
@@ -50,27 +61,158 @@ export function requireCanonicalDevotionalId(devotionalId?: string | null, conte
   return devotionalId;
 }
 
+type ReaderContext = Pick<Devotional, 'userContext' | 'themeCategory' | 'devotionalType' | 'studySubject'>;
+
+/**
+ * Today holds no series the reader chose: none, one that is gone or
+ * archived, or onboarding's first reading.
+ */
+/**
+ * A landing for a series the reader deleted on this phone. It neither brings
+ * the series back nor ends the series it was to replace.
+ */
+export class DeletedSeriesResultError extends Error {
+  constructor() {
+    super('The landed series was deleted on this phone');
+    this.name = 'DeletedSeriesResultError';
+  }
+}
+
+function holdsNoChosenSeries(current: Devotional | undefined): boolean {
+  return !current
+    || isDevotionalArchived(current)
+    || isOnboardingSampleDevotionalId(current.id)
+    || isOnboardingFirstReading(current);
+}
+
+/**
+ * Whether a landed series the store already holds may become current. The
+ * sync pull inserts a new series without selecting it (it adopts only an
+ * explicit resume), so a pull that beats the job result used to leave Today
+ * empty. Select it as a fresh shell is selected, but only in place of no
+ * chosen series, the finished journey it was started from, or this
+ * generation's own series: never over a live series the reader picked
+ * meanwhile. An archived row is never selected, because selecting it would
+ * unarchive a series archived on another device. And only the series the
+ * server writes, the strict active winner, is selected: beside a newer live
+ * series (one another device started, say) this one stays off Today, where
+ * its later days would be refused as not active.
+ */
+function canSelectLandedSeries(landed: Devotional): boolean {
+  if (isDevotionalArchived(landed)) return false;
+  const { currentDevotionalId, devotionals } = useUnfoldStore.getState();
+  if (!isStrictActiveSeriesWinner(landed.id, devotionals)) return false;
+  if (currentDevotionalId === landed.id) return true;
+  const current = devotionals.find((row) => row.id === currentDevotionalId);
+  return holdsNoChosenSeries(current) || isSeriesComplete(current);
+}
+
+/**
+ * A shell the sync pull landed first carries only the series columns. Give
+ * it the reader context the land-first shell is built with, on this device
+ * only, without replacing anything the row already holds.
+ */
+function fillMissingReaderContext(devotionalId: string, context: ReaderContext): void {
+  useUnfoldStore.setState((state) => ({
+    devotionals: state.devotionals.map((row) => (row.id !== devotionalId ? row : {
+      ...row,
+      userContext: Object.values(row.userContext ?? {}).some(Boolean) ? row.userContext : context.userContext,
+      themeCategory: row.themeCategory ?? context.themeCategory,
+      devotionalType: row.devotionalType ?? context.devotionalType,
+      studySubject: row.studySubject ?? context.studySubject,
+    })),
+  }));
+}
+
+/**
+ * Whether a landing result still ends the series it replaces. A later choice
+ * about either series stands over an old result: the replaced series resumed
+ * or paused after the reader chose to replace it (its lifecycle clock moved
+ * since the choice), or the replacement already paused, as another device
+ * can do before this result lands here.
+ */
+function replacementStillEnds(replacedId: string, replacementId: string): boolean {
+  const { devotionals } = useUnfoldStore.getState();
+  const replacement = devotionals.find((d) => d.id === replacementId);
+  if (replacement && isDevotionalArchived(replacement)) return false;
+  const replaced = devotionals.find((d) => d.id === replacedId);
+  const seenStateAt = readReplacedSeriesState();
+  return !replaced || seenStateAt === null || (replaced.archivedStateAt ?? '') === seenStateAt;
+}
+
+/**
+ * Writes the landed series to disk now. A failed write (a full disk) is
+ * logged and the landing goes on: the reader continues with the series in
+ * memory, and the server, which already holds it, brings it back on the next
+ * pull. The recovery records are cleared either way, so the finished job is
+ * never offered again as pending work.
+ */
+function writeLandedSeriesToDisk(): void {
+  try {
+    flushUnfoldStorePersist();
+  } catch (err) {
+    void logBugError('generation', err, { phase: 'persist-landed-series' });
+  }
+}
+
 /**
  * Put day 1 in the store, record its scripture, drop the in-flight record and
  * mark the generation session complete. Idempotent: when the shell already
  * exists (a retry, or the sync pull landed it first) only the day is added,
- * and the store ignores a day it already holds.
+ * and the store ignores a day it already holds; the series still becomes
+ * current when the server writes it and nothing the reader chose holds Today.
  */
 export function applyInitialArcResult(
   result: InitialArcResult,
-  { user, devotionalLength, session }: InitialArcResultContext,
+  { user, devotionalLength, session, answersCurrentRequest = false }: InitialArcResultContext,
 ): AppliedInitialArcResult {
   assertSyncSessionCurrent(session, 'apply initial arc');
   const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
+  // A row sync kept past the delete here (the delete lost) is live again.
+  const held = useUnfoldStore.getState().devotionals.find((d) => d.id === devotionalId);
+  if (wasSeriesDeleted(devotionalId, held?.updatedAt)) throw new DeletedSeriesResultError();
   const seriesTitle = result.seriesTitle ?? DEFAULT_SERIES_TITLE;
   const totalDays = result.totalDays ?? devotionalLength;
   const day1 = result.devotionalDay;
+
+  // The series "Start a new series" replaces ends now that this one exists.
+  // First, so Today moves off the old series: to this one when a sync pull
+  // already landed it, otherwise to the shell added below.
+  // Only the series the reader started in its place ends it.
+  if (answersCurrentRequest) bindReplacementSeries(devotionalId);
+  const replacedId = readReplacedSeries() && readBoundReplacementSeries() === devotionalId ? readReplacedSeries() : null;
+  if (replacedId && replacedId !== devotionalId && replacementStillEnds(replacedId, devotionalId)) {
+    // Dated from the reader's choice, so a resume made elsewhere after it
+    // still wins on the server. The archive clock still moves past the one
+    // the reader saw, which can run ahead of this phone.
+    const endedAt = readReplacedSeriesChosenAt() ?? new Date().toISOString();
+    useUnfoldStore.getState().archiveReplacedDevotional(replacedId, devotionalId, endedAt);
+  }
+
   const store = useUnfoldStore.getState();
 
   const existingDevotional = store.devotionals.find((d) => d.id === devotionalId);
+  const readerContext: ReaderContext = {
+    userContext: {
+      name: user?.name ?? '',
+      aboutMe: user?.aboutMe ?? '',
+      currentSituation: user?.currentSituation ?? '',
+      emotionalState: user?.emotionalState ?? '',
+    },
+    themeCategory: user?.selectedTheme,
+    devotionalType: user?.selectedType || 'personal',
+    studySubject: user?.selectedStudySubject,
+  };
 
+  // Set when the undated new series is held back from Today, so the trial
+  // step below does not hand Today to it by its guessed start either.
+  let heldFromToday = false;
   if (existingDevotional) {
     store.addGeneratedDay(devotionalId, day1);
+    fillMissingReaderContext(devotionalId, readerContext);
+    if (canSelectLandedSeries(existingDevotional)) {
+      store.setCurrentDevotional(devotionalId);
+    }
   } else {
     const serverAnchor = [result.seriesStartDate, day1.generatedAt].find(
       (value): value is string => typeof value === 'string' && !Number.isNaN(new Date(value).getTime()),
@@ -84,25 +226,39 @@ export function applyInitialArcResult(
       days: [day1],
       createdAt: seriesStartDate,
       seriesStartDate,
-      userContext: {
-        name: user?.name ?? '',
-        aboutMe: user?.aboutMe ?? '',
-        currentSituation: user?.currentSituation ?? '',
-        emotionalState: user?.emotionalState ?? '',
-      },
-      themeCategory: user?.selectedTheme,
-      devotionalType: user?.selectedType || 'personal',
-      studySubject: user?.selectedStudySubject,
+      ...readerContext,
       generationMode: 'progressive',
       seriesArc: result.arc,
       progressiveMemory: { fullDays: [], summaries: [], narrative: null },
     };
+    const previousCurrentId = useUnfoldStore.getState().currentDevotionalId;
     store.addDevotional(newDevotional);
+    // addDevotional makes the new series current. Beside a newer live series,
+    // such as the replaced one resumed elsewhere after the choice, the server
+    // writes that one, so the new series gives Today back. Without a server
+    // date the new series' start is this phone's guess, so it takes Today
+    // only when no other chosen, unfinished series is held here, current or
+    // not, and its guess ranks nothing.
+    const landedState = useUnfoldStore.getState();
+    heldFromToday = !serverAnchor && landedState.devotionals.some((d) => (
+      d.id !== devotionalId && !holdsNoChosenSeries(d) && !isSeriesComplete(d)
+    ));
+    const keepsPrevious = !isStrictActiveSeriesWinner(devotionalId, landedState.devotionals) || heldFromToday;
+    if (keepsPrevious) {
+      // The previous series keeps Today only while the server would pick it.
+      // Otherwise Today stays empty: another held series can carry a guessed
+      // start of its own, so this never moves Today to one.
+      const rivals = serverAnchor
+        ? landedState.devotionals
+        : landedState.devotionals.filter((d) => d.id !== devotionalId);
+      const keeps = previousCurrentId !== null && isStrictActiveSeriesWinner(previousCurrentId, rivals);
+      useUnfoldStore.setState({ currentDevotionalId: keeps ? previousCurrentId : null });
+    }
   }
 
   const intent = readAutoTrialIntent();
   if (intent && intent.devotionalId === devotionalId) {
-    settleLandedAutoTrialSeries(intent, devotionalId);
+    settleLandedAutoTrialSeries(intent, devotionalId, { mayTakeToday: !heldFromToday });
   }
 
   if (day1.scriptureReference) {
@@ -116,10 +272,16 @@ export function applyInitialArcResult(
     }]);
   }
 
-  // Generation succeeded — nothing is in flight any more.
+  // Generation succeeded — nothing is in flight any more. The new series and
+  // the replaced one's end reach disk before their recovery records go: the
+  // outbox already holds that end, and a crash before the store's delayed
+  // write would otherwise leave no new series and no way to land it again.
+  // Landing the same result twice is safe.
+  store.completeGenerationSession({ title: seriesTitle });
+  writeLandedSeriesToDisk();
+  if (replacedId) clearReplacedSeries();
   clearInflightGenerationJob();
   clearInitialGenerationRequestId();
-  store.completeGenerationSession({ title: seriesTitle });
 
   return { devotionalId, seriesTitle, day1 };
 }
@@ -140,6 +302,10 @@ export function settleInflightInitialArcWatch(
   if (!isSyncSessionCurrent(session)) return;
 
   const store = useUnfoldStore.getState();
+  const inflight = readInflightGenerationJob();
+  const answered = inflight?.jobId === jobId
+    ? requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId())
+    : null;
 
   if (outcome.kind === 'complete') {
     try {
@@ -148,6 +314,7 @@ export function settleInflightInitialArcWatch(
         user,
         devotionalLength: user?.devotionalLength ?? 7,
         session,
+        answersCurrentRequest: answered !== null && answered === readInitialGenerationRequestId(),
       });
       void logBugEvent('generation', 'server-generation-complete', {
         devotionalId: applied.devotionalId,
@@ -157,6 +324,15 @@ export function settleInflightInitialArcWatch(
       });
     } catch (err) {
       if (isGenerationSessionInvalidatedError(err) || !isSyncSessionCurrent(session)) {
+        return;
+      }
+      if (err instanceof DeletedSeriesResultError) {
+        // The reader deleted this series: its job is done, and nothing is left
+        // to watch or retry.
+        clearInflightGenerationJob();
+        if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
+        store.clearGenerationSession();
+        abandonAutoTrialIntentForDeletedSeries(outcome.result.devotionalId ?? '', Date.now());
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
@@ -178,7 +354,11 @@ export function settleInflightInitialArcWatch(
 
   if (!isSyncSessionCurrent(session)) return;
   logger.error(`[home] ${outcome.phase}:`, outcome.message);
+  // The server ruled on this job, and resubmitting the request it answered
+  // only returns the same job, so Today's Try again would loop on it. That
+  // request is retired with the job. A newer request stays.
   clearInflightGenerationJob();
+  if (answered && answered === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
   store.failGenerationSession(outcome.message);
   void logBugError('generation', new Error(outcome.message), { jobId, phase: outcome.phase });
 

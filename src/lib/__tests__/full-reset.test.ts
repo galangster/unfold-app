@@ -167,6 +167,9 @@ import {
   isLocalResetInProgress,
   resetSyncSessionFenceForTesting,
 } from '../sync-session-fence';
+import { USER_PROFILE_CONFLICT_KEY } from '../user-profile-sync';
+import { COPY_MEMORY_KEY_PREFIX, rememberCarriedCues, takeCompletionOrdinal } from '../copy-variation';
+import { DELETED_SERIES_KEY, rememberDeletedSeries } from '../deleted-series';
 import {
   mmkvStorage,
   rotateDeviceId,
@@ -275,11 +278,42 @@ describe('performFullLocalReset', () => {
     expect(FULL_RESET_MMKV_KEYS).not.toContain('unfold-trial-notification');
   });
 
+  it('forgets the series a new series would replace', () => {
+    expect(FULL_RESET_MMKV_KEYS).toContain('replaced-series-v1');
+  });
+
+  it('forgets the series deleted on this phone', () => {
+    expect(FULL_RESET_MMKV_KEYS).toContain('deleted-series-v1');
+  });
+
+  // The delete clocks are also held in memory. A delete after the reset must
+  // not write the clocks of the reset account back to storage.
+  it('drops the delete clocks held in memory, so a later delete stores only its own', async () => {
+    const oldAt = '2026-10-01T00:00:00.000Z';
+    const newAt = '2026-10-09T00:00:00.000Z';
+    rememberDeletedSeries('series-old', oldAt);
+    for (let index = 0; index < 100; index += 1) {
+      rememberDeletedSeries(`series-later-${index}`, newAt);
+    }
+    expect(mockStore.has(DELETED_SERIES_KEY)).toBe(true);
+
+    await performFullLocalReset();
+    expect(mockStore.has(DELETED_SERIES_KEY)).toBe(false);
+
+    rememberDeletedSeries('series-new', newAt);
+    expect(JSON.parse(mockStore.get(DELETED_SERIES_KEY) ?? 'null')).toEqual({ 'series-new': Date.parse(newAt) });
+  });
+
   it('D13 includes the auto-trial intent key and the completion marker', () => {
     expect(FULL_RESET_MMKV_KEYS).toContain('auto-trial-series-intent-v1');
     expect(FULL_RESET_MMKV_KEYS).toContain('onboarding-completed-reported-v1');
     expect(FULL_RESET_MMKV_KEYS).toContain('sound-effects-enabled');
     expect(FULL_RESET_MMKV_KEYS).toContain('success-cue-ledger');
+  });
+
+  it('forgets the profile snapshot the server refused as older', () => {
+    expect(USER_PROFILE_CONFLICT_KEY).toEqual(expect.any(String));
+    expect(FULL_RESET_MMKV_KEYS).toContain(USER_PROFILE_CONFLICT_KEY);
   });
 
   it('sweeps every rate-limit key by prefix through the live key list and leaves other keys', async () => {
@@ -294,6 +328,19 @@ describe('performFullLocalReset', () => {
     expect(mockStore.has('@unfold_rate_limits_companion')).toBe(false);
     expect(mockStore.has('@unfold_rate_limits_tts')).toBe(false);
     expect(mockStore.has('@unfold_rate_limits_some-future-endpoint')).toBe(false);
+    expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
+  });
+
+  it('forgets the copy memory: the completion order, each finished day’s order, and the check-in cues', async () => {
+    takeCompletionOrdinal(3, { devotionalId: 'series', dayNumber: 1 });
+    rememberCarriedCues('midday', {}, [{ dayIndex: 100, cue: 'Tap to check in.' }]);
+    const written = Array.from(mockStore.keys()).filter((key) => key.startsWith(COPY_MEMORY_KEY_PREFIX));
+    expect(written).toHaveLength(3);
+    mockStore.set('unfold-bible-meta-not-in-list', 'survivor');
+
+    await performFullLocalReset();
+
+    expect(Array.from(mockStore.keys()).filter((key) => key.startsWith(COPY_MEMORY_KEY_PREFIX))).toEqual([]);
     expect(mockStore.has('unfold-bible-meta-not-in-list')).toBe(true);
   });
 

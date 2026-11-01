@@ -390,9 +390,11 @@ export function analyzeLiveness(text, { simulator, registeredAt }) {
   }
   const rendered = tree.filter((node) => node.visible === true && node.role !== 'Application');
   const splashOnly = rendered.length === 0 || rendered.every(isSplashNode);
-  const hasRenderedId = rendered.some((node) => typeof node.id === 'string' && node.id && !isSplashNode(node));
-  if (splashOnly || !hasRenderedId) {
-    return fail('splash-only', 'observation is splash-only; post-boot rendered UI with an accessibility id is required');
+  const hasRenderedControl = rendered.some((node) => !isSplashNode(node) && (
+    (typeof node.id === 'string' && node.id) || isVisibleButton(node, application)
+  ));
+  if (splashOnly || !hasRenderedControl) {
+    return fail('splash-only', 'post-boot rendered UI needs an accessibility id or a visible enabled labeled button');
   }
   return {
     ok: true,
@@ -727,6 +729,20 @@ function existingFile(filePath) {
 
 function isSplashNode(node) {
   return SPLASH_RE.test(`${node?.label || ''} ${node?.id || ''}`);
+}
+
+function isVisibleButton(node, application) {
+  if (node.role !== 'Button' || node.enabled !== true
+    || typeof node.label !== 'string' || !node.label.trim()
+    || typeof node.ref !== 'string' || !node.ref.trim()) return false;
+  const frame = node.frame;
+  const appFrame = application.frame;
+  for (const rect of [frame, appFrame]) {
+    if (!rect || !['x', 'y', 'width', 'height'].every((key) => Number.isFinite(rect[key]))
+      || rect.width <= 0 || rect.height <= 0) return false;
+  }
+  return frame.x < appFrame.x + appFrame.width && frame.x + frame.width > appFrame.x
+    && frame.y < appFrame.y + appFrame.height && frame.y + frame.height > appFrame.y;
 }
 
 function realPath(pathValue) {

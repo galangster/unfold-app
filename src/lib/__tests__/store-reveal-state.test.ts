@@ -29,7 +29,9 @@ jest.mock('../bug-logger', () => ({
 }));
 
 // eslint-disable-next-line import/first -- store import must run after Jest module mocks are registered.
-import { useUnfoldStore, type Devotional, type DevotionalDay } from '../store';
+import { updateSyncedDevotionals, useUnfoldStore, type Devotional, type DevotionalDay } from '../store';
+// eslint-disable-next-line import/first -- imports the store, so it must also follow the mocks.
+import { applyPulledDevotionalContent } from '../devotional-pulled-content';
 
 const now = '2026-05-18T10:00:00.000Z';
 
@@ -99,6 +101,48 @@ describe('store reveal state', () => {
       isRead: false,
       isRevealed: true,
     });
+  });
+
+  // The act answer is local-only: the server row a read push changed comes
+  // back read, but without the answer. Today's focus and warm-resume pulls
+  // merge that row over the local day.
+  function readDayTwoWithActOutcome(outcome: 'done' | 'skipped') {
+    useUnfoldStore.getState().addDevotional(devotional());
+    useUnfoldStore.getState().markDayAsRead('devotional-1', 2, now);
+    useUnfoldStore.getState().setActOutcome('devotional-1', 2, outcome);
+  }
+
+  function storedDayTwo() {
+    return useUnfoldStore
+      .getState()
+      .devotionals.find((item) => item.id === 'devotional-1')
+      ?.days.find((item) => item.dayNumber === 2);
+  }
+
+  it('keeps the act answer when a pulled copy of a read day merges in', () => {
+    readDayTwoWithActOutcome('done');
+
+    useUnfoldStore.getState().updateDevotionalDays('devotional-1', [
+      day({ dayNumber: 2, isRead: true, readAt: now, isRevealed: true }),
+    ]);
+
+    expect(storedDayTwo()).toMatchObject({ isRead: true, readAt: now, actOutcome: 'done' });
+  });
+
+  it('keeps the act answer through the pull apply Today runs on focus and resume', () => {
+    readDayTwoWithActOutcome('skipped');
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: {
+        days: [day({ dayNumber: 2, isRead: true, readAt: now })],
+        timestamp: now,
+      },
+      updateDevotionalDays: useUnfoldStore.getState().updateDevotionalDays,
+      updateDevotionals: updateSyncedDevotionals,
+    });
+
+    expect(storedDayTwo()).toMatchObject({ isRead: true, actOutcome: 'skipped' });
   });
 
   it('marks completed days as revealed too', () => {

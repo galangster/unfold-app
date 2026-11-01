@@ -52,59 +52,6 @@ import {
   starFrame,
 } from '@/lib/evening-twinkle';
 
-// ─── Evening messages (sans-serif, single line) ──────────────────────────────
-const EVENING_MESSAGES = [
-  'God is near tonight.',
-  'His mercy is new every morning.',
-  'He watches while you rest.',
-  'Jesus carries what you cannot.',
-  'God\u2019s faithfulness outlasts the day.',
-  'He is working even now.',
-  'The Lord gives sleep\u00A0to\u00A0those\u00A0He\u00A0loves.',
-  'His peace has no expiration.',
-  'God holds tomorrow already.',
-  'Christ\u2019s grace covers tonight.',
-  'He is the same, yesterday and forever.',
-  'The Good Shepherd doesn\u2019t sleep.',
-  'His love is the last word tonight.',
-  'God finishes what He starts.',
-  'Rest in what He has done.',
-  'His presence fills the quiet.',
-  'God\u2019s promises don\u2019t expire overnight.',
-  'He who began a good work will complete it.',
-  'The Father never looks away.',
-  'His compassions never fail.',
-  'God\u2019s grace is wider than today.',
-  'He knit this day together for you.',
-  'Jesus intercedes while you sleep.',
-  'The Spirit prays what words cannot.',
-  'His arm is not too short to reach you.',
-  'God is writing a story through your life.',
-  'He is making all things new.',
-  'The cross already said everything.',
-  'His kingdom comes while the world sleeps.',
-  'God\u2019s love never had a beginning.',
-  'He calls you by name.',
-  'Christ is risen. That changes tonight.',
-  'The Word became flesh for nights like this.',
-  'His light shines in the darkness.',
-  'God\u2019s ear is turned toward you.',
-  'He is closer than your next breath.',
-  'The Father runs toward you, not away.',
-  'Jesus knows this exact feeling.',
-  'His hand holds what yours released.',
-  'God is sovereign over your sleep.',
-  'He chose you before the world began.',
-  'The Shepherd leads beside still waters.',
-  'His grace is sufficient. Even now.',
-  'God delights in you tonight.',
-  'He numbers your days and fills them.',
-];
-
-function pickRandom(arr: string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)]!;
-}
-
 // ─── Single twinkling star ───────────────────────────────────────────────────
 // A star owns no animation: it reads the shared sky clocks and derives its
 // fade-in and twinkle from them with its own stable random parameters.
@@ -191,7 +138,8 @@ function DarkExpansion({ bgColor, width, height }: { bgColor: string; width: num
 interface EveningCelebrationProps {
   visible: boolean;
   onDismiss: () => void;
-  message?: string;
+  /** Tonight's line, drawn by the caller (getEveningCelebrationMessage). */
+  message: string;
 }
 
 export function EveningCelebration({
@@ -211,12 +159,6 @@ export function EveningCelebration({
   const starColor = '#F5F0EB';
   const messageColor = 'rgba(245, 240, 235, 0.85)';
   const hintColor = 'rgba(245, 240, 235, 0.18)';
-
-  const subtitle = useMemo(() => {
-    if (message) return message;
-    return pickRandom(EVENING_MESSAGES);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, message]);
 
   // Generate stars fresh each time celebration shows. Positions are fractions
   // of the window, so a resize moves the sky without reshuffling it.
@@ -380,7 +322,7 @@ export function EveningCelebration({
           <View style={styles.textContainer}>
             <Animated.View style={textStyle}>
               <Text style={[styles.messageText, { color: messageColor }]}>
-                {subtitle}
+                {message}
               </Text>
             </Animated.View>
           </View>

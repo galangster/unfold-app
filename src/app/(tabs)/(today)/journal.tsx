@@ -50,12 +50,15 @@ import { useKeyboardFoldedPanes } from '@/hooks/useKeyboardFoldedPanes';
 import { adaptiveFrameStyle, PRIMARY_SAFE_AREA_EDGES, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { FacingPanes } from '@/components/ui/FacingPanes';
 import { JournalSourcePage } from '@/components/journal/JournalSourcePage';
+import { CrisisResourcesCard } from '@/components/journal/CrisisResourcesCard';
+import { crisisMentions, namesCrisis } from '@/lib/crisis-words';
 import { useTheme } from '@/lib/theme';
 import { flushUnfoldStorePersist, useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
-import { PERSONA_BRIEF } from '@/constants/persona';
+import { buildGoDeeperRequest } from '@/lib/go-deeper-prompt';
+import { copySeed } from '@/lib/copy-variation';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { authenticatedFetch } from '@/lib/device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
@@ -63,12 +66,14 @@ import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import {
   EMPTY_SOAP_RESPONSES,
+  SOAP_FIELDS,
   buildInitialQuestionResponses,
   diffSoapWrites,
   normalizeSoapResponses,
   resolveInitialJournalMode,
   resolveJournalCloseAction,
 } from '@/lib/journal-entry-state';
+import { rebaseJournalDraft } from '@/lib/journal-entry-merge';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   createAutosaveController,
@@ -79,6 +84,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { getReflectionTypography } from '@/lib/reflection-typography';
 import { resolveStackRoute, type TabGroup } from '@/lib/tab-stack-routes';
+import { HAIKU_REQUEST_MODEL } from '@/lib/ai-model';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string }[] = [
   {
@@ -187,6 +193,7 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   const updateQuestionResponse = useUnfoldStore((s) => s.updateQuestionResponse);
   const setDeeperQuestions = useUnfoldStore((s) => s.setDeeperQuestions);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
+  const activeDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const premiumPolicy = usePremiumAccessPolicy();
   const isPremium = premiumPolicy === 'granted';
@@ -283,6 +290,61 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
     }
   }, [existingEntry]);
 
+  // A sync pull can change this day's entry while the editor is open: a merge
+  // can move it to its canonical id, or fold another device's writing in under
+  // the same id. Every save addresses savedEntryIdRef and writes the editor's
+  // own copy. So the ref follows the store's entry for the day as soon as the
+  // store changes, before any pending autosave, and whatever the pull brought
+  // in is rebased into the editor's copy. An editor that opened before the day
+  // had an entry follows the first one that arrives, and its pending draft is
+  // rebased onto it as onto an empty entry: the save that follows would
+  // otherwise find that entry and drop the draft.
+  useEffect(() => useUnfoldStore.subscribe((state, previous) => {
+    const followedId = savedEntryIdRef.current;
+    const live = state.journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber);
+    if (!live) return;
+    if (live.id !== followedId) savedEntryIdRef.current = live.id;
+    const before = followedId
+      ? previous.journalEntries.find((e) => e.id === followedId)
+      : { ...live, content: '', soapResponses: undefined, questionResponses: [] };
+    if (!before || before === live) return;
+    // Answers save on every keystroke, so the editor's answers hold nothing the
+    // store lacks. They take each answer the store changed, edits or not.
+    const answersBefore = new Map((before.questionResponses ?? []).map((qr) => [qr.question, qr.response]));
+    const changedAnswers = (live.questionResponses ?? [])
+      .filter((qr) => qr.response !== (answersBefore.get(qr.question) ?? ''));
+    if (changedAnswers.length > 0) {
+      setQuestionResponses((current) => {
+        const next = new Map(current);
+        for (const qr of changedAnswers) {
+          const base = answersBefore.get(qr.question) ?? '';
+          next.set(qr.question, rebaseJournalDraft(base, qr.response, current.get(qr.question) ?? base));
+        }
+        return next;
+      });
+    }
+    // Unsaved edits were made over the entry as it stood before the pull, and
+    // the pull can bring in text merged from another device. The pending save
+    // would replace that text, so the draft is rebased onto the merged entry.
+    // With no edits pending, the resync effect loads the merged entry.
+    if (!hasChangesRef.current) return;
+    const content = rebaseJournalDraft(before.content ?? '', live.content ?? '', contentRef.current);
+    if (content !== contentRef.current) {
+      contentRef.current = content;
+      setContent(content);
+    }
+    const beforeSoap = normalizeSoapResponses(before.soapResponses) ?? EMPTY_SOAP_RESPONSES;
+    const liveSoap = normalizeSoapResponses(live.soapResponses) ?? EMPTY_SOAP_RESPONSES;
+    const soap = { ...soapValuesRef.current };
+    for (const field of SOAP_FIELDS) {
+      soap[field] = rebaseJournalDraft(beforeSoap[field] ?? '', liveSoap[field] ?? '', soap[field] ?? '');
+    }
+    if (SOAP_FIELDS.some((field) => soap[field] !== soapValuesRef.current[field])) {
+      soapValuesRef.current = soap;
+      setSoapValues(soap);
+    }
+  }), [devotionalId, dayNumber]);
+
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
   // Mirrors the draft so background/unmount flushes read the latest text
@@ -342,7 +404,10 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
   }, [focusQuestionIndex, currentDay?.reflectionQuestions]);
 
   useEffect(() => {
-    if (!devotionalId || Number.isNaN(dayNumber)) return;
+    // Today's resume card opens the series this pointer names, so only the
+    // current series may leave one. A reflection on a paused series from the
+    // library must not switch the active series (reading.tsx has the same rule).
+    if (!devotionalId || Number.isNaN(dayNumber) || devotionalId !== activeDevotionalId) return;
 
     setResumeContext({
       route: 'journal',
@@ -355,7 +420,7 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       // causes the home screen to auto-push to reading while the user is in
       // the journal, stealing focus when the Journal tab closes.
     });
-  }, [devotionalId, dayNumber, currentDevotional?.title, currentDay?.title, setResumeContext]);
+  }, [devotionalId, dayNumber, activeDevotionalId, currentDevotional?.title, currentDay?.title, setResumeContext]);
 
   useEffect(() => {
     if (focusQuestionIndex == null && activeMode === 'freewrite') {
@@ -733,38 +798,22 @@ export default function JournalScreen({ hostTab }: { hostTab?: TabGroup } = {}) 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      const systemPrompt = `${PERSONA_BRIEF}
-
-WHAT YOU'RE DOING: Generate exactly 3 follow-up reflection prompts based on someone's journal entry about their devotional.
-
-QUALITY:
-- Each prompt MUST reference something specific from their entry — never generic
-- Read their words: what emotion is underneath? What are they circling around but haven't named?
-
-STRUCTURE (vary across these 3 approaches):
-1. FEELING — explores the emotion beneath their words ("What does it feel like when..." / "Where do you feel that in your body?")
-2. LIFE — connects the devotional insight to a concrete moment in their daily life
-3. IMAGINATION — invites prayer or "what if" thinking ("If Jesus were sitting with you right now..." / "What would change if you believed this?")
-
-RULES:
-- 1-2 sentences each
-- Never assume you know their situation — ask, don't tell
-- Vary sentence structure and openings
-
-RESPOND WITH ONLY A JSON ARRAY OF EXACTLY 3 STRINGS. No other text, no markdown wrapping.`;
-
-      const userMessage = `Devotional: "${sanitizeForPrompt(currentDevotional?.title ?? 'Devotional', 200)}"
-Day: "${sanitizeForPrompt(currentDay?.title ?? `Day ${dayNumber}`, 200)}"
-Scripture: ${sanitizeForPrompt(currentDay?.scriptureReference ?? 'N/A', 200)}
-
-Their journal entry:
-"${sanitizeForPrompt(content, 2000)}"`;
+      // The request's three angles come from the bag, and the reader's recent
+      // prompts go along so the model does not write them again.
+      const { system: systemPrompt, userMessage } = buildGoDeeperRequest({
+        devotionalTitle: currentDevotional?.title ?? 'Devotional',
+        dayTitle: currentDay?.title ?? `Day ${dayNumber}`,
+        scriptureReference: currentDay?.scriptureReference ?? 'N/A',
+        entryText: content,
+        journalEntries,
+        seed: copySeed(),
+      });
 
       const response = await authenticatedFetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: HAIKU_REQUEST_MODEL,
           max_tokens: 400,
           temperature: 0.8,
           system: systemPrompt,
@@ -839,6 +888,18 @@ Their journal entry:
 
   // Prayer requests from existing entry
   const prayerRequests = existingEntry?.prayerRequests ?? [];
+
+  // Every field the reader writes in on this screen, checked for crisis words.
+  const crisis = useMemo(
+    () => crisisMentions([
+      content,
+      ...questionResponses.values(),
+      ...Object.values(soapValues),
+      newPrayerText,
+      ...(existingEntry?.prayerRequests ?? []).map((prayer) => prayer.text),
+    ].join('\n')),
+    [content, questionResponses, soapValues, newPrayerText, existingEntry?.prayerRequests],
+  );
 
   // The writing desk (DESIGN.md, Journal, write): writing from a day's reading
   // puts that day on a source page beside the draft, or above it in a tall
@@ -1225,6 +1286,8 @@ Their journal entry:
 
               </Animated.View>
             )}
+
+            {namesCrisis(crisis) && <CrisisResourcesCard abuse={crisis.abuse} />}
 
             {/* ===== PRAYER REQUESTS SECTION ===== */}
             <Animated.View

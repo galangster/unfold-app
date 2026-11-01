@@ -60,6 +60,9 @@ export const useUIState = create<{
   bumpNotificationPermissionEpoch: () => void;
   trialNoticeEpoch: number;
   bumpTrialNoticeEpoch: () => void;
+  /** Bumped on every act reminder write result. The result itself lives in MMKV (`act-reminder-write.ts`). */
+  actReminderWriteEpoch: number;
+  bumpActReminderWriteEpoch: () => void;
   qaCaptureMode: boolean;
   setQaCaptureMode: (value: boolean) => void;
   autoTrialRevealGuardKey: string | null;
@@ -95,6 +98,8 @@ export const useUIState = create<{
   bumpTrialNoticeEpoch: () => set((state) => ({
     trialNoticeEpoch: state.trialNoticeEpoch + 1,
   })),
+  actReminderWriteEpoch: 0,
+  bumpActReminderWriteEpoch: () => set((state) => ({ actReminderWriteEpoch: state.actReminderWriteEpoch + 1 })),
   qaCaptureMode: false,
   setQaCaptureMode: (value) => set({ qaCaptureMode: value }),
   autoTrialRevealGuardKey: null,

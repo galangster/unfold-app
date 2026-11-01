@@ -5,9 +5,9 @@ import {
   chapterStatusLabel,
   isSeriesComplete,
   listDaysInOrder,
-  listSeriesActs,
   resolveBookOpenDayNumber,
 } from '../book-of-seasons';
+import { listSeriesActs } from '../series-weeks';
 import type { Devotional, DevotionalDay } from '../store';
 
 const now = new Date(2026, 4, 10, 12, 0, 0);

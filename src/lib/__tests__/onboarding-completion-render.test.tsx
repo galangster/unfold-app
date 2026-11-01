@@ -9,6 +9,7 @@ const renderer = require('react-test-renderer');
 const { act } = renderer;
 
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockGetPermissionsAsync = jest.fn();
 const mockRequestPermissionsAsync = jest.fn();
 const mockRegisterPushToken = jest.fn();
@@ -58,7 +59,13 @@ jest.mock('react-native-keyboard-controller', () => {
 jest.mock('@react-native-community/datetimepicker', () => ({ __esModule: true, default: 'DateTimePicker' }));
 jest.mock('expo-router', () => ({
   useIsFocused: () => true,
-  useRouter: () => ({ canGoBack: () => true, replace: (...args: unknown[]) => mockReplace(...args), back: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({
+    canGoBack: () => true,
+    replace: (...args: unknown[]) => mockReplace(...args),
+    dismissTo: (...args: unknown[]) => mockDismissTo(...args),
+    back: jest.fn(),
+    push: jest.fn(),
+  }),
   useSegments: () => [],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }) }),
   useLocalSearchParams: () => mockOnboardingSearchParams,
@@ -151,6 +158,9 @@ jest.mock('@/lib/remote-config', () => ({
   refreshRemoteConfig: jest.fn(async () => undefined),
   awaitRemoteConfigSettled: jest.fn(async () => ({ status: 'ok' })),
   readAutoTrialSwitchSnapshot: () => ({ enabled: true, maxTrialDays: 7, fetchedAtMs: 1, reason: 'ok' }),
+  readChapteredSeriesEnabled: () => false,
+  hasRemoteConfigSettled: () => true,
+  subscribeRemoteConfig: () => () => undefined,
 }));
 jest.mock('@/lib/device-timezone', () => ({ getDeviceTimezone: () => 'America/Chicago' }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
@@ -291,6 +301,7 @@ describe('new series from Today', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockReplace.mockClear();
+    mockDismissTo.mockClear();
     mockTypewriterFinishes = true;
     mockGenerateDiagnosticQuestions.mockReset().mockResolvedValue(null);
     mockStoreState.lifeContextDraft = SHARE_AN_UPDATE_DRAFT;
@@ -346,6 +357,33 @@ describe('new series from Today', () => {
       );
     });
   }
+
+  function selectedLengthCards(): string[] {
+    // The touchable and its host view both carry the props: count each label once.
+    return [...new Set<string>(tree.root.findAll(
+      (node: { props?: { accessibilityRole?: string; accessibilityState?: { selected?: boolean }; onPress?: unknown } }) =>
+        node.props?.accessibilityRole === 'radio'
+        && node.props?.accessibilityState?.selected === true
+        && typeof node.props?.onPress === 'function',
+    ).map((node: { props: { accessibilityLabel: string } }) => node.props.accessibilityLabel))];
+  }
+
+  it('the length step starts on the reader\'s last chosen duration', async () => {
+    mockStoreState.user = { ...mockStoreState.user, readingDuration: 30 };
+    await openAt('readingDuration');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(selectedLengthCards()).toEqual(['30 minutes']);
+  });
+
+  it('the length step starts on 15 minutes when the reader never chose a duration', async () => {
+    await openAt('readingDuration');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(selectedLengthCards()).toEqual(['15 minutes']);
+  });
 
   // Presses, then lets step transitions (up to 350 ms) and completion settle.
   async function tap(target: { label?: string; text?: string }) {
@@ -452,6 +490,18 @@ describe('new series from Today', () => {
       currentSituation: PREVIOUS_SITUATION,
     }));
     expect(mockStoreState.lifeContextDraft).toBe(SHARE_AN_UPDATE_DRAFT);
+  });
+
+  it('backing out of the first step keeps the series it would have replaced', async () => {
+    // Set by "Start a new series?"; the series ends only when the new one lands.
+    // Nothing else is pending: earlier tests here leave a first-series request.
+    mockMmkvStore.clear();
+    mockMmkvStore.set('replaced-series-v1', 'series-reading');
+    await openAt('themeType');
+    await tap({ label: 'Go back' });
+
+    expect(mockDismissTo).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(mockMmkvStore.has('replaced-series-v1')).toBe(false);
   });
 
   it('does not inherit the previous series direction', async () => {

@@ -7,6 +7,7 @@ import { CaretLeftIcon, CaretRightIcon } from '@/components/icons';
 import { FontFamily } from '@/constants/fonts';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { useCalendarNow } from '@/hooks/useCalendarNow';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useTheme } from '@/lib/theme';
@@ -49,6 +50,7 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore(s => s.devotionals);
   const currentDevotionalId = useUnfoldStore(s => s.currentDevotionalId);
+  const premiumPolicy = usePremiumAccessPolicy();
   const now = useCalendarNow();
   const id = paramId ?? (chrome === 'tabRoot' ? currentDevotionalId : undefined);
   const devotional = useMemo(() => devotionals.find(d => d.id === id) ?? null, [devotionals, id]);
@@ -99,14 +101,14 @@ export function SeriesArcScreen({ hostTab, chrome = 'stack' }: SeriesArcScreenPr
         {chrome !== 'tabRoot' && <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} accessibilityRole="button" accessibilityLabel="Close book" style={styles.backButton}><CaretLeftIcon size={22} color={colors.textMuted} /></TouchableOpacity>
           <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>Your library</Text>
-          <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} days completed` : `${progress.read} of ${progress.total} completed`}</Text>
+          <Text style={{ marginLeft: 'auto', fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>{progress.complete ? `${progress.total} ${progress.total === 1 ? 'day' : 'days'} completed` : `${progress.read} of ${progress.total} completed`}</Text>
         </View>}
         <ScrollView testID="series-detail-scroll" showsVerticalScrollIndicator={false} onContentSizeChange={() => markShelfContentsReady(shelfOpening)}
           contentContainerStyle={{ paddingHorizontal: spread ? 0 : 24, paddingTop: chrome === 'tabRoot' ? 24 : 18, paddingBottom: 120 }}>
           {chrome !== 'tabRoot' && <View style={[{ borderTopWidth: 1, borderColor: cover.gold + '66', paddingTop: 18, marginBottom: 14 }, edgeStyle]}>
             {dateLabel ? <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>Begun {dateLabel}</Text> : null}
           </View>}
-          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} seriesPaused={isPausedSeries(devotional, currentDevotionalId)} showAllReadings={chrome !== 'tabRoot'} spread={bookSpread} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
+          <BookOfSeasonsView key={`book-of-seasons-${layout.fontScale}`} devotional={devotional} seriesPaused={isPausedSeries(devotional, currentDevotionalId)} premiumPolicy={premiumPolicy} showAllReadings={chrome !== 'tabRoot'} spread={bookSpread} now={now} colors={colors} isDark={isDark} onOpenDay={handleDayPress}
             headerAccessory={chrome === 'tabRoot' ? <ProfileEntryButton testID="study-profile-button" /> : undefined} />
           {chrome === 'tabRoot' ? <PastSeriesLink key={`book-archive-${layout.fontScale}`} onPress={openPastSeries} style={archiveStyle} /> : <View style={[{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: cover.gold + '66', marginTop: 24, paddingTop: 20, alignItems: 'center' }, edgeStyle]}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 18, color: colors.textMuted }}>Unfold</Text>

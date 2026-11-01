@@ -10,6 +10,16 @@ import { Alert } from 'react-native';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
+// A failed expectation skips the unmount at the end of its test. The reader
+// then stays subscribed to the store and its pending work fails the tests
+// after it, so afterEach unmounts every reader a test created.
+const mountedReaders = new Set<{ unmount: () => void }>();
+const createReader = renderer.create;
+renderer.create = (...args: unknown[]) => {
+  const tree = createReader(...args);
+  mountedReaders.add(tree);
+  return tree;
+};
 
 const DEVOTIONAL_ID = 'devo-reader-cancel';
 const SERIES_TITLE = 'Still Waters';
@@ -59,7 +69,7 @@ const mockPanGesture = {
   onEnd: null as null | ((event: { translationX: number }, success: boolean) => void),
   onFinalize: null as null | ((event: { translationX: number }, success: boolean) => void),
 };
-const routeParams: { devotionalId: string; dayNumber?: string; readOnly?: string } = {
+const routeParams: { devotionalId: string; dayNumber?: string; dayRequest?: string; readOnly?: string } = {
   devotionalId: DEVOTIONAL_ID,
   dayNumber: '3',
 };
@@ -568,6 +578,14 @@ function emptyPull() {
   };
 }
 
+/** Series lifecycle writes the reader posted, in order. */
+function postedLifecycles() {
+  return (globalThis.fetch as jest.Mock).mock.calls
+    .flatMap((call) => JSON.parse(call[1].body).changes as { table: string; id: string; data: Record<string, unknown> }[])
+    .filter((change) => change.table === 'devotionals' && 'archivedStateAt' in change.data)
+    .map((change) => ({ id: change.id, archivedAt: change.data.archivedAt, archivedStateAt: change.data.archivedStateAt }));
+}
+
 async function flushEffects(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -634,6 +652,7 @@ describe('reader swipe cancellation', () => {
     jest.requireMock('../api-config').getAuthHeaders.mockReset().mockResolvedValue({ 'Content-Type': 'application/json' });
     routeParams.devotionalId = DEVOTIONAL_ID;
     routeParams.dayNumber = '3';
+    delete routeParams.dayRequest;
     delete routeParams.readOnly;
     mockFocused = true;
     mockPanGesture.enabledValues.length = 0;
@@ -650,7 +669,9 @@ describe('reader swipe cancellation', () => {
     mockPullDevotionalContent.mockImplementation(async () => ({ ...emptyPull(), devotional: mockAcceptedResume }));
     globalThis.fetch = jest.fn(async (_url, init) => {
       const { changes } = JSON.parse(init!.body as string);
-      const resumed = changes.find((change: { table: string }) => change.table === 'devotionals');
+      // A verified activation also sends the pause of the previous series.
+      const resumed = changes.find((change: { table: string; data: { archivedAt?: unknown } }) => (
+        change.table === 'devotionals' && change.data.archivedAt === null));
       if (resumed) mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
       return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
         table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
@@ -665,6 +686,8 @@ describe('reader swipe cancellation', () => {
   });
 
   afterEach(() => {
+    for (const tree of mountedReaders) act(() => tree.unmount());
+    mountedReaders.clear();
     jest.useRealTimers();
     jest.restoreAllMocks();
     resetReadBudgetForTests();
@@ -688,6 +711,27 @@ describe('reader swipe cancellation', () => {
     });
     return tree!;
   }
+
+  it('opens the day the day menu picks again after a swipe moved away from it', async () => {
+    seedReader();
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+    });
+    const dayShown = (day: number) => tree!.root.findAllByProps({ accessibilityLabel: `Day ${day} of 7` }).length > 0;
+    expect(dayShown(3)).toBe(true);
+
+    act(() => { mockPanGesture.onEnd?.({ translationX: 100 }, true); });
+    expect(dayShown(2)).toBe(true);
+
+    // The menu picks Day 3, which the route already names: only the request is new.
+    routeParams.dayRequest = '1';
+    await act(async () => {
+      tree!.update(<ReadingScreen />);
+    });
+    expect(dayShown(3)).toBe(true);
+    expect(dayShown(2)).toBe(false);
+  });
 
   it('places an open selection bar again after a scroll the reader ran itself, not after a fling', async () => {
     const tree = await renderWithDayFour();
@@ -1255,11 +1299,14 @@ describe('reader swipe cancellation', () => {
     });
     globalThis.fetch = jest.fn(async (_url, init) => {
       const { changes } = JSON.parse(init!.body as string);
-      requestOrder.push('unarchive push accepted');
-      const resumed = changes.find((change: { table: string }) => change.table === 'devotionals');
-      mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
-      serverArchived = false;
-      if (Date.parse(resumed.data.archivedStateAt) > Date.parse(beforeActive.createdAt)) serverActive = DEVOTIONAL_ID;
+      const resumed = changes.find((change: { table: string; data: { archivedAt?: unknown } }) => (
+        change.table === 'devotionals' && change.data.archivedAt === null));
+      requestOrder.push(resumed ? 'unarchive push accepted' : 'pause push accepted');
+      if (resumed) {
+        mockAcceptedResume = { id: resumed.id, archivedAt: resumed.data.archivedAt, archivedStateAt: resumed.data.archivedStateAt };
+        serverArchived = false;
+        if (Date.parse(resumed.data.archivedStateAt) > Date.parse(beforeActive.createdAt)) serverActive = DEVOTIONAL_ID;
+      }
       return { ok: true, json: async () => ({ results: changes.map((change: { table: string; id: string }) => ({
         table: change.table, id: change.id, status: 'accepted', serverUpdatedAt: new Date().toISOString(),
       })) }) } as Response;
@@ -1295,8 +1342,23 @@ describe('reader swipe cancellation', () => {
     expect(after.seriesStartDate).toBe(before.seriesStartDate);
     expect(after.days.find((day) => day.dayNumber === 1)).toEqual(before.days[0]);
     if (archived) expect(after.archivedAt).toBeNull();
-    expect(requestOrder).toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
-    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual(beforeActive);
+    expect(requestOrder.filter((step) => step !== 'pause push accepted'))
+      .toEqual(['unarchive push accepted', 'resume lifecycle readback', 'generation']);
+    // The dialog said the active series "will be paused": it is archived on
+    // the resume clock with its progress and content clock kept, so the
+    // server stops treating it as a live candidate.
+    const resumeClock = mockAcceptedResume!.archivedStateAt;
+    expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)).toEqual({
+      ...beforeActive, archivedAt: resumeClock, archivedStateAt: resumeClock,
+    });
+    // The pause is sent right after the verified activation. Left for the
+    // next launch, a second device would keep the paused series until then.
+    expect(requestOrder.indexOf('pause push accepted')).toBeGreaterThan(requestOrder.indexOf('resume lifecycle readback'));
+    expect(postedLifecycles()).toEqual([
+      { id: DEVOTIONAL_ID, archivedAt: null, archivedStateAt: resumeClock },
+      { id: ACTIVE_DEVOTIONAL_ID, archivedAt: resumeClock, archivedStateAt: resumeClock },
+    ]);
+    expect(peekSyncOutbox().filter((change) => change.id === ACTIVE_DEVOTIONAL_ID)).toEqual([]);
     expect(mockWebViewProps.current?.day?.bodyText).toBe('Resumed Day 2 content.');
     expect(useUnfoldStore.getState().currentDevotionalId).toBe(DEVOTIONAL_ID);
     act(() => tree!.unmount());
@@ -1490,7 +1552,12 @@ describe('reader swipe cancellation', () => {
     expect(after.days).toEqual(before.days);
     expect(after.seriesStartDate).toBe(before.seriesStartDate);
     await act(async () => { releaseAuth({ 'Content-Type': 'application/json' }); await flushEffects(); });
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    // One resume, then the pause of the previous series on its clock. The
+    // late credentials post nothing.
+    expect(postedLifecycles()).toEqual([
+      { id: DEVOTIONAL_ID, archivedAt: null, archivedStateAt: after.archivedStateAt },
+      { id: ACTIVE_DEVOTIONAL_ID, archivedAt: after.archivedStateAt, archivedStateAt: after.archivedStateAt },
+    ]);
     expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
     expect(useUnfoldStore.getState().devotionals.find((series) => series.id === DEVOTIONAL_ID)!.archivedStateAt).toBe(after.archivedStateAt);
     act(() => tree!.unmount());
@@ -1615,8 +1682,13 @@ describe('reader swipe cancellation', () => {
       expect(after.title).toBe('Updated while waiting');
       expect(after.days).toEqual(before.find((series) => series.id === DEVOTIONAL_ID)!.days);
       expect(after.seriesStartDate).toBe(before.find((series) => series.id === DEVOTIONAL_ID)!.seriesStartDate);
+      // Only a verified activation pauses the previous series, on the resume clock.
+      const activeBefore = before.find((series) => series.id === ACTIVE_DEVOTIONAL_ID)!;
+      const resumeClock = changes[0].data.archivedStateAt as string;
       expect(useUnfoldStore.getState().devotionals.find((series) => series.id === ACTIVE_DEVOTIONAL_ID))
-        .toEqual(before.find((series) => series.id === ACTIVE_DEVOTIONAL_ID));
+        .toEqual(outcome === 'accepted'
+          ? { ...activeBefore, archivedAt: resumeClock, archivedStateAt: resumeClock }
+          : activeBefore);
       if (outcome === 'accepted') {
         expect(after.archivedStateAt).toBe(changes[0].data.archivedStateAt);
         expect(after.archivedAt).toBeNull();
@@ -1997,5 +2069,102 @@ describe('reader swipe cancellation', () => {
       await flushEffects();
     });
     act(() => tree!.unmount());
+  });
+
+  // What the server holds for a series this device lacks: Day 1.
+  function pulledMissingSeries(devotionalId: string) {
+    const startedAt = '2026-09-14T17:00:00.000Z';
+    return {
+      devotional: {
+        id: devotionalId,
+        title: 'A series from the server',
+        totalDays: 7,
+        currentDay: 1,
+        createdAt: startedAt,
+        seriesStartDate: startedAt,
+        updatedAt: startedAt,
+        generationMode: 'progressive' as const,
+      },
+      days: [makeDay(1, { id: canonicalGeneratedDayId(devotionalId, 1), devotionalId, isRead: false })],
+      timestamp: TYPING_AT,
+    };
+  }
+
+  async function renderMissingSeries(devotionalId: string) {
+    seedReader();
+    useUnfoldStore.setState((state) => ({ currentDevotionalId: null, devotionals: state.devotionals }));
+    routeParams.devotionalId = devotionalId;
+    routeParams.dayNumber = '1';
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen />);
+      await flushEffects();
+    });
+    return tree!;
+  }
+
+  it('offers Try again after a failed series pull, and says the series is missing only once a pull finds nothing', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(new Error('Network request failed'));
+    const tree = await renderMissingSeries('missing-offline');
+
+    let screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series couldn’t load.');
+    expect(screenText).toContain('Check your connection and try again.');
+    expect(screenText).not.toContain('This series isn’t on the device.');
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    let resolveRetry: ((value: ReturnType<typeof emptyPull>) => void) | undefined;
+    mockPullDevotionalContent.mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve; }));
+    await act(async () => {
+      (tree.root.findByProps({ accessibilityLabel: 'Try again' }).props.onPress as () => void)();
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-offline');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' }).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveRetry?.(emptyPull());
+      await flushEffects();
+    });
+    screenText = JSON.stringify(tree.toJSON());
+    expect(screenText).toContain('This series isn’t on the device.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('asks again after a failed pull when the reader comes back, not while it stays open, and shows what it brings', async () => {
+    mockPullDevotionalContent.mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }));
+    const tree = await renderMissingSeries('missing-5xx');
+    expect(JSON.stringify(tree.toJSON())).toContain('This series couldn’t load.');
+
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = false;
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(1);
+
+    mockFocused = true;
+    mockPullDevotionalContent.mockResolvedValueOnce(pulledMissingSeries('missing-5xx'));
+    await act(async () => {
+      tree.update(<ReadingScreen />);
+      await flushEffects();
+    });
+    expect(mockPullDevotionalContent).toHaveBeenCalledTimes(2);
+    expect(mockPullDevotionalContent.mock.calls[1][0]).toBe('missing-5xx');
+
+    // The retried pull brings the series: its reading replaces the error.
+    expect(tree.root.findAllByProps({ testID: 'devotional-reader-screen' }).length).toBeGreaterThan(0);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('This series couldn’t load.');
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Try again' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Loading reading' })).toHaveLength(0);
+    act(() => tree.unmount());
   });
 });

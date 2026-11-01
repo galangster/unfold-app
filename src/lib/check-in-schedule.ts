@@ -38,9 +38,11 @@
  * ## Sizing the horizon
  *
  * iOS keeps only the 64 soonest pending local notifications per app and
- * silently drops the rest. Two slots across 14 days is at most 28, alongside
- * the daily reminder, one act reminder and one trial notice — comfortably
- * inside the cap with room for both slots to grow.
+ * silently drops the rest. Two slots across 14 days is at most 28. The
+ * morning reminder adds at most 14 more (DAILY_REMINDER_HORIZON_DAYS in
+ * daily-reminder-content.ts), then one act reminder and one trial notice:
+ * under 50, inside the cap. `daily-reminder-schedule.test.ts` totals the
+ * worst case.
  *
  * One consequence of dated occurrences: they are absolute instants, so a
  * reader who changes timezone keeps the old local times until the schedule is
@@ -48,7 +50,8 @@
  * never drifted. `useCheckInNotifications` carries the device timezone in its
  * fingerprint for exactly this reason — without it the foreground reconcile
  * hits its own skip gate (same fingerprint, same wall-clock day) and never
- * rewrites.
+ * rewrites. The morning reminder's horizon has the same exposure and the
+ * same guard (`withDeviceTimezone` in daily-reminder-sync.ts).
  *
  * This module is pure: no expo, no store, no clock of its own. Everything it
  * needs arrives as an argument so the whole schedule is testable directly.
@@ -85,6 +88,8 @@ export interface BuildCheckInScheduleArgs {
   fallback: { hour: number; minute: number };
   /** Local "YYYY-MM-DD" the trial flow asked to leave empty, if any. */
   skipLocalDate?: string | null;
+  /** An instant another notification holds. The occurrence at exactly that moment is left out. */
+  skipAt?: Date | null;
   now: Date;
   horizonDays?: number;
 }
@@ -105,6 +110,7 @@ export function buildCheckInSchedule({
   byDay,
   fallback,
   skipLocalDate,
+  skipAt,
   now,
   horizonDays = PRE_ROLL_DAYS,
 }: BuildCheckInScheduleArgs): CheckInOccurrence[] {
@@ -125,6 +131,7 @@ export function buildCheckInSchedule({
     const fireAt = new Date(day);
     fireAt.setHours(hour, minute, 0, 0);
     if (fireAt.getTime() <= now.getTime()) continue;
+    if (skipAt && fireAt.getTime() === skipAt.getTime()) continue;
 
     occurrences.push({
       id: `${idBase}-${occurrences.length}`,

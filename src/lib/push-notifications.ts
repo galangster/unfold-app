@@ -30,10 +30,12 @@ import {
   scheduleRemindLater,
 } from '@/lib/notifications';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { markActOutcome } from '@/lib/act-outcome';
 import {
   buildNotificationPreferenceRequestBody,
   buildPushRegistrationRequestBody,
   createNotificationNavigationCoordinator,
+  notificationResponseKey,
   shouldHydrateNotificationResponse,
 } from '@/lib/push-notification-helpers';
 import {
@@ -90,12 +92,6 @@ function isSamePushRegistrationOwner(
 export function resetPushRegistrationSession(): void {
   registeredOwner = null;
   inFlightRegistration = null;
-}
-
-function getNotificationResponseKey(
-  response: Notifications.NotificationResponse | null | undefined,
-): string | undefined {
-  return response?.notification?.request?.identifier;
 }
 
 async function hydrateLastNotificationResponse(): Promise<void> {
@@ -354,7 +350,7 @@ function handleNotificationResponse(
   if (handleNotificationAction(response)) return false;
   logger.log(`[push] Notification tapped (${start}), data:`, data);
   logNotificationOpened(response, start);
-  return notificationNavigationCoordinator.queueFromData(data, getNotificationResponseKey(response));
+  return notificationNavigationCoordinator.queueFromData(data, notificationResponseKey(response));
 }
 
 function notificationTypeOf(response: Notifications.NotificationResponse): string {
@@ -397,9 +393,7 @@ function handleNotificationAction(response: Notifications.NotificationResponse):
       const data = content.data as { devotionalId?: unknown; dayNumber?: unknown } | null;
       const devotionalId = typeof data?.devotionalId === 'string' ? data.devotionalId : null;
       const dayNumber = Number(data?.dayNumber);
-      if (devotionalId && Number.isInteger(dayNumber)) {
-        useUnfoldStore.getState().setActOutcome(devotionalId, dayNumber, 'done');
-      }
+      if (devotionalId && Number.isInteger(dayNumber)) markActOutcome(devotionalId, dayNumber, 'done');
       logEvent('act_outcome', { outcome: 'done', source: 'notification_action' });
       return true;
     }

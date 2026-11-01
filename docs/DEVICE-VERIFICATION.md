@@ -2,11 +2,20 @@
 
 How to build, run, and verify this app on the iOS Simulator using **FlowDeck**.
 
+Owner clarification, 2026-10-19: agent “device QA” means virtual-device QA.
+Use FlowDeck with iPhone and iPad simulators. Never use iPhone Mirroring or
+Nick's physical phone. Exercise supported rotation, in-app text sizes and
+system accessibility scaling. Record hardware-only features as not covered.
+
 The simulator is the only real visual verification for Unfold. The web target
 cannot render the app — Rive, Skia, `react-native-webview`, and the native Swift
 editor all lack web implementations, and Home white-screens on the Rive import.
 CI covers typecheck, lint, unit tests, and e2e selector integrity; everything
 visual or interactive has to happen here.
+
+Before you submit a build for App Review, run the release smoke in
+[RELEASE-SMOKE.md](RELEASE-SMOKE.md). Every simulator run also audits the
+design of what it visits ([§8](#design-audit-on-every-simulator-run)).
 
 ---
 
@@ -159,7 +168,7 @@ Prefer `--by-id` over label matching — copy changes far more often than testID
 When you need a new hook, add a `testID` in the component rather than reaching
 for a text match.
 
-### Four things that will otherwise cost you an hour
+### Things that will otherwise cost you an hour
 
 - **Taps above roughly `y=150` are swallowed by sticky headers.** A row reported
   at `y=118` sits *under* the Settings header and the tap does nothing — but the
@@ -180,6 +189,34 @@ for a text match.
   limitation, **not** a dead selector — Maestro reads the native view hierarchy
   and sees them. Never "fix" a Maestro flow because FlowDeck can't find a
   container; you would be breaking a working test.
+- **UI commands wait for the app to go idle.** An endless animation, such as
+  the companion avatar, the Today rays or the onboarding embers, can hang
+  `tap`, `screen` and `batch`. Stop a command that hangs for 60 s. Capture the
+  screen with `flowdeck simulator frames`. Ask Nick before you drive that
+  screen with another tool.
+- **A label `tap` reaches only elements marked as buttons.** The founder
+  note's "Continue" and "Open your devotional" ignore it. Tap the centre of the
+  element's frame with `--point x,y`.
+- **`scroll --until "<label>"` reports Found for an element still off-screen.**
+  Use `swipe up`. Then read the screen again.
+- **Taps inside a React Native `Modal` need `--duration 0.05`.** The default
+  zero-length tap does nothing there.
+- **The first `open-url` after a launch is dropped.** Send it two times. When
+  iOS asks "Open in “Unfold”?", tap Open. It can need two taps.
+- **Tap a multi-line field before you type into it.** `type` can also drop the
+  text after a space. Type a short probe first. Check the probe. Then type the
+  rest.
+- **`flowdeck stop` can need a force kill, and it leaves `flowdeck logs` and
+  `run --log` streams running.** Stop those streams by hand. After a stop,
+  start a new UI session or use `screen --json`, because the old session's
+  captures go stale.
+- **The Lock Screen widget editor locks FlowDeck out.** `screen`, `tap` and
+  `swipe` wait 45 s for an unlock, then fail. `simulator frames` still
+  captures. A long press works as `tap --point x,y --duration 2.2`. To leave
+  the editor, press `simulator button lock` two times, then
+  `button swipe-home`.
+- **`frames` and `record` generate their own file names in `--output`.**
+  Rename the files after each capture.
 
 ## 5. Letting an agent drive it
 
@@ -265,6 +302,26 @@ for approval rather than declaring it fixed:
 
 Cover the cross-cutting matrix in §7 for anything visual: dark + light, Reduce
 Motion on + off, and a non-gold accent.
+
+### Design audit on every simulator run
+
+Nick's standing rule, 2026-10-08: whenever an agent drives the app on a
+simulator, for any reason, it also audits the design of everything it visits.
+A long findings list is the expected result. A missed issue is the failure.
+
+1. Audit each screen and transition for information architecture, UI and UX,
+   flow, copy and motion. Do this beside the check you came to run.
+2. Load `audit-ui` and `apple-hig`. Load `debug-animation` for motion. Add any
+   other design skill that fits the screen.
+3. Write each finding as: screen · severity (blocker, high, medium, low) ·
+   what is wrong · a BEFORE capture · two or three options · your pick.
+4. Capture motion as video with `flowdeck ui simulator record`. Use
+   `flowdeck simulator frames` for a burst of stills.
+5. Before you change anything visual, show Nick a BEFORE capture and an AFTER
+   for each option. An AFTER can be a mock, a prototype route or a throwaway
+   worktree build. For motion, show BEFORE and AFTER recordings.
+6. Change the app only after Nick picks an option. Then show the final BEFORE
+   and AFTER side by side, as above.
 
 ## 9. Reporting bugs
 
@@ -450,3 +507,45 @@ flowdeck simulator content-size set large -S "<QA simulator>" --json
 Retain the source hash, viewport, content size, theme, build identity, fixture scope, and proof paths.
 Run the existing typecheck, lint, and Jest gates after the final changes.
 A compatible Debug binary with Metro proves local native layout. It does not prove a release build or physical installation.
+
+## Bible reader native text regression
+
+A complete accessibility label does not prove that scripture is visible.
+Fabric can report a 144-point paragraph as 143.999878 points. TextKit then
+merges the final line into the preceding line's glyph range and clips it.
+The Bible paragraph corrects its measured host height. It resets that
+measurement when width, typography, chapter, translation or inline notes change.
+
+Use the full app with an isolated fictional profile and the established local
+stub backend. Start Metro offline. Keep the stub and Metro in owned foreground
+processes, retain their logs outside the checkout, and stop them after QA.
+Use a dedicated named simulator. Do not run a production release smoke for this
+regression. The existing public offline Bible database is a suitable fixture.
+
+For machine assertions, temporarily instrument the actual reader before launch:
+
+```sh
+node scripts/qa/bible-reader-layout.mjs instrument 'src/app/(tabs)/(bible)/reader.tsx' /tmp/bible-reader-probe.json
+node scripts/qa/bible-reader-layout.mjs check /tmp/metro-case.log native 21
+node scripts/qa/bible-reader-layout.mjs restore 'src/app/(tabs)/(bible)/reader.tsx' /tmp/bible-reader-probe.json
+node --test scripts/__tests__/bible-reader-layout.test.mjs
+```
+
+The snapshot must be new and outside the checkout. Restoration refuses to
+overwrite later edits. Keep instrumentation out of the production diff. It
+records only numeric geometry and verse numbers. Each case needs a fresh log
+or a unique fixture tag (`globalThis.__bibleProbeTag`), set before navigation.
+Wait for the chapter to load and layout to settle before checking. Require all
+21 verses for Revelation 19 and all 176 verses for Psalm 119. An incomplete
+probe is a failure. The observer checks line count against the native height
+and checks every line's bounds. Its tests include the captured native failure.
+
+Run the full-reader matrix on small and large iPhone simulators and an iPad
+simulator. Include default and maximum in-app sizes, maximum system text size,
+live font changes, selection/highlight overlays and note markers. Verify iPad
+portrait and landscape. Current iPhone configuration is portrait-locked; do
+not describe an attempted rotation as landscape coverage. Capture and inspect
+pixels at Revelation 19:10–12, including the complete endings and next heading.
+Exercise the right-side settings gear, its sheet and dismissal, the search
+back action and chapter notes. A standalone text fixture is diagnostic evidence
+only; it cannot replace this full-screen pass.

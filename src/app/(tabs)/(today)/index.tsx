@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, StyleSheet, Alert, type ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, AppState, type ScrollView } from 'react-native';
 import { useAdaptiveLayout } from '@/hooks/useAdaptiveLayout';
 import { adaptiveFrameStyle, adaptivePanesFrameStyle, resolveAdaptivePanes } from '@/lib/adaptive-layout';
 import { useRouter, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
@@ -13,7 +13,13 @@ import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
-import { updateSyncedDevotionals, useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
+import {
+  flushUnfoldStorePersistAsync,
+  updateSyncedDevotionals,
+  useUnfoldStore,
+  useHasHydrated,
+  type MoodLevel,
+} from '@/lib/store';
 import { AppFeedbackSheet } from '@/components/AppFeedbackSheet';
 import { getFeedbackProgress, shouldOfferAppFeedback } from '@/lib/app-feedback-policy';
 import { useQuery } from '@tanstack/react-query';
@@ -32,7 +38,9 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { VoiceCheckInSheet } from '@/components/voice-check-in/VoiceCheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
+import { getWidgetSeriesFields } from '@/lib/widget-timeline';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { isDisplayableBridge } from '@/lib/bridge-text';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { useMiddayNotificationOpen } from '@/hooks/useMiddayNotificationOpen';
@@ -46,6 +54,7 @@ import {
   getContentAwareEveningMessage,
   getMiddayCheckInBody,
 } from '@/constants/check-in-messages';
+import { heroCtaLabel, todayCardCopy } from '@/constants/daily-copy';
 import { copySeed } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -62,13 +71,13 @@ import {
   type TodayInflightDecision,
 } from '@/lib/inflight-generation-job';
 import {
+  abandonPurchasedIntentBeforeNewSeries,
   readAutoTrialIntent,
   reconcileAutoTrialIntentOnLaunch,
   settleLandedAutoTrialSeries,
   transitionAutoTrialIntent,
   type AutoTrialIntentV1,
   type AutoTrialLaunchAction,
-  type IntentStorage,
 } from '@/lib/auto-trial-intent';
 import { isAutoTrialSeries, isOnboardingFirstReading } from '@/lib/auto-trial-series';
 import { getDeviceId } from '@/lib/mmkv-storage';
@@ -84,6 +93,7 @@ import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { commitDevotionalPullCursor, pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { clearInitialGenerationRequestId, readInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { readReplacedSeries } from '@/lib/series-replacement';
 import {
   isReadableCurrentSeries,
   resolveCreateNewDuringPendingInitial,
@@ -97,6 +107,7 @@ import {
   getTodayCarryLine,
   getTodayDayContext,
   hasReadDevotionalToday,
+  localDayKey,
   shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
 import {
@@ -108,6 +119,7 @@ import { getReadingDayLabel } from '@/lib/devotional-day-access';
 import { resolveRitualCompletion } from '@/lib/ritual-session';
 import { getDeviceTimezone } from '@/lib/device-timezone';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 import { useReadBudgetBlocked } from '@/hooks/useReadBudgetBlocked';
 import { logBugEvent } from '@/lib/bug-logger';
 import { SyncPullRateLimitedError } from '@/lib/sync-pull-backoff';
@@ -175,6 +187,9 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 const REVEAL_RESUME_WINDOW_MS = 15_000;
+// Repeated foregrounds refresh Today at most once per cooldown, like the
+// day watch's own foreground discovery.
+const TODAY_FOREGROUND_REFRESH_COOLDOWN_MS = 10_000;
 
 function generatingRoute(autoTrialIntentId?: string | null): {
   pathname: '/generating';
@@ -183,6 +198,30 @@ function generatingRoute(autoTrialIntentId?: string | null): {
   return autoTrialIntentId
     ? { pathname: '/generating', params: { autoTrialIntentId } }
     : { pathname: '/generating' };
+}
+
+/**
+ * The /generating route that resumes an app-kill record. The auto-trial
+ * intent goes along only for its own job: a landed or submitted trial left in
+ * storage would otherwise send /generating back to that older series.
+ */
+export function resumeGeneratingRoute(
+  jobId: string,
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'jobId'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent?.jobId === jobId ? intent.intentId : null);
+}
+
+/**
+ * The /generating route behind the failure card's Try again. A trial still in
+ * flight (purchased, submitted or failed) retries through its intent. A
+ * landed trial is finished, so the failure belongs to a later series: its
+ * intent would reopen the trial's reveal instead of submitting that series.
+ */
+export function retryFailedSeriesRoute(
+  intent: Pick<AutoTrialIntentV1, 'intentId' | 'status'> | null,
+): ReturnType<typeof generatingRoute> {
+  return generatingRoute(intent && intent.status !== 'landed' ? intent.intentId : null);
 }
 
 export function applyTodayAutoTrialFocus(i: {
@@ -274,26 +313,6 @@ export function applyTodayAutoTrialFocus(i: {
   };
 }
 
-/** Abandons purchased or failed auto-trial intents before the user starts a new series. */
-export function abandonPurchasedIntentBeforeNewSeries(i: {
-  nowMs: number;
-  storage?: IntentStorage;
-}): void {
-  const current = readAutoTrialIntent(i.storage);
-  const reason = current?.status === 'purchased'
-    ? 'superseded_by_user_series'
-    : current?.status === 'failed'
-      ? 'user_setup_fallback'
-      : null;
-  if (!reason) return;
-  transitionAutoTrialIntent(
-    'abandoned',
-    { abandonReason: reason },
-    { nowMs: i.nowMs },
-    i.storage,
-  );
-}
-
 export default function HomeScreen() {
   const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
@@ -336,7 +355,6 @@ export default function HomeScreen() {
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -532,6 +550,18 @@ export default function HomeScreen() {
 
 
   const [clockNow, setClockNow] = useState(() => new Date());
+  // The local day for day-dependent memos. Unlike clockNow it also moves at
+  // local midnight and on foreground, so a Today left mounted and focused
+  // overnight re-asks them the moment the app resumes. They key on the day,
+  // not the Date, so a foreground on the same day does not recompute them.
+  const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
+  // The minute clock follows the calendar clock, so on resume and at
+  // midnight the card's date decisions (read today, the day shown) move with
+  // the watch instead of up to a minute later.
+  useEffect(() => {
+    setClockNow(new Date());
+  }, [calendarNow]);
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   // The check-in keeps the series and day it opened on, with that day's
   // question and chips, until it closes, and the answer saves there. Neither a
@@ -592,9 +622,11 @@ export default function HomeScreen() {
   // the preparing card and watch the job from here. Without it the record is
   // app-kill recovery — and the server, never the record's age, decides
   // where the reader goes: /generating is re-entered only while it reports
-  // the job alive or complete; a failed job settles here, as the watch would,
+  // the job alive or complete; a complete job whose day 1 the phone already
+  // holds lands here; a failed job settles here, as the watch would,
   // so the failed card shows instead of a bounce into /generating's error
-  // state; an unreachable server keeps the record for the next focus. A
+  // state; an unreachable server keeps the record, shows the pending card
+  // and asks again on the next focus or foreground. A
   // server that answers "no such job" (404 / 400) is a verdict, not
   // unreachable: that record is dropped too, or it would be kept forever.
   const generationSessionStatus = useUnfoldStore((s) => s.generationSession.status);
@@ -604,6 +636,12 @@ export default function HomeScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const [inflightSeries, setInflightSeries] = useState<InflightGenerationJob | null>(null);
   const [pendingInitialResume, setPendingInitialResume] = useState<PendingInitialArcResume>('none');
+  // App-kill recovery the server did not answer: the record is kept, so
+  // Today offers to continue the wait and asks again on foreground. Without
+  // it a new reader sat on an empty Today until something else changed.
+  const [keptInflightJob, setKeptInflightJob] = useState<InflightGenerationJob | null>(null);
+  const [inflightRecheckKey, setInflightRecheckKey] = useState(0);
+  const inflightCheckPendingRef = useRef(false);
   const [autoIntent, setAutoIntent] = useState<AutoTrialIntentV1 | null>(readAutoTrialIntent);
   const landedDevotionalIdsKey = devotionals.map((row) => row.id).join('\0');
 
@@ -638,6 +676,7 @@ export default function HomeScreen() {
     if (focus.skipResolver) {
       setInflightSeries(null);
       setPendingInitialResume('none');
+      setKeptInflightJob(null);
       if (focus.navigation) {
         router.push(focus.navigation);
       }
@@ -645,6 +684,7 @@ export default function HomeScreen() {
     }
     const decision = focus.inflightDecision;
     if (decision.action !== 'resume-on-generating') {
+      setKeptInflightJob(null);
       if (decision.action === 'none') {
         const store = useUnfoldStore.getState();
         const pendingResume = resolvePendingInitialArcResume({
@@ -678,6 +718,9 @@ export default function HomeScreen() {
     setInflightSeries(null);
     setPendingInitialResume('none');
     const { jobId, devotionalId } = decision.job;
+    // A re-check of the kept job keeps its card up until the server answers.
+    setKeptInflightJob((prev) => (prev?.jobId === jobId ? prev : null));
+    inflightCheckPendingRef.current = true;
     let cancelled = false;
     const session = captureSyncSession();
     void (async () => {
@@ -694,33 +737,68 @@ export default function HomeScreen() {
         );
       }
       if (cancelled || !isSyncSessionCurrent(session)) return;
+      inflightCheckPendingRef.current = false;
       const resume = resolveInflightResume(poll);
-      if (resume === 'resume') {
+      setKeptInflightJob((prev) => {
+        if (resume !== 'keep') return null;
+        return prev?.jobId === jobId ? prev : decision.job;
+      });
+      if (resume === 'keep') return;
+      // One poll with no history classifies the server's answer the way the
+      // watch would.
+      const step = classifyInitialArcPoll(poll, {
+        consecutiveUnknown: 0,
+        consecutiveNetworkErrors: 0,
+        elapsedMs: 0,
+        fallbackDevotionalId: devotionalId,
+      });
+      // A ready push after the kill opens the reveal, which pulls the series
+      // and its first day but leaves this record. The reader back from day 1
+      // would see /generating's "Begin Day 1" again, so that finished job
+      // lands here instead.
+      const finishedId = step.kind === 'settled' && step.outcome.kind === 'complete'
+        ? step.outcome.result.devotionalId
+        : null;
+      const day1Landed = hasInflightSeriesLanded(finishedId, useUnfoldStore.getState().devotionals, false);
+      if (resume === 'resume' && !day1Landed) {
         const serverStatus = 'status' in poll ? poll.status.status : null;
         logger.log(`[home] Resuming inflight generation job ${jobId} (server: ${serverStatus})`);
         // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+        router.replace(resumeGeneratingRoute(jobId, readAutoTrialIntent()));
         return;
       }
-      if (resume === 'discard') {
-        // The server's verdict (its failed status, or "no such job") is the
-        // failed outcome the watch would settle on; one poll with no history
-        // classifies it the same way. 'discard' is always settled — the
-        // check narrows the type.
-        const step = classifyInitialArcPoll(poll, {
-          consecutiveUnknown: 0,
-          consecutiveNetworkErrors: 0,
-          elapsedMs: 0,
-          fallbackDevotionalId: devotionalId,
-        });
-        if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
-      }
+      // The landed job, or the server's verdict (its failed status, or "no
+      // such job"), settles as the watch would. Both are always settled —
+      // the check narrows the type.
+      if (step.kind === 'settled') settleInflightInitialArcWatch(step.outcome, { jobId, session });
     })();
     return () => {
       cancelled = true;
+      inflightCheckPendingRef.current = false;
     };
-  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId]);
+  }, [router, isTodayFocused, generationSessionStatus, generationSessionDevotionalId, user?.hasCompletedOnboarding, landedDevotionalIdsKey, currentDevotionalId, inflightRecheckKey]);
   const onInflightSeriesSettled = useCallback(() => setInflightSeries(null), []);
+
+  // iOS keeps Today mounted and focused while the app is suspended, so the
+  // check above would not run again on its own. A return to the foreground
+  // asks again, at most once per cooldown, while a record is kept or a check
+  // is still out: a return during the first check would otherwise be missed.
+  const lastInflightRecheckAtRef = useRef<number | null>(null);
+  const keptInflightJobRef = useRef(keptInflightJob);
+  keptInflightJobRef.current = keptInflightJob;
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      if (!inflightCheckPendingRef.current && !keptInflightJobRef.current) return;
+      const now = Date.now();
+      const lastRecheckAt = lastInflightRecheckAtRef.current;
+      if (lastRecheckAt !== null && now - lastRecheckAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastInflightRecheckAtRef.current = now;
+      setInflightRecheckKey((key) => key + 1);
+    });
+    return () => subscription.remove();
+  }, [isTodayFocused]);
 
   // The series failed after the reader left for Today (the watch below
   // settled on a failure, or the submission itself failed). The session holds
@@ -731,8 +809,14 @@ export default function HomeScreen() {
   // same answers.
   const handleRetryInflightSeries = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace(generatingRoute(readAutoTrialIntent()?.intentId));
+    router.replace(retryFailedSeriesRoute(readAutoTrialIntent()));
   }, [router]);
+  const keptInflightJobId = keptInflightJob?.jobId ?? null;
+  const handleResumeKeptInflight = useCallback(() => {
+    if (!keptInflightJobId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace(resumeGeneratingRoute(keptInflightJobId, readAutoTrialIntent()));
+  }, [router, keptInflightJobId]);
   const handleResumePendingInitial = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/generating' });
@@ -766,44 +850,71 @@ export default function HomeScreen() {
   // Refresh the current devotional from server sync when Today gains focus.
   // Reading already has a missing-day fallback, but Home needs the same pull
   // because the hero card is where users expect to discover Day 2+.
-  useFocusEffect(
-    useCallback(() => {
-      // Drain any queued offline completions before pulling new content
-      void drainSyncOutbox();
+  const refreshCurrentDevotional = useCallback(() => {
+    // Drain any queued offline completions before pulling new content
+    void drainSyncOutbox();
 
-      const devotionalId = currentDevotionalId;
-      if (!devotionalId || readBudgetBlocked) return;
+    const devotionalId = currentDevotionalId;
+    if (!devotionalId || readBudgetBlocked) return;
 
-      let cancelled = false;
-      void (async () => {
-        try {
-          const session = captureSyncSession();
-          const pulled = await pullDevotionalContent(devotionalId);
-          if (cancelled || !isSyncSessionCurrent(session)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = captureSyncSession();
+        const pulled = await pullDevotionalContent(devotionalId);
+        if (cancelled || !isSyncSessionCurrent(session)) return;
 
-          applyPulledDevotionalContent({
-            devotionalId,
-            pulled,
-            updateDevotionalDays,
-            updateDevotionals: updateSyncedDevotionals,
-          });
-          // Only after the content is in the store — a cancelled focus above
-          // discards the response, and must not advance the cursor.
-          commitDevotionalPullCursor(pulled);
-        } catch (err) {
-          if (err instanceof SyncPullRateLimitedError) {
-            void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
-              retryAfterSeconds: err.retryAfterSeconds,
-            }, 'warn');
-            return;
-          }
-          logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+        applyPulledDevotionalContent({
+          devotionalId,
+          pulled,
+          updateDevotionalDays,
+          updateDevotionals: updateSyncedDevotionals,
+        });
+        // Only after the content is on disk — a cancelled focus above
+        // discards the response, and must not advance the cursor. The
+        // store's writes wait up to a few seconds; a kill in that window
+        // with the cursor saved would skip these rows until the next full
+        // refresh.
+        await flushUnfoldStorePersistAsync();
+        if (cancelled || !isSyncSessionCurrent(session)) return;
+        commitDevotionalPullCursor(pulled);
+      } catch (err) {
+        if (err instanceof SyncPullRateLimitedError) {
+          void logBugEvent('today-sync-refresh', 'sync-pull-rate-limited', {
+            retryAfterSeconds: err.retryAfterSeconds,
+          }, 'warn');
+          return;
         }
-      })();
+        logger.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+      }
+    })();
 
-      return () => { cancelled = true; };
-    }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays])
-  );
+    return () => { cancelled = true; };
+  }, [currentDevotionalId, readBudgetBlocked, updateDevotionalDays]);
+  useFocusEffect(refreshCurrentDevotional);
+
+  // A warm resume is not a focus: iOS keeps Today mounted and focused while
+  // the app is suspended, so the refresh above would not run again until the
+  // reader left and came back. Run the same refresh on foreground too, so a
+  // day the server wrote overnight lands on the open screen.
+  const lastForegroundRefreshAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isTodayFocused) return;
+    let cancelForegroundRefresh: (() => void) | undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const now = Date.now();
+      const lastRefreshAt = lastForegroundRefreshAtRef.current;
+      if (lastRefreshAt !== null && now - lastRefreshAt < TODAY_FOREGROUND_REFRESH_COOLDOWN_MS) return;
+      lastForegroundRefreshAtRef.current = now;
+      cancelForegroundRefresh?.();
+      cancelForegroundRefresh = refreshCurrentDevotional();
+    });
+    return () => {
+      subscription.remove();
+      cancelForegroundRefresh?.();
+    };
+  }, [isTodayFocused, refreshCurrentDevotional]);
 
   // Check if today's reading has been completed — drives ember visibility.
   // clockNow in deps + passed as `now`: recomputes each minute so "today"
@@ -833,13 +944,33 @@ export default function HomeScreen() {
     getCurrentDevotional(devotionals, currentDevotionalId)
   ), [currentDevotionalId, devotionals]);
 
+  // The focus sync above runs before the focus pull lands, replaces or
+  // restores a day, and the day watch below lands one while Today stays
+  // open. Sync the widgets again when what they show changes. A replaced day
+  // keeps the day count, and an earlier day restored or marked read keeps the
+  // reading too, so the key is the series fields the sync fingerprint
+  // compares (getWidgetSeriesFields). Writing on a day does not change them,
+  // so it does not re-sync. They change only with the local day, so the key
+  // follows calendarNow, not the minute clock.
+  const widgetSyncKey = useMemo(
+    () => JSON.stringify(getWidgetSeriesFields(currentDevotional, devotionals, calendarNow)),
+    [currentDevotional, devotionals, calendarNow],
+  );
+  useEffect(() => {
+    syncWidgets();
+  }, [currentDevotionalId, widgetSyncKey]);
+
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
   // tomorrow's content and shouldn't trigger auto-generation.
+  // The local day is an input: after an evening read currentDay is ahead of
+  // the calendar, so this is false until midnight and must turn true then
+  // without any store write, or the watch below never asks for the new day.
   const isPreparingCurrentDay = useMemo(() => (
-    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
-  ), [currentDevotional, premiumPolicy]);
+    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy, calendarNow)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+  ), [currentDevotional, premiumPolicy, calendarDayKey]);
 
   const dailyGeneration = useGeneratedDayWatch({
     devotionalId: currentDevotional?.id,
@@ -863,13 +994,28 @@ export default function HomeScreen() {
     enabled: inflightSeries != null && isTodayFocused,
     onSettled: onInflightSeriesSettled,
   });
+  // "Start a new series" keeps the series it replaces current until the new
+  // one lands. That series is the old reading, never the series in flight:
+  // not by id (a session it left behind) and not as the current series.
+  const replacedSeriesId = readReplacedSeries();
+  const landedSeries = replacedSeriesId ? devotionals.filter((row) => row.id !== replacedSeriesId) : devotionals;
+  const hasLandedCurrentSeries = !!currentDevotional && currentDevotional.id !== replacedSeriesId;
   const isPreparingInflightSeries = inflightSeries != null
-    && !hasInflightSeriesLanded(inflightSeries.devotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(inflightSeries.devotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
   const isInflightSeriesFailed = inflightSeries == null
     && generationSessionStatus === 'error'
-    && !hasInflightSeriesLanded(generationSessionDevotionalId, devotionals, !!currentDevotional)
+    && !hasInflightSeriesLanded(generationSessionDevotionalId, landedSeries, hasLandedCurrentSeries)
     && premiumPolicy !== 'denied';
+  // A kept record gets the pending card. Continue re-enters /generating on
+  // the record, as the check does once the server answers. Only a series the
+  // record names counts as landed: a record without one (an adopted job)
+  // says nothing about the series already here.
+  const keptSeriesId = keptInflightJob?.devotionalId;
+  const keptSeriesLanded = hasInflightSeriesLanded(keptSeriesId, landedSeries, false);
+  const keptInflightResume = keptInflightJob != null && !isInflightSeriesFailed && !keptSeriesLanded
+    ? { onResume: handleResumeKeptInflight }
+    : null;
 
   const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
     if (!isQaToolsEnabled()) return null;
@@ -925,20 +1071,25 @@ export default function HomeScreen() {
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     // Keyed to match generateBridge's own MMKV cache identity (devotional +
-    // day + calendar date). Embedding the whole input object here forked a new
-    // cache entry on every free-text profile edit for the same day's bridge.
+    // day + the local day of calendarNow, which the query hands it).
+    // Embedding the whole input object here forked a new cache entry on every
+    // free-text profile edit for the same day's bridge. The UTC date it used
+    // to carry rolled over in the evening for a reader in the Americas.
     // eslint-disable-next-line @tanstack/query/exhaustive-deps -- input is deliberately not part of the bridge's cache identity
-    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, clockNow.toISOString().slice(0, 10)],
-    queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
+    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, calendarDayKey],
+    queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber, calendarNow),
     enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
     retry: 1,
   });
 
+  // Only the current series resumes from Today. A saved pointer to any other
+  // series (written before this rule, or before a series change) is ignored:
+  // following it would switch the series the server generates.
   const resumeDevotional = useMemo(() => {
-    if (!resumeContext?.devotionalId) return null;
+    if (!resumeContext?.devotionalId || resumeContext.devotionalId !== currentDevotionalId) return null;
     return devotionals.find((d) => d.id === resumeContext.devotionalId) ?? null;
-  }, [resumeContext?.devotionalId, devotionals]);
+  }, [resumeContext?.devotionalId, currentDevotionalId, devotionals]);
 
   const shouldShowResumeCard = useMemo(() => {
     if (!resumeContext || !resumeDevotional) return false;
@@ -975,7 +1126,6 @@ export default function HomeScreen() {
     if (!resumeContext || !resumeDevotional) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCurrentDevotional(resumeContext.devotionalId);
 
     if (resumeContext.route === 'journal') {
       router.push({
@@ -994,7 +1144,7 @@ export default function HomeScreen() {
         dayNumber: String(resumeContext.dayNumber),
       },
     });
-  }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
+  }, [resumeContext, resumeDevotional, router]);
 
   const openNewSeriesDiscovery = () => {
     abandonPurchasedIntentBeforeNewSeries({ nowMs: Date.now() });
@@ -1007,13 +1157,13 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
-    const pending = resolvePendingInitialArcResume({
+    const pending = {
       inflight: readInflightGenerationJob(),
       requestId: readInitialGenerationRequestId(),
       generationSessionStatus,
       hasReadableCurrentSeries: isReadableCurrentSeries(currentDevotional),
       autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
-    });
+    };
     if (resolveCreateNewDuringPendingInitial(pending) === 'resume-existing') {
       handleResumePendingInitial();
       return;
@@ -1181,6 +1331,7 @@ export default function HomeScreen() {
   const currentHour = clockNow.getHours();
   const currentMinute = clockNow.getMinutes();
   const todayDate = clockNow.toLocaleDateString('en-CA');
+  const todayDayIndex = dayIndexFor(clockNow);
   const hasDismissedMiddayCardToday = dismissedMiddayCardDate === todayDate;
   const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
   const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
@@ -1188,8 +1339,8 @@ export default function HomeScreen() {
   // Item 12 (highlights audit H9): the card draws from Bible highlights too.
   const rememberedPick = useMemo(() => {
     if (dismissedRememberThisCardDate === todayDate) return null;
-    return pickRememberThis(highlights, bibleHighlights, todayDate);
-  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate]);
+    return pickRememberThis(highlights, bibleHighlights, { seed: copySeed(), dayIndex: todayDayIndex });
+  }, [dismissedRememberThisCardDate, highlights, bibleHighlights, todayDate, todayDayIndex]);
 
   const rememberedSource = useMemo(
     () => (rememberedPick ? rememberThisSource(rememberedPick, devotionals) : ''),
@@ -1311,13 +1462,15 @@ export default function HomeScreen() {
   // for the rest of the home UI and wrong for copy about today. Raised by
   // Greptile on PR #107.
   const dayCopyContext = useMemo(
-    () => getTodayDayContext(currentDevotional),
-    [currentDevotional],
+    () => getTodayDayContext(currentDevotional, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, calendarDayKey],
   );
 
   const todayCarryLine = useMemo(
-    () => getTodayCarryLine(devotionals, currentDevotionalId),
-    [devotionals, currentDevotionalId],
+    () => getTodayCarryLine(devotionals, currentDevotionalId, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [devotionals, currentDevotionalId, calendarDayKey],
   );
 
   const middayMessage = useMemo(
@@ -1326,15 +1479,18 @@ export default function HomeScreen() {
   );
 
   // Evening deliberately still takes the content-aware path only. Its
-  // notification leads with the day's `act` — a task — and that is the right
-  // lead for a banner at 20:30 but not obviously right for a card the reader
-  // is already looking at. Aligning it is a product call, not a cleanup, and
-  // it has not been made. The midday divergence above was a plain defect: a
-  // card named for the companion nudge that never showed it.
+  // notification leads with the evening scripture line when the day has one
+  // (getEveningWindDownBody); the act has its own reminder. Aligning the card
+  // with that banner is a product call, not a cleanup, and it has not been
+  // made. The midday divergence above was a plain defect: a card named for
+  // the companion nudge that never showed it.
   const eveningMessage = useMemo(
     () => getContentAwareEveningMessage(dayCopyContext, variation),
     [dayCopyContext, variation],
   );
+
+  // The card stack's titles, one bag draw per card kind.
+  const cardCopy = useMemo(() => todayCardCopy(variation), [variation]);
 
   // --- Derived state for zone components ---
 
@@ -1357,14 +1513,13 @@ export default function HomeScreen() {
     return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
   }, [isTomorrow, currentDayData?.bodyText]);
 
+  // Drawn once per streak and day, not on every render.
+  const heroCta = useMemo(() => heroCtaLabel(streakCurrent, variation), [streakCurrent, variation]);
   const getCtaText = () => {
     if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
     if (isFirstDay) return "Start Today's Reading";
     if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
-    if (streakCurrent >= 7) return 'Deepen Your Practice';
-    if (streakCurrent >= 3) return 'Stay Rooted';
-    if (streakCurrent >= 1) return 'Keep Going';
-    return 'Continue Reading';
+    return heroCta;
   };
 
   const handleReveal = useCallback(() => {
@@ -1383,7 +1538,7 @@ export default function HomeScreen() {
   }, [currentDevotional, currentDayData, router]);
 
   const effectiveBridgeText = qaContextSlot === 'bridge' ? QA_BRIDGE_TEXT : bridgeText;
-  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
+  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && isDisplayableBridge(effectiveBridgeText)
     ? effectiveBridgeText
     : undefined;
   const isEveningWindow = (currentHour >= 17 && currentHour < 23) || (currentHour === 23 && currentMinute < 30);
@@ -1445,17 +1600,19 @@ export default function HomeScreen() {
       });
       return;
     }
+    // A saved line opens as history, like the Saved tab: it never changes
+    // which series Today and the server's generation follow.
     const h = rememberedPick.highlight;
-    setCurrentDevotional(h.devotionalId);
     router.push({
       pathname: '/(tabs)/(today)/reading',
       params: {
         devotionalId: h.devotionalId,
         dayNumber: h.dayNumber.toString(),
         highlightId: h.id,
+        ...(h.devotionalId !== currentDevotionalId ? { readOnly: '1' } : {}),
       },
     });
-  }, [rememberedPick, router, setCurrentDevotional]);
+  }, [currentDevotionalId, rememberedPick, router]);
 
   const handleDismissRememberThisCard = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1575,14 +1732,14 @@ export default function HomeScreen() {
         id: 'today-stack-evening',
         kind: 'evening',
         priority: 400,
-        title: 'How has your day been?',
+        title: cardCopy.evening,
         body: eveningMessage,
         actions: [
           { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
           { label: 'Wind down', onPress: handleEveningWindDown, accessibilityLabel: 'Wind down with today’s reading', accessibilityHint: 'Opens the evening reflection', tone: 'secondary' },
         ],
         onDismiss: handleDismissEveningCard,
-        accessibilityLabel: `How has your day been? ${eveningMessage}`,
+        accessibilityLabel: `${cardCopy.evening} ${eveningMessage}`,
         accessibilityHint: 'Share a life update or open the evening reflection',
         dismissAccessibilityLabel: 'Dismiss evening stack card',
         dismissAccessibilityHint: 'Hides this evening check-in card for today',
@@ -1595,14 +1752,14 @@ export default function HomeScreen() {
         id: 'today-stack-midday',
         kind: 'midday',
         priority: 300,
-        title: 'What’s happening in your life?',
+        title: cardCopy.midday,
         body: middayMessage,
         actions: [
           { label: 'Share an update', onPress: handleLifeUpdate, accessibilityLabel: 'Share a life update', accessibilityHint: 'Record or write what is happening in your life' },
           { label: 'Reflect', onPress: handleCheckIn, accessibilityLabel: 'Reflect on today’s reading', accessibilityHint: 'Opens the midday reflection', tone: 'secondary' },
         ],
         onDismiss: handleDismissMiddayCard,
-        accessibilityLabel: `What’s happening in your life? ${middayMessage}`,
+        accessibilityLabel: `${cardCopy.midday} ${middayMessage}`,
         accessibilityHint: 'Share a life update or reflect on today’s reading',
         dismissAccessibilityLabel: 'Dismiss midday stack card',
         dismissAccessibilityHint: 'Hides this midday check-in card for today',
@@ -1615,10 +1772,11 @@ export default function HomeScreen() {
         id: 'today-stack-bridge',
         kind: 'bridge',
         priority: 200,
-        title: 'A thread from yesterday to today',
+        title: cardCopy.bridge,
         body: validBridgeText,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: validBridgeText,
+        // The spoken label carries the drawn title the card shows, then the text.
+        accessibilityLabel: `${cardCopy.bridge}. ${validBridgeText}`,
         accessibilityHint: 'A personal bridge into today’s reading',
         dismissAccessibilityLabel: 'Dismiss bridge stack card',
         dismissAccessibilityHint: 'Hides this bridge text for today',
@@ -1631,10 +1789,10 @@ export default function HomeScreen() {
         id: 'today-stack-bridge-loading',
         kind: 'bridge-loading',
         priority: 100,
-        title: 'Preparing today’s thread…',
-        body: 'A quiet bridge from yesterday to today will appear here when it is ready.',
+        title: cardCopy.bridgeLoading,
+        body: cardCopy.bridgeLoadingBody,
         onDismiss: handleDismissBridgeCard,
-        accessibilityLabel: 'Preparing today’s thread',
+        accessibilityLabel: `${cardCopy.bridgeLoading} ${cardCopy.bridgeLoadingBody}`,
         accessibilityHint: 'A personal bridge into today’s reading is loading',
         dismissAccessibilityLabel: 'Dismiss bridge loading stack card',
         dismissAccessibilityHint: 'Hides this bridge card for today',
@@ -1648,7 +1806,7 @@ export default function HomeScreen() {
         id: `today-stack-remember-this-${rememberedPick.highlight.id}`,
         kind: 'remember-this',
         priority: 80,
-        title: 'A line worth carrying',
+        title: cardCopy.rememberThis,
         // Quoted highlight is genuinely variable-length — keep a real-overflow
         // clamp (de-slop #15: authored copy wraps; only true overflow clamps).
         bodyQuote: { text: quote, color: rememberedPick.highlight.color ?? null },
@@ -1657,7 +1815,7 @@ export default function HomeScreen() {
         actionLabel: 'Open highlight',
         onPress: handleSavedEchoPress,
         onDismiss: handleDismissRememberThisCard,
-        accessibilityLabel: `Saved highlight from ${rememberedSource}: ${quote}`,
+        accessibilityLabel: `${cardCopy.rememberThis}. Saved highlight from ${rememberedSource}: ${quote}`,
         accessibilityHint: rememberedPick.kind === 'bible' ? 'Opens the Bible at this verse' : 'Opens the reading at this highlighted passage',
         dismissAccessibilityLabel: 'Dismiss saved highlight stack card',
         dismissAccessibilityHint: 'Hides this saved highlight card for today without deleting the highlight',
@@ -1743,6 +1901,7 @@ export default function HomeScreen() {
 
     return cards;
   }, [
+    cardCopy,
     handleLifeUpdate,
     eveningMessage,
     handleCheckIn,
@@ -1808,9 +1967,8 @@ export default function HomeScreen() {
           onDismiss: handleDismissInflightSeriesFailure,
         }
       : null,
-    pendingInitialResume: pendingInitialResume === 'offer-resume'
-      ? { onResume: handleResumePendingInitial }
-      : null,
+    pendingInitialResume: keptInflightResume
+      ?? (pendingInitialResume === 'offer-resume' ? { onResume: handleResumePendingInitial } : null),
     premiumPolicy,
     daysCompleted,
     totalDays,
@@ -1873,6 +2031,7 @@ export default function HomeScreen() {
           {/* Zone 1: Greeting */}
           <GreetingRow
             userName={user?.name}
+            now={clockNow}
             avatarTestID="home-avatar-button"
             onAvatarPress={() => router.push('/(tabs)/(you)')}
             headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
@@ -1892,9 +2051,10 @@ export default function HomeScreen() {
                 isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
                 gateCreation={gate}
                 storedPick={autoTrialActive ? storedNextPick : undefined}
-                nonblockingResume={pendingInitialResume === 'offer-nonblocking-resume'
-                  ? { onResume: handleResumePendingInitial }
-                  : null}
+                nonblockingResume={keptInflightResume
+                  ?? (pendingInitialResume === 'offer-nonblocking-resume'
+                    ? { onResume: handleResumePendingInitial }
+                    : null)}
                 ambienceVisible={shouldShowCompletedEmberAmbience({
                   stateType: devotionalState.type,
                   hasReadToday,
