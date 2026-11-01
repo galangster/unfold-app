@@ -11,8 +11,7 @@ type ReaderTextProps = ComponentPropsWithRef<typeof Text>;
  */
 export function ReaderText({ ref, ...props }: ReaderTextProps) {
   const { fontScale } = useWindowDimensions();
-  // NativeWind's interop drops refs on React Native 0.86's Text, and it strips a
-  // cssInterop prop before this component sees it, so a caller's ref skips the
-  // interop here.
+  // Caller refs target the native host directly, so focus does not depend on
+  // NativeWind's Text wrapper.
   return <Text key={fontScale} maxFontSizeMultiplier={1.8} {...props} ref={ref} {...(ref ? { cssInterop: false } : null)} />;
 }

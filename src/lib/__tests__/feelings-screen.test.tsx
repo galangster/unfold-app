@@ -48,9 +48,9 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-// On device React Native 0.86's ScrollView is a function component, and
-// NativeWind's interop drops its ref; the preset mock is a class that keeps it.
-// This stand-in sits behind the interop, as on device, and records scrollTo.
+// On device React Native 0.86's ScrollView is a function component behind
+// NativeWind's interop; the preset mock is a class. This stand-in sits behind
+// the interop, as on device, and records scrollTo.
 jest.mock('react-native/Libraries/Components/ScrollView/ScrollView', () => {
   const { createElement, useImperativeHandle } = jest.requireActual('react');
   function ScrollView({ ref, children }: { ref?: unknown; children?: unknown }) {
