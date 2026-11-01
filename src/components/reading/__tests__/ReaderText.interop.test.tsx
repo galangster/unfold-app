@@ -6,7 +6,7 @@ import { render } from '@testing-library/react-native';
 import { ReaderText } from '../ReaderText';
 
 // On device, React Native 0.86's Text is a function component, and NativeWind's
-// interop drops refs on function components. Jest's preset Text is a class that
+// interop must keep refs on function components. Jest's preset Text is a class that
 // keeps refs, so this file puts a function Text behind the interop, as the app
 // runs it on device.
 jest.mock('react-native/Libraries/Text/Text', () => {
@@ -22,10 +22,10 @@ cssInterop(Text, { className: 'style' });
 const renderWithHosts = (ui: ReactElement) => render(ui, { createNodeMock: () => ({ host: true }) });
 
 describe('ReaderText behind NativeWind', () => {
-  it('reproduces the device bug: the interop drops a ref on a plain Text', () => {
+  it('keeps a native ref on a plain function Text through the patched interop', () => {
     const ref = createRef<Text>();
     renderWithHosts(<Text ref={ref}>Weary</Text>);
-    expect(ref.current).toBeNull();
+    expect(ref.current).toEqual({ host: true });
   });
 
   it('keeps a caller ref, so the feelings headings can take VoiceOver focus', () => {

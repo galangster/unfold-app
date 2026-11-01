@@ -1,0 +1,14 @@
+diff --git a/dist/runtime/native/api.js b/dist/runtime/native/api.js
+index 5ea02d81fd0954009978e04b12542e58a954af7e..ee53640d52dceba8904cf51c4bf893518d850e21 100644
+--- a/dist/runtime/native/api.js
++++ b/dist/runtime/native/api.js
+@@ -24,7 +24,8 @@ const cssInterop = (baseComponent, mapping) => {
+     const type = (0, unwrap_components_1.getComponentType)(baseComponent);
+     if (type === "function") {
+         component = (props) => {
+-            return (0, native_interop_1.interop)(baseComponent, configs, props, undefined);
++            // React 19 passes ref as a prop. Forward it instead of overwriting it with undefined.
++            return (0, native_interop_1.interop)(baseComponent, configs, props, props.ref);
+         };
+     }
+     else {
