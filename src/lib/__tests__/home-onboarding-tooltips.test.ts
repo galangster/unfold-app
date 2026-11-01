@@ -26,7 +26,8 @@ describe('home onboarding tooltips', () => {
 
   it('uses current Today concepts instead of stale per-tab and streak copy', () => {
     expect(tooltipSource).toContain("title: 'Today’s thread'");
-    expect(tooltipSource).toContain("title: 'Companion check-in'");
+    expect(tooltipSource).toContain("title: 'Through the day'");
+    expect(tooltipSource).not.toContain("title: 'Companion check-in'");
     expect(tooltipSource).toContain("title: 'Daily Rhythm'");
     expect(tooltipSource).toContain("title: 'Read, Ask & Write'");
     expect(tooltipSource).not.toContain("title: 'Your Streak'");

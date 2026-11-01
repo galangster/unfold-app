@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { HomeOnboardingTooltips } from '../HomeOnboardingTooltips';
 import { listPendingAnnouncementPages } from '@/lib/feature-announcements';
 import { useUnfoldStore, type UserProfile } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
 
 const mockValues = new Map<string, string>();
 
@@ -62,6 +63,10 @@ jest.mock('react-native-reanimated', () => {
     FadeIn: transition,
     FadeOut: transition,
     useReducedMotion: () => true,
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    withTiming: (value: unknown) => value,
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
   };
 });
 jest.mock('expo-haptics', () => ({
@@ -77,6 +82,7 @@ const allAvailable = { bookshelf: true, companion: true, music: true, reflection
 describe('HomeOnboardingTooltips', () => {
   beforeEach(() => {
     mockValues.clear();
+    useUIState.setState({ tabBarHidden: false, tabBarRowRect: { x: 0, y: 846, width: 440, height: 110 } });
     useUnfoldStore.setState({ hasSeenHomeTooltips: false, user: null, companionName: null });
   });
 

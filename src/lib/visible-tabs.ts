@@ -33,6 +33,16 @@ export const VISIBLE_TAB_COUNT = VISIBLE_TAB_GROUPS.length;
  */
 export const TAB_BAR_HORIZONTAL_PADDING = Spacing['2'];
 
+/**
+ * Vertical insets of the tab row. Onboarding subtracts them from the measured
+ * row so the tabs spotlight hugs the icons and labels.
+ */
+export const TAB_BAR_ROW_PADDING_TOP = Spacing['2'];
+
+export function tabBarRowPaddingBottom(bottomInset: number): number {
+  return Math.max(bottomInset, 8);
+}
+
 export function isVisibleTabGroup(name: string): name is VisibleTabGroup {
   return (VISIBLE_TAB_GROUPS as readonly string[]).includes(name);
 }
