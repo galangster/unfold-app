@@ -146,8 +146,9 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
       setSelectedColor(undefined);
       translateY.value = OFFSCREEN;
       translateY.value = withTiming(0, SLIDE_IN);
+      // A dismiss inside the first 350 ms must not raise the keyboard again.
       const focusTimer = setTimeout(() => {
-        inputRef.current?.focus();
+        if (!dismissing.current) inputRef.current?.focus();
       }, 350);
       return () => clearTimeout(focusTimer);
     }

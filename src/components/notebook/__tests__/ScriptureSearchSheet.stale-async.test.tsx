@@ -172,3 +172,35 @@ describe('ScriptureSearchSheet stale lookups (Greptile A6)', () => {
     expect(collectText(tree!.toJSON()).join(' ')).not.toContain('STALE JOHN TEXT');
   });
 });
+
+describe('ScriptureSearchSheet open focus', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  const openAndFindInput = async () => {
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<ScriptureSearchSheet visible onClose={jest.fn()} onInsert={jest.fn()} />);
+    });
+    // The preset TextInput shares one focus mock across instances, so clear it.
+    const focus = jest.spyOn(tree!.root.findByType(TextInput).instance, 'focus');
+    focus.mockClear();
+    return { tree: tree!, focus };
+  };
+
+  it('focuses the reference input once the sheet has slid in', async () => {
+    const { focus } = await openAndFindInput();
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not raise the keyboard when the sheet is dismissed before the focus lands', async () => {
+    const { tree, focus } = await openAndFindInput();
+    await act(async () => { jest.advanceTimersByTime(250); });
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: 'Close scripture search' }).props.onPress();
+      jest.advanceTimersByTime(100);
+    });
+    expect(focus).not.toHaveBeenCalled();
+  });
+});
