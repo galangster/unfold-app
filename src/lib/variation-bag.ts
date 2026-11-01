@@ -145,6 +145,65 @@ export function pickFromBag<T>(pool: readonly T[], seed: string, dayIndex: numbe
 }
 
 /**
+ * Which draw a piece of copy belongs to.
+ *
+ * `seed` is the stable per-install identity, so two readers are never on the
+ * same sequence. `dayIndex` is the local calendar day (see `dayIndexFor`), so
+ * the copy turns over at the reader's own midnight — and so a notification
+ * being SCHEDULED for a day five days out can be given that day's copy now,
+ * rather than today's copy baked into every future occurrence. Copy that
+ * belongs to a finished reading instead steps once per completion: there the
+ * index is the completion's place in the reader's history
+ * (completionVariation in constants/daily-copy.ts).
+ */
+export interface CopyVariation {
+  seed: string;
+  dayIndex: number;
+}
+
+/**
+ * One field of one day's copy: the bag salted with the field name, so a
+ * title and a body drawn for the same day move independently. `index` is the
+ * day unless a caller takes several entries for one draw. The `pool[0]`
+ * floor fires only on undefined, when a pool is emptied by a bad edit, so a
+ * pool can hold null as a real entry.
+ */
+export function drawCopy<T>(pool: readonly T[], variation: CopyVariation, field: string, index = variation.dayIndex): T {
+  const picked = pickFromBag(pool, `${variation.seed}|${field}`, index);
+  return picked === undefined ? pool[0] : picked;
+}
+
+/**
+ * Whether consecutive `drawConsecutive` draws of `count` from a pool of
+ * `poolLength` share no entry. Two things must hold: a draw never straddles
+ * two laps (the length is a multiple of the count), and the guard band holds
+ * a whole draw apart across a lap boundary.
+ */
+export function drawsStayApart(poolLength: number, count: number): boolean {
+  return poolLength % count === 0 && minimumGapFor(poolLength) > count;
+}
+
+/**
+ * `count` entries for one draw: consecutive picks from the bag, so no entry
+ * repeats within the draw. `variation.dayIndex` numbers the draw, which need
+ * not be a day. When `drawsStayApart(pool.length, count)` holds, two
+ * consecutive draws share no entry either.
+ */
+export function drawConsecutive<T>(pool: readonly T[], variation: CopyVariation, field: string, count: number): T[] {
+  return Array.from({ length: count }, (_, k) => drawCopy(pool, variation, field, variation.dayIndex * count + k));
+}
+
+/**
+ * The pool from the day's draw onward, wrapping round: the drawn entry
+ * first, then each entry after it. For a caller that steps past entries it
+ * cannot use, so the step starts where the bag put the day.
+ */
+export function drawRotation<T>(pool: readonly T[], variation: CopyVariation, field: string): T[] {
+  const start = pool.indexOf(drawCopy(pool, variation, field));
+  return [...pool.slice(start), ...pool.slice(0, start)];
+}
+
+/**
  * Days since the Unix epoch for the LOCAL calendar day of `date`.
  *
  * Built from the local Y/M/D rather than the timestamp so that "which day is
@@ -153,4 +212,9 @@ export function pickFromBag<T>(pool: readonly T[], seed: string, dayIndex: numbe
  */
 export function dayIndexFor(date: Date): number {
   return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
+/** The draw for the local calendar day of `date` on the sequence `seed` names. */
+export function copyVariationAt(seed: string, date: Date): CopyVariation {
+  return { seed, dayIndex: dayIndexFor(date) };
 }

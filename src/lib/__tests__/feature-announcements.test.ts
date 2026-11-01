@@ -11,15 +11,18 @@ import {
   isKnownAnnouncementId,
   listPendingAnnouncementPages,
   recordAnnouncement,
+  settleAnnouncementsForNewReader,
 } from '../feature-announcements';
 import { MUSIC_ANNOUNCEMENT } from '../music-announcement';
 
 const mockValues = new Map<string, string>();
+let mockWritesFail = false;
 
 jest.mock('../mmkv-storage', () => ({
   mmkvStorage: {
     getItem: (name: string) => mockValues.get(name) ?? null,
     setItem: (name: string, value: string) => {
+      if (mockWritesFail) throw new Error('storage unavailable');
       mockValues.set(name, value);
     },
     removeItem: (name: string) => {
@@ -33,6 +36,7 @@ jest.mock('../../../assets/audio/previews/still-waters.m4a', () => 99, { virtual
 const allAvailable = { bookshelf: true, companion: true, music: true, reflection: true };
 
 const openGate = {
+  hasSeenTodayTour: true,
   isTodayHome: true,
   todayReadingAvailable: true,
   soundOff: true,
@@ -146,5 +150,40 @@ describe('feature announcements', () => {
     expect(canAnnounceFeatures({ ...openGate, todayReadingAvailable: false })).toBe(false);
     expect(canAnnounceFeatures({ ...openGate, appActive: false })).toBe(false);
     expect(canAnnounceFeatures({ ...openGate, soundOff: false })).toBe(false);
+  });
+
+  it('waits for the Today tour, so a fresh install goes straight to the tour', () => {
+    expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: false })).toBe(false);
+    expect(canAnnounceFeatures({ ...openGate, hasSeenTodayTour: true })).toBe(true);
+  });
+
+  it('keeps settled pages closed for this visit when storage writes fail', () => {
+    mockWritesFail = true;
+    try {
+      // A fresh module copy, so the remembered records end with this test.
+      jest.isolateModules(() => {
+        const announcements = jest.requireActual('../feature-announcements') as typeof import('../feature-announcements');
+        announcements.settleAnnouncementsForNewReader();
+
+        expect(announcements.listPendingAnnouncementPages(allAvailable)).toEqual([]);
+        expect(announcements.hasSeenAnnouncement(COMPANION_ANNOUNCEMENT_ID)).toBe(true);
+      });
+    } finally {
+      mockWritesFail = false;
+    }
+    expect(mockValues.has(FEATURE_ANNOUNCEMENTS_KEY)).toBe(false);
+  });
+
+  it('settles every current page for a new reader and keeps what was already seen', () => {
+    recordAnnouncement(MUSIC_ANNOUNCEMENT.id, 'seen');
+
+    settleAnnouncementsForNewReader();
+
+    expect(listPendingAnnouncementPages(allAvailable)).toEqual([]);
+    const stored = JSON.parse(mockValues.get(FEATURE_ANNOUNCEMENTS_KEY) ?? '{}');
+    expect(stored[MUSIC_ANNOUNCEMENT.id].status).toBe('seen');
+    expect(stored[BOOKSHELF_LIBRARY_ANNOUNCEMENT_ID].status).toBe('dismissed');
+    expect(stored[COMPANION_ANNOUNCEMENT_ID].status).toBe('dismissed');
+    expect(stored[REFLECTION_ANNOUNCEMENT_ID].status).toBe('dismissed');
   });
 });

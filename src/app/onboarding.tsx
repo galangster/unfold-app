@@ -18,7 +18,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ADAPTIVE_CLUSTER_MEASURE, adaptiveFrameStyle } from '@/lib/adaptive-layout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
@@ -56,8 +56,10 @@ import { VoiceAnswerButton } from '@/components/onboarding/VoiceAnswerButton';
 import { isVoiceCheckInsEnabled } from '@/lib/voice-feature';
 import { useUnfoldStore, flushUnfoldStorePersistAsync, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateDiagnosticQuestions, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
+import { onboardingMirrorBackReflection } from '@/lib/mirror-back-fallback';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
+  pickRandomFromArray,
   pickRandomVariation,
   getRandomDurationSubtext,
   getRandomReadingSubtext,
@@ -155,6 +157,7 @@ import {
 } from '@/lib/auto-trial-intent';
 import { runOnboardingCompletion } from '@/lib/onboarding-completion';
 import { ensureInitialGenerationRequestId } from '@/lib/initial-generation-request';
+import { forgetReplacedSeriesUnlessPending } from '@/lib/series-replacement';
 import { resolveCompanionDisplayName, resolveCompanionNameToPersist } from '@/lib/support-clarity';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { runOnboardingPurchaseSuccess } from '@/lib/onboarding-purchase-success';
@@ -162,6 +165,10 @@ import { runReminderTimeCommit } from '@/lib/reminder-time-commit';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { getPurchaseConfirmationCopy } from '@/lib/purchase-confirmation-copy';
 import { refreshRemoteConfig } from '@/lib/remote-config';
+import { seriesLengthOptions } from '@/lib/series-length-options';
+import type { DevotionalLength } from '@/lib/series-length';
+import { useChapteredSeriesSwitch } from '@/hooks/useChapteredSeriesEnabled';
+import { useFrozenWhile } from '@/hooks/useFrozenWhile';
 import { trialLabelToDays } from '@/lib/trial-reminder-copy';
 
 // Ember exclusion zones (normalized to the ember layer's container) — keep
@@ -256,7 +263,6 @@ const DEFAULT_SCRIPTURES = [
   { text: 'The Lord is my shepherd; I shall not want.', ref: 'Psalm 23:1' },
   { text: 'I am with you always, to the end of the age.', ref: 'Matthew 28:20' },
 ];
-const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 // One selection-state vocabulary: selected option controls share accent border +
 // accent-tinted fill (this surface) + accent text. Keep the default tint aligned
 // with the chip/pill controls (alpha 0.18) so every selected control matches.
@@ -368,6 +374,13 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
   };
 }
 
+const HOOK_HEADLINE = 'Ever open your Bible and not know where to start?';
+
+/** Bottom padding of the standard scrolling step layout. */
+const STANDARD_STEP_BOTTOM_PADDING = 120;
+/** Height of the fade above the pinned mirror-back actions. */
+const MIRROR_BACK_FADE_HEIGHT = 48;
+
 const ALL_STEPS = [
   // HOOK: Opening question — problem-naming with an obvious "yes"
   { id: 'hook', question: '', subtext: '', type: 'hook' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
@@ -467,9 +480,12 @@ const ALL_STEPS = [
   // UPCOMING EVENT: optional \u2014 reachable from both first-run and new-series flows
   { id: 'upcomingEvent', question: "Anything coming up that's weighing on you, or that you're counting down to?", subtext: "A move, a birth, an anniversary, a court date. We'll walk toward it with you.", type: 'upcomingEvent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: 'Each day is crafted to fit your rhythm.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
-  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
+  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
+
+/** One card of a choice step. Only the length cards carry their own VoiceOver label. */
+type ChoiceOption = { value: string | number; label: string; description?: string; time?: string; accessibilityLabel?: string };
 
 type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'keyPeople' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'diagnosticRound' | 'spiritualSeeking' | 'upcomingEvent' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
@@ -551,7 +567,7 @@ export interface OnboardingData {
   relationshipWithGod?: RelationshipWithGod;
   bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 30;
+  devotionalLength: DevotionalLength;
   reminderTime: string;
   mirrorBackCommitted: boolean;
   /** The mirror-back "working read" shown for ratification, stored whenever displayed. */
@@ -626,6 +642,7 @@ export default function OnboardingScreen() {
   const isDark = true;
   const reducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const iconMap = useMemo(() => getIconMap(colors.accent), [colors.accent]);
 
@@ -661,9 +678,14 @@ export default function OnboardingScreen() {
   }, []);
   const onboardingDeviceIdRef = useRef<string | null>(null);
 
-  // Preserve legacy names while new users choose a conversation style.
-  const [companionNameInput] = useState(() =>
-    resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName) ?? '',
+  // The name the reader gives the companion on the feature summary. The draft
+  // keeps what they typed across a relaunch, because a resume never returns to
+  // the feature summary. Otherwise a saved name prefills it. Empty means no
+  // name: nothing falls back to a default here.
+  const [companionNameInput, setCompanionNameInput] = useState(() =>
+    restoredDraft?.companionName
+      ?? resolveCompanionDisplayName(existingUser?.companionName, useUnfoldStore.getState().companionName)
+      ?? '',
   );
   const [companionPersonality, setCompanionPersonality] = useState(() =>
     resolveCompanionPersonality(restoredDraft?.companionPersonality ?? existingUser?.companionPersonality),
@@ -704,7 +726,8 @@ export default function OnboardingScreen() {
     obstacles: existingUser?.obstacles ?? [],
     relationshipWithGod: existingUser?.relationshipWithGod,
     bibleFrequency: existingUser?.bibleFrequency,
-    readingDuration: 15,
+    // A new series starts on the reader's last chosen duration.
+    readingDuration: existingUser?.readingDuration ?? 15,
     devotionalLength: 7,
     reminderTime: existingUser?.reminderTime || '8:00 AM',
     mirrorBackCommitted: false,
@@ -765,39 +788,24 @@ export default function OnboardingScreen() {
 
   // Premium gating state for duration/length options in onboarding
   const [premiumGateFeature, setPremiumGateFeature] = useState<'devotionalLength' | 'readingDuration' | null>(null);
+  const chapteredSeries = useChapteredSeriesSwitch();
 
   // Adaptive-question endpoint is now public (no auth required) — no early auth needed.
 
   // Mirror-back content — structured for the redesigned screen
   const mirrorBackContent = useMemo<MirrorBackContent>(() => {
     const themeId = (data?.selectedThemes?.length ?? 0) > 0 ? data.selectedThemes[0] : null;
-    const hasEmotional = !!data?.currentSituation;
-    const hasSeeking = !!data?.spiritualSeeking;
-    const nameClause = data?.name ? `${data.name}, ` : '';
 
     // Pick scripture based on selected theme
     const scripture = themeId && THEME_SCRIPTURE[themeId]
       ? THEME_SCRIPTURE[themeId]
-      : pickRandom(DEFAULT_SCRIPTURES);
+      : pickRandomFromArray(DEFAULT_SCRIPTURES);
 
-    let reflection: string;
-    if (hasEmotional && hasSeeking) {
-      reflection = pickRandom([
-        `${nameClause}something real brought you here\u00A0\u2014 a weight you've been carrying, and a hope you haven't let go\u00A0of.`,
-        `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at\u00A0work.`,
-        `${nameClause}you named what many people never pause long enough to say out\u00A0loud.`,
-      ]);
-    } else if (hasEmotional) {
-      reflection = pickRandom([
-        `${nameClause}you named something that matters. That kind of honesty is where God meets\u00A0us.`,
-        `What you shared took courage${data?.name ? `, ${data.name}` : ''}. It's exactly the right place to\u00A0begin.`,
-      ]);
-    } else {
-      reflection = pickRandom([
-        `${nameClause}something drew you here today. Whatever the reason\u00A0\u2014 you're in the right\u00A0place.`,
-        `You showed up${data?.name ? `, ${data.name}` : ''}. That's the beginning of\u00A0everything.`,
-      ]);
-    }
+    const reflection = onboardingMirrorBackReflection({
+      currentSituation: data?.currentSituation,
+      spiritualSeeking: data?.spiritualSeeking,
+      name: data?.name,
+    });
 
     const anticipation = 'Something is being written for you right now\u00A0\u2014 crafted for exactly where you\u00A0are.';
 
@@ -946,6 +954,7 @@ export default function OnboardingScreen() {
   const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
   // Mirror-back v2: inline correction UI shown instead of immediately going back
   const [showMirrorCorrection, setShowMirrorCorrection] = useState(false);
+  const [mirrorBackActionsHeight, setMirrorBackActionsHeight] = useState(0);
 
   // Re-entering mirrorBack must always offer ratification afresh — without
   // this, one tap of "Let me adjust something" locks the step into
@@ -1055,6 +1064,7 @@ export default function OnboardingScreen() {
       stepId: currentStepId,
       data: dataRef.current,
       companionPersonality: companionPersonalityRef.current,
+      companionName: companionNameInputRef.current,
       purchasedDuringOnboarding,
       sampleDevotionalId: onboardingDevotionalId || null,
     });
@@ -1090,7 +1100,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!shouldPersistOnboardingDraft(currentStepId)) return;
     draftAutosave.schedule();
-  }, [data, companionPersonality, currentStepId, draftAutosave]);
+  }, [data, companionPersonality, companionNameInput, currentStepId, draftAutosave]);
 
   // Land the pending write before iOS suspends the app — the debounce window is
   // exactly the gap that used to lose the last answer on a force-quit.
@@ -1108,18 +1118,21 @@ export default function OnboardingScreen() {
     opacity: inputOpacity.value,
   }));
 
+  // A ring at rest (value 0) is hidden. The ripple is off on the diagnostic
+  // step, with Reduce Motion, and during each ring's start delay, and a resting
+  // ring read as a static circle around the mascot.
   const ripple1Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
+    opacity: ripple1.value > 0 ? 0.35 - ripple1.value * 0.35 : 0,
     transform: [{ scale: 0.35 + ripple1.value * 1.5 }],
   }));
 
   const ripple2Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.3 - ripple2.value * 0.3),
+    opacity: ripple2.value > 0 ? 0.3 - ripple2.value * 0.3 : 0,
     transform: [{ scale: 0.35 + ripple2.value * 1.5 }],
   }));
 
   const ripple3Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.25 - ripple3.value * 0.25),
+    opacity: ripple3.value > 0 ? 0.25 - ripple3.value * 0.25 : 0,
     transform: [{ scale: 0.35 + ripple3.value * 1.5 }],
   }));
 
@@ -1258,6 +1271,12 @@ export default function OnboardingScreen() {
 
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
+  // The length cards stay put while their step is on screen, even if a config refresh lands.
+  // Before the first config answer they follow it, so a cold start cannot lock in "30 days".
+  const lengthOptions = useFrozenWhile(
+    currentStepId === 'devotionalLength' && chapteredSeries.settled,
+    seriesLengthOptions(chapteredSeries.enabled),
+  );
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
 
   // Helper to get the index of current step in STEPS array
@@ -1385,7 +1404,9 @@ export default function OnboardingScreen() {
     const pendingAuth = pendingAuthDataRef.current ?? {};
     // Read through the ref, never the closure — see dataRef above.
     const data = dataRef.current;
-    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current);
+    // An empty field sends no name, never a default. Omitting the field keeps
+    // a name saved on another device that this one has not loaded yet.
+    const companionName = resolveCompanionNameToPersist(companionNameInputRef.current) || undefined;
     // A blank or skipped life answer keeps the saved context.
     const wroteSituation = hasLifeContextAnswer(data.currentSituation);
     const lifeDraftState = useUnfoldStore.getState();
@@ -1427,7 +1448,7 @@ export default function OnboardingScreen() {
         ...pendingAuth,
         ...(isPrem ? { isPremium: true } : {}),
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     } else {
       setUser({
         name: data.name,
@@ -1469,7 +1490,7 @@ export default function OnboardingScreen() {
         mirrorCorrection: data.mirrorCorrection || undefined,
         ...pendingAuth,
       });
-      setCompanionName(companionName);
+      setCompanionName(companionName ?? null);
     }
   }, [data, existingUser, updateUser, setUser, setCompanionName, purchasedDuringOnboarding]);
 
@@ -1614,6 +1635,7 @@ export default function OnboardingScreen() {
           stepId: 'purchaseConfirmation',
           data: dataRef.current,
           companionPersonality: companionPersonalityRef.current,
+          companionName: companionNameInputRef.current,
           purchasedDuringOnboarding: true,
           sampleDevotionalId: onboardingDevotionalId || null,
         });
@@ -1820,6 +1842,8 @@ export default function OnboardingScreen() {
     }) as StepId | null;
     if (!prevStepId && isNewSeriesFlow) {
       Keyboard.dismiss();
+      // Leaving before a new series is asked for keeps the current one.
+      forgetReplacedSeriesUnlessPending();
       router.dismissTo('/(tabs)/(today)');
       return;
     }
@@ -1999,14 +2023,18 @@ export default function OnboardingScreen() {
           >
             {/* Heading — left-aligned, scatter letter animation */}
             <View style={{ flexGrow: 1, justifyContent: 'center' }}>
-              <ScatterTitle
-                text="Ever open your Bible and not know where to start?"
-                fontSize={32}
-                baseDelay={400}
-                stagger={60}
-                color={colors.text}
-                onComplete={() => setScreenReady(true)}
-              />
+              {/* Each letter is its own element, so VoiceOver spelled the
+                  heading out. One label carries the whole sentence. */}
+              <View accessible accessibilityLabel={HOOK_HEADLINE}>
+                <ScatterTitle
+                  text={HOOK_HEADLINE}
+                  fontSize={32}
+                  baseDelay={400}
+                  stagger={60}
+                  color={colors.text}
+                  onComplete={() => setScreenReady(true)}
+                />
+              </View>
 
               {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
               <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
@@ -3380,11 +3408,9 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'choice' || step.type === 'timeChoice') {
-      const options = step.hasDynamicOptions && step.id === 'readingDuration'
-        ? step.options
-        : step.hasDynamicOptions && step.id === 'devotionalLength'
-          ? step.options
-          : step.options || [];
+      const options: readonly ChoiceOption[] = step.hasDynamicOptions && step.id === 'devotionalLength'
+        ? lengthOptions
+        : step.options || [];
 
       return (
         <View
@@ -3451,7 +3477,7 @@ export default function OnboardingScreen() {
                   }, 300);
                 }}
                 accessibilityRole="radio"
-                accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.label}
+                accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.accessibilityLabel ?? option.label}
                 accessibilityState={{ selected: isSelected, disabled: isLockedOption }}
               >
                     <View style={{
@@ -3610,63 +3636,12 @@ export default function OnboardingScreen() {
             </Text>
           </Animated.View>
 
-          {/* CTA buttons */}
+          {/* CTA buttons. The confirm pair is pinned below the scroll
+              (renderMirrorBackActions); this spacer lets the last line
+              scroll clear of it. */}
           <Animated.View entering={FadeIn.duration(600).delay(1850)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
             {!showMirrorCorrection ? (
-              <>
-                <TouchableOpacity activeOpacity={1}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
-                    // Advance immediately — the feature summary is a full-screen step
-                    // that replaces the entire view, so no need for input fade-out
-                    advanceToNextStep();
-                  }}
-                >
-                  <View style={{
-                    backgroundColor: colors.accent,
-                    paddingVertical: 18,
-                    paddingHorizontal: Spacing['6'],
-                    borderRadius: Radius.lg,
-                    alignItems: 'center',
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.4,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}>
-                    <Text style={{
-                      fontFamily: FontFamily.uiSemiBold,
-                      fontSize: FontSize.base,
-                      color: colors.background,
-                    }}>
-                      Yes, this feels right
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity activeOpacity={1}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowMirrorCorrection(true);
-                  }}
-                >
-                  <View style={{
-                    paddingVertical: 14,
-                    paddingHorizontal: Spacing['6'],
-                    borderRadius: Radius.lg,
-                    alignItems: 'center',
-                  }}>
-                    <Text style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.sm,
-                      color: colors.textMuted,
-                    }}>
-                      Let me adjust something
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </>
+              <View testID="mirror-back-scroll-spacer" style={{ height: Math.max(0, mirrorBackActionsHeight - STANDARD_STEP_BOTTOM_PADDING) }} />
             ) : (
               <Animated.View entering={FadeIn.duration(300)} style={{ gap: Spacing['3'] }}>
                 <View style={{
@@ -3768,13 +3743,18 @@ export default function OnboardingScreen() {
       return (
         <FeatureSummaryCarousel
           colors={colors}
+          companionName={companionNameInput}
+          onCompanionNameChange={setCompanionNameInput}
           companionPersonality={companionPersonality}
           onCompanionPersonalityChange={setCompanionPersonality}
           currentPage={featureSummaryPage}
           onPageChange={setFeatureSummaryPage}
           onComplete={() => {
             setFeatureSummaryPage(0);
-            updateUser({ companionPersonality });
+            // The store keeps the name across a relaunch until the profile is saved.
+            const companionName = resolveCompanionNameToPersist(companionNameInput) || undefined;
+            updateUser({ companionPersonality, companionName });
+            setCompanionName(companionName ?? null);
             advanceToNextStep();
           }}
         />
@@ -3976,6 +3956,7 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               activeOpacity={1}
               onPress={handleNext}
+              accessibilityRole="button"
               style={{
                 backgroundColor: colors.accent,
                 paddingVertical: Spacing['4'],
@@ -4240,6 +4221,90 @@ export default function OnboardingScreen() {
     return null;
   };
 
+  // Mirror-back confirm actions, pinned below the scroll. The generated text
+  // can run long, so they no longer sit under it below the screen edge. The
+  // text scrolls behind a soft fade.
+  const showMirrorBackActions = step?.type === 'mirrorBack'
+    && showInput
+    && !showMirrorCorrection
+    && !(isLoadingMirrorBack && !aiMirrorBack);
+  const renderMirrorBackActions = () => (
+    <Animated.View
+      entering={FadeIn.duration(600).delay(1850)}
+      testID="mirror-back-actions"
+      onLayout={(e) => setMirrorBackActionsHeight(Math.ceil(e.nativeEvent.layout.height))}
+      pointerEvents="box-none"
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+    >
+      <LinearGradient
+        colors={[alpha(colors.background, 0), colors.background]}
+        style={{ height: MIRROR_BACK_FADE_HEIGHT }}
+        pointerEvents="none"
+      />
+      <View style={{
+        backgroundColor: colors.background,
+        paddingHorizontal: Spacing['6'],
+        paddingBottom: Math.max(insets.bottom, Spacing['4']),
+        gap: Spacing['3'],
+      }}>
+        <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
+            // Advance immediately — the feature summary is a full-screen step
+            // that replaces the entire view, so no need for input fade-out
+            advanceToNextStep();
+          }}
+        >
+          <View style={{
+            backgroundColor: colors.accent,
+            paddingVertical: 18,
+            paddingHorizontal: Spacing['6'],
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+            shadowColor: colors.accent,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.4,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            <Text style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: FontSize.base,
+              color: colors.background,
+            }}>
+              Yes, this feels right
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity activeOpacity={1}
+          accessibilityRole="button"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowMirrorCorrection(true);
+          }}
+        >
+          <View style={{
+            paddingVertical: 14,
+            paddingHorizontal: Spacing['6'],
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+          }}>
+            <Text style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textMuted,
+            }}>
+              Let me adjust something
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+
   // Loading state during discovery preparation
   if (isPreparingDiscovery) {
     return (
@@ -4423,7 +4488,7 @@ export default function OnboardingScreen() {
               </KeyboardAwareScrollView>
             ) : (
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={100}>
-                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: 120 }}>
+                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: STANDARD_STEP_BOTTOM_PADDING }}>
                   <View>
                     {(isLoadingAdaptive && step?.adaptive) || (isLoadingDiagnostic && step?.id === 'diagnosticRound') ? (
                       <>
@@ -4515,6 +4580,7 @@ export default function OnboardingScreen() {
                 </View>
               </KeyboardAwareScrollView>
             )}
+            {showMirrorBackActions && renderMirrorBackActions()}
           </Animated.View>
         </View>
       </SafeAreaView>

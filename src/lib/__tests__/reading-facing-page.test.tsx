@@ -15,7 +15,10 @@ const QUESTION = 'Where did you notice rest today?';
 const SECOND_QUESTION = 'What would you set down tomorrow?';
 const DRAFT = 'In the walk home, before the phone came out.';
 
+// The day the reader opens. A test can open another day of the series.
+const mockReaderParams = { devotionalId: 'devo-facing-page', dayNumber: '1' };
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 let mockReducedMotion = true;
 const mockWindow = { width: 390, height: 844, insetTop: 47, insetBottom: 34, insetLeft: 0, insetRight: 0 };
 
@@ -45,12 +48,12 @@ jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn() },
   useRouter: () => ({
     canGoBack: () => true,
-    replace: jest.fn(),
+    replace: mockReplace,
     push: mockPush,
     back: jest.fn(),
     setParams: jest.fn(),
   }),
-  useLocalSearchParams: () => ({ devotionalId: DEVOTIONAL_ID, dayNumber: '1' }),
+  useLocalSearchParams: () => mockReaderParams,
   useSegments: () => ['(tabs)', '(today)', 'reading'],
   useNavigation: () => ({ getState: () => ({ index: 1, routes: [] }), addListener: jest.fn(() => jest.fn()) }),
   useIsFocused: () => true,
@@ -66,16 +69,18 @@ jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
+// Device storage, kept here so a test can start with none.
+const mockMmkvValues = new Map<string, string>();
 jest.mock('../mmkv-storage', () => {
-  const store = new Map<string, string>();
+  // Read when called, not when the factory runs, which is before this file's consts.
   return {
     mmkvStorage: {
-      getItem: jest.fn((key: string) => store.get(key) ?? null),
+      getItem: jest.fn((key: string) => mockMmkvValues.get(key) ?? null),
       setItem: jest.fn((key: string, value: string) => {
-        store.set(key, value);
+        mockMmkvValues.set(key, value);
       }),
       removeItem: jest.fn((key: string) => {
-        store.delete(key);
+        mockMmkvValues.delete(key);
       }),
     },
     getDeviceId: jest.fn(() => 'test-device-id'),
@@ -163,7 +168,15 @@ jest.mock('@/lib/theme', () => ({
 }));
 jest.mock('@/components/icons', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/UndoToast', () => ({ UndoToast: () => null }));
-jest.mock('@/components/CompletionCelebration', () => ({ CompletionCelebration: () => null }));
+// The overlay's last props, so a test can read the completion it was given.
+type MockCelebrationProps = { visible?: boolean; type?: 'day' | 'series'; ordinal?: number; nextStep?: { detail: string } };
+let mockCelebrationProps: MockCelebrationProps | null = null;
+jest.mock('@/components/CompletionCelebration', () => ({
+  CompletionCelebration: (props: MockCelebrationProps) => {
+    mockCelebrationProps = props;
+    return null;
+  },
+}));
 jest.mock('@/components/reading/StudyMethodSheet', () => ({ StudyMethodSheet: () => null }));
 jest.mock('@/components/reading/ReaderOutlineSheet', () => ({ ReaderOutlineSheet: () => null }));
 jest.mock('@/components/ScriptureTapSheet', () => ({ ScriptureTapSheet: () => null }));
@@ -254,6 +267,10 @@ jest.mock('react-native-purchases', () => ({
 }));
 
 import type { Devotional, UserProfile } from '@/lib/store';
+import { DarkColors } from '@/constants/colors';
+import { ACT_OUTCOME_NOTES, actOutcomeNote, completionCopy, completionVariation } from '@/constants/daily-copy';
+import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
+import { copySeed } from '@/lib/copy-variation';
 const { ReadingScreen } = require('@/app/(tabs)/(today)/reading');
 const { useUnfoldStore } = require('@/lib/store') as typeof import('@/lib/store');
 const { DevotionalContent } = require('@/components/reading/DevotionalContent');
@@ -618,6 +635,272 @@ describe('reader continuity across a pane change', () => {
       keyboardListeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } });
     });
     expect(isHiddenFromAccessibility(tree.root.findByType(DevotionalContent))).toBe(false);
+    act(() => tree.unmount());
+  });
+});
+
+describe('reader next step after a finished day', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockWindow, PHONE);
+    useUnfoldStore.getState().reset();
+    mockMmkvValues.clear();
+  });
+
+  afterEach(() => {
+    useUnfoldStore.getState().reset();
+    mockReaderParams.dayNumber = '1';
+  });
+
+  /** Opens a day of the series, finishes it, and returns what the overlay was given. */
+  async function finishDay(dayNumber: number) {
+    mockReaderParams.dayNumber = String(dayNumber);
+    const tree = await renderAt(PHONE);
+    const [complete] = tree.root.findAllByProps({ testID: 'reading-complete-day' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    await act(async () => {
+      (complete.props.onPress as () => void)();
+    });
+    return { tree, shown: { ...mockCelebrationProps } };
+  }
+
+  function returnLinks(root: Node) {
+    return root.findAllByProps({ testID: 'reading-completed-return' })
+      .filter((node) => typeof node.props.onPress === 'function');
+  }
+
+  function textOf(node: Node): string {
+    return node.children.map((child) => (typeof child === 'string' ? child : textOf(child))).join('');
+  }
+
+  it('offers one quiet return to Today under Day Completed', async () => {
+    seedReader({ isRead: true });
+    const tree = await renderAt(PHONE);
+
+    const [link] = returnLinks(tree.root);
+    expect(link.props.accessibilityRole).toBe('button');
+    expect(textOf(link)).toBe('Return to Today');
+    act(() => {
+      (link.props.onPress as () => void)();
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    act(() => tree.unmount());
+  });
+
+  it('returns to Study when the reader was opened there', async () => {
+    seedReader({ isRead: true });
+    let tree: ReaderTree;
+    await act(async () => {
+      tree = renderer.create(<ReadingScreen hostTab="(study)" />);
+    });
+
+    const [link] = returnLinks(tree!.root);
+    expect(textOf(link)).toBe('Return to Study');
+    act(() => {
+      (link.props.onPress as () => void)();
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(study)');
+    act(() => tree!.unmount());
+  });
+
+  it('places a completion among every reading finished before it, across series and days', async () => {
+    // Three readings in another series: two days ago, yesterday, and a
+    // minute ago. The overlay draws its copy by that place, not by the day.
+    seedReader();
+    const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const earlier = (dayNumber: number, readAt: string) => ({
+      id: `earlier-series-${dayNumber}`, devotionalId: 'earlier-series', dayNumber, title: `Day ${dayNumber}`, isRead: true, readAt,
+    });
+    useUnfoldStore.setState((state) => ({
+      devotionals: [...state.devotionals, {
+        id: 'earlier-series',
+        title: 'Earlier',
+        totalDays: 7,
+        currentDay: 4,
+        createdAt: '2026-09-01T12:00:00.000Z',
+        days: [earlier(1, minutesAgo(2 * 24 * 60)), earlier(2, minutesAgo(24 * 60)), earlier(3, minutesAgo(1))],
+      } as unknown as Devotional],
+    }));
+    const tree = await renderAt(PHONE);
+    const [complete] = tree.root.findAllByProps({ testID: 'reading-complete-day' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    await act(async () => {
+      (complete.props.onPress as () => void)();
+    });
+
+    expect(mockCelebrationProps?.visible).toBe(true);
+    expect(mockCelebrationProps?.ordinal).toBe(3);
+    // A later render of the same overlay keeps its place.
+    await resizeTo(tree, PHONE);
+    expect(mockCelebrationProps?.ordinal).toBe(3);
+    act(() => tree.unmount());
+  });
+
+  /** Day 1 and Day 2 of the series, and a one-reading series read yesterday. */
+  function seedWithFirstReading(dayOverrides: Record<string, unknown> = {}) {
+    seedReader(dayOverrides);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const series = useUnfoldStore.getState().devotionals[0];
+    useUnfoldStore.setState({
+      devotionals: [
+        { ...series, days: [...series.days, { ...series.days[0], id: `${DEVOTIONAL_ID}-2`, dayNumber: 2, title: 'Room to rest' }] },
+        {
+          id: 'first-reading',
+          title: 'Your first reading',
+          totalDays: 1,
+          currentDay: 1,
+          createdAt: '2026-09-01T12:00:00.000Z',
+          days: [{ id: 'first-reading-1', devotionalId: 'first-reading', dayNumber: 1, title: 'A first day', isRead: true, readAt: yesterday }],
+        } as unknown as Devotional,
+      ],
+    });
+  }
+
+  /** The next day: Day 1 reads as finished yesterday. */
+  function moveDayOneToYesterday() {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((row) => ({
+        ...row,
+        days: row.days.map((day) => (day.dayNumber === 1 ? { ...day, readAt: yesterday } : day)),
+      })),
+    }));
+  }
+
+  function stringsIn(node: Node): string[] {
+    return node.children.flatMap((child) => (typeof child === 'string' ? [child] : stringsIn(child)));
+  }
+
+  /** The note under the open day's act, once the act is marked done. */
+  function actNoteIn(root: Node): string | undefined {
+    const notes: readonly string[] = ACT_OUTCOME_NOTES.done;
+    return root.findAllByProps({ testID: 'reading-act-section' })
+      .flatMap(stringsIn)
+      .find((text) => notes.includes(text));
+  }
+
+  /** Taps "I did it" under the open day's act, and returns the note shown. */
+  async function markActDone(tree: ReaderTree) {
+    const [done] = tree.root.findAllByProps({ accessibilityLabel: 'I did it' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    await act(async () => {
+      (done.props.onPress as () => void)();
+    });
+    return actNoteIn(tree.root);
+  }
+
+  it('keeps two completions apart when a one-reading series is deleted between them', async () => {
+    seedWithFirstReading();
+    const first = await finishDay(1);
+    act(() => first.tree.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
+    const second = await finishDay(2);
+
+    // The history alone now holds one reading before Day 2, the place Day 1's
+    // overlay took. The device's mark moves the second overlay on.
+    expect(first.shown.ordinal).toBe(1);
+    expect(second.shown.ordinal).toBe(2);
+    const copyFor = (ordinal = 0) => completionCopy('day', completionVariation(copySeed(), ordinal));
+    expect(copyFor(second.shown.ordinal).title).not.toBe(copyFor(first.shown.ordinal).title);
+    expect(copyFor(second.shown.ordinal).message).not.toBe(copyFor(first.shown.ordinal).message);
+    expect(second.shown.nextStep?.detail).not.toBe(first.shown.nextStep?.detail);
+    // A later render of the second overlay keeps its place.
+    await resizeTo(second.tree, PHONE);
+    expect(mockCelebrationProps?.ordinal).toBe(2);
+    act(() => second.tree.unmount());
+  });
+
+  it('keeps two act notes apart when a one-reading series is deleted between them', async () => {
+    seedWithFirstReading({ act: 'Send one honest line to a friend.' });
+    const noteAt = (ordinal = 0) => actOutcomeNote('done', completionVariation(copySeed(), ordinal));
+    const first = await finishDay(1);
+    const firstNote = await markActDone(first.tree);
+    // The note draws at the place its overlay took.
+    expect(firstNote).toBe(noteAt(first.shown.ordinal));
+    act(() => first.tree.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
+    // Day 1, opened again after the delete, keeps the note it showed.
+    mockReaderParams.dayNumber = '1';
+    const dayOne = await renderAt(PHONE);
+    expect(actNoteIn(dayOne.root)).toBe(firstNote);
+    act(() => dayOne.unmount());
+
+    // By the history alone, Day 2's note would take Day 1's place and words.
+    const second = await finishDay(2);
+    const secondNote = await markActDone(second.tree);
+    expect(secondNote).toBe(noteAt(second.shown.ordinal));
+    expect(secondNote).not.toBe(firstNote);
+    act(() => second.tree.unmount());
+  });
+
+  it('keeps two act notes apart when the next day is finished on another device after a delete', async () => {
+    seedWithFirstReading({ act: 'Send one honest line to a friend.' });
+    const noteAt = (ordinal = 0) => actOutcomeNote('done', completionVariation(copySeed(), ordinal));
+    // 1. Day 1 is finished here, and its act marked.
+    const first = await finishDay(1);
+    const firstNote = await markActDone(first.tree);
+    expect(firstNote).toBe(noteAt(first.shown.ordinal));
+    act(() => first.tree.unmount());
+
+    // 2. The one-reading series before it is deleted.
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    moveDayOneToYesterday();
+    // 3. Day 2 is finished on another device, and its read syncs here.
+    const readElsewhere = new Date(Date.now() - 60_000).toISOString();
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((row) => ({
+        ...row,
+        days: row.days.map((day) => (day.dayNumber === 2 ? { ...day, isRead: true, readAt: readElsewhere } : day)),
+      })),
+    }));
+
+    // 4. Its act is marked here. By the history alone its note would take
+    // Day 1's order and words.
+    mockReaderParams.dayNumber = '2';
+    const dayTwo = await renderAt(PHONE);
+    const secondNote = await markActDone(dayTwo);
+    expect(secondNote).toBe(noteAt((first.shown.ordinal ?? 0) + 1));
+    expect(secondNote).not.toBe(firstNote);
+    act(() => dayTwo.unmount());
+  });
+
+  it('keeps the first reader overlay apart from the onboarding one when the first reading is deleted between them', async () => {
+    seedWithFirstReading();
+    const onboardingOverlay = () => (
+      <OnboardingCelebration colors={DarkColors} onContinue={jest.fn()} firstReadingId="first-reading" />
+    );
+    let onboarding: ReaderTree;
+    await act(async () => {
+      onboarding = renderer.create(onboardingOverlay());
+    });
+    const onboardingShown = { ...mockCelebrationProps };
+    // A later render of the onboarding overlay keeps its place.
+    await act(async () => {
+      onboarding.update(onboardingOverlay());
+    });
+    expect(mockCelebrationProps?.ordinal).toBe(onboardingShown.ordinal);
+    act(() => onboarding.unmount());
+
+    act(() => useUnfoldStore.getState().removeDevotional('first-reading'));
+    const first = await finishDay(1);
+
+    // With the first reading gone the history holds no reading before Day 1,
+    // the place the onboarding overlay took. The device's mark moves it on.
+    expect(onboardingShown.ordinal).toBe(0);
+    expect(first.shown.ordinal).toBe(1);
+    const titleAt = (ordinal = 0) => completionCopy('day', completionVariation(copySeed(), ordinal)).title;
+    expect(titleAt(first.shown.ordinal)).not.toBe(titleAt(onboardingShown.ordinal));
+    act(() => first.tree.unmount());
+  });
+
+  it('shows no return before the day is finished', async () => {
+    seedReader();
+    const tree = await renderAt(PHONE);
+    expect(returnLinks(tree.root)).toHaveLength(0);
     act(() => tree.unmount());
   });
 });

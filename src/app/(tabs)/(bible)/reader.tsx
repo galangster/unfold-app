@@ -31,6 +31,7 @@ import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter, formatScriptureReference } from '@/lib/bible-constants';
 import { accentFillInk } from '@/lib/bible-hub-category-palette';
 import type { BibleTranslation } from '@/lib/bible-db';
+import { BibleVerseText } from '@/components/bible/BibleVerseText';
 import { ReadingSettingsSheet } from '@/components/bible/ReadingSettingsSheet';
 import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
@@ -178,6 +179,7 @@ const VerseItem = React.memo(function VerseItem({
   fontSize,
   lineHeight,
   fontFamily,
+  fontScale,
   isSelected,
   highlightColor,
   hasNote,
@@ -197,6 +199,15 @@ const VerseItem = React.memo(function VerseItem({
   fontSize: number;
   lineHeight: number;
   fontFamily: string;
+  /**
+   * The system text size. It keys the native Text hosts. iOS can paint larger
+   * Dynamic Type glyphs before a host invalidates its measured bounds, which
+   * dropped the last line of a verse when the text size changed with the reader
+   * open; a new host re-measures. ReaderText does the same for the devotional
+   * reader but also sets a 1.8 scaling cap, so it is not used here and the
+   * Bible text keeps its current scaling.
+   */
+  fontScale: number;
   isSelected: boolean;
   highlightColor?: BibleHighlightColor;
   hasNote: boolean;
@@ -334,7 +345,7 @@ const VerseItem = React.memo(function VerseItem({
     <View ref={rowRef} collapsable={false} onLayout={handleLayout}>
       {/* Section heading before this verse */}
       {sectionHeading ? (
-        <Text style={[
+        <Text key={fontScale} style={[
           styles.sectionHeading,
           {
             color: textColor,
@@ -390,7 +401,8 @@ const VerseItem = React.memo(function VerseItem({
         ))}
 
         {/* Text */}
-        <Text
+        <BibleVerseText
+          layoutKey={`${contentKey}:${layoutKey}:${hasNote}`}
           onTextLayout={handleTextLayout}
           style={{
             fontSize,
@@ -422,7 +434,7 @@ const VerseItem = React.memo(function VerseItem({
             </Text>
           )}
           {verse.text}
-        </Text>
+        </BibleVerseText>
       </Animated.View>
       </GestureDetector>
     </View>
@@ -1413,27 +1425,18 @@ export default function BibleReaderScreen() {
         backgroundColor: colors.background,
         opacity: showNavigator ? 0 : 1,
       }]}>
-        {params.fromSearch === 'true' && (
-          <TouchableOpacity
-            onPress={guardedBack}
-            style={styles.headerButton}
-            accessibilityRole="button"
-            accessibilityLabel="Back to search"
-          >
-            <CaretLeftIcon size={20} color={colors.text} weight="light" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => setShowSettings(true)}
-          style={styles.headerButton}
-          testID="reader-settings-button"
-          accessibilityLabel="Reader settings"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <GearSixIcon size={20} color={colors.text} weight="light" />
-        </TouchableOpacity>
-
+        <View style={[styles.headerActions, { width: chapterNotebookNotes.length > 0 ? 88 : 44 }]} testID="reader-header-leading">
+          {params.fromSearch === 'true' && (
+            <TouchableOpacity
+              onPress={guardedBack}
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back to search"
+            >
+              <CaretLeftIcon size={20} color={colors.text} weight="light" />
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity
           onPress={() => setShowNavigator(true)}
           style={styles.headerCenter}
@@ -1449,25 +1452,35 @@ export default function BibleReaderScreen() {
           </Text>
         </TouchableOpacity>
 
-        {chapterNotebookNotes.length > 0 ? (
+        <View style={styles.headerActions} testID="reader-header-trailing">
+          {chapterNotebookNotes.length > 0 && (
+            <TouchableOpacity
+              onPress={handleOpenChapterNotes}
+              style={styles.headerButton}
+              testID="reader-chapter-notes-badge"
+              accessibilityRole="button"
+              accessibilityLabel={`${chapterNotebookNotes.length} notebook ${chapterNotebookNotes.length === 1 ? 'note' : 'notes'} reference this chapter`}
+              hitSlop={8}
+            >
+              <NotepadIcon size={20} color={colors.text} weight="light" />
+              <View style={[styles.headerNoteBadge, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.headerNoteBadgeText, { color: colors.background }]}>
+                  {chapterNotebookNotes.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            onPress={handleOpenChapterNotes}
+            onPress={() => setShowSettings(true)}
             style={styles.headerButton}
-            testID="reader-chapter-notes-badge"
+            testID="reader-settings-button"
+            accessibilityLabel="Reader settings"
             accessibilityRole="button"
-            accessibilityLabel={`${chapterNotebookNotes.length} notebook ${chapterNotebookNotes.length === 1 ? 'note' : 'notes'} reference this chapter`}
             hitSlop={8}
           >
-            <NotepadIcon size={20} color={colors.text} weight="light" />
-            <View style={[styles.headerNoteBadge, { backgroundColor: colors.accent }]}>
-              <Text style={[styles.headerNoteBadgeText, { color: colors.background }]}>
-                {chapterNotebookNotes.length}
-              </Text>
-            </View>
+            <GearSixIcon size={20} color={colors.text} weight="light" />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.headerButton} />
-        )}
+        </View>
       </View>
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
@@ -1523,6 +1536,7 @@ export default function BibleReaderScreen() {
                 fontSize={fontSize}
                 lineHeight={lineHeight}
                 fontFamily={readingFont.body}
+                fontScale={adaptiveLayout.fontScale}
                 isSelected={selectedVerses.has(v.verse)}
                 highlightColor={highlightMap[v.verse]}
                 hasNote={!!noteMap[v.verse]}
@@ -1538,8 +1552,9 @@ export default function BibleReaderScreen() {
               />
             ))}
 
-            {/* End-of-chapter ornament */}
-            <View style={styles.endMarker}>
+            {/* End-of-chapter ornament and the prompts below it are keyed on
+                fontScale like the verse text. */}
+            <View key={`end-marker-${adaptiveLayout.fontScale}`} style={styles.endMarker}>
               <Text style={[styles.endOrnament, { color: colors.textHint }]}>
                 {'\u00B7\u00B7\u00B7'}
               </Text>
@@ -1547,13 +1562,14 @@ export default function BibleReaderScreen() {
 
             {/* Next chapter prompt */}
             {isEndOfBible ? (
-              <View style={styles.endOfBibleContainer}>
+              <View key={`end-of-bible-${adaptiveLayout.fontScale}`} style={styles.endOfBibleContainer}>
                 <Text style={[styles.endOfBibleText, { color: colors.textMuted }]}>
                   You've reached the end of the Bible
                 </Text>
               </View>
             ) : canGoNext && (
               <TouchableOpacity
+                key={`next-chapter-${adaptiveLayout.fontScale}`}
                 onPress={() => navigateChapter(1)}
                 style={[
                   styles.nextChapterPrompt,
@@ -1867,6 +1883,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'], paddingVertical: Spacing['2'],
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', minWidth: 44 },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerNoteBadge: {
     position: 'absolute',
@@ -1908,7 +1925,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 2,
   },
-  headerCenter: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  headerCenter: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },
 

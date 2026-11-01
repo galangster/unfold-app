@@ -43,6 +43,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Typography } from '@/constants/typography';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -59,6 +60,7 @@ import {
   type SyncCheckCooldown,
 } from '@/lib/sync-pull-backoff';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { canPulledSeriesTakeEmptyToday } from '@/lib/devotional-resume-selection';
 import {
   captureSyncSession,
   isSyncSessionCurrent,
@@ -72,13 +74,17 @@ import {
   summarizeRenderableDevotionalDays,
 } from '@/lib/devotional-canonical-days';
 import {
+  blockedForwardMessage,
+  countReadsBefore,
   getLockedTodayDayNumber,
   getPausedSeriesMissingDayKind,
   getSelectableDayLimit,
   isDevotionalDaySelectable,
+  isPausedSeries,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
 import { nextConfirmedAbsentKey, shouldWatchForGeneratedDay } from '@/lib/generated-day-watch';
+import { localDayKey } from '@/lib/home-devotional-state';
 import { getPausedSeriesContinuationDay, type PausedSeriesRecoveryContext } from '@/lib/paused-series-recovery';
 import { createPausedSeriesResume, type PausedSeriesResume } from '@/lib/paused-series-resume';
 import { useGeneratedDayWatch } from '@/hooks/useGeneratedDayWatch';
@@ -89,7 +95,10 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { getCompletionDismissRoute, type CompletionDismissTarget } from '@/lib/completion-dismiss-route';
-import { getCompletionNextStep } from '@/lib/completion-next-step';
+import { completionAnnouncement, getCompletionNextStep, resolveWeekCompletion } from '@/lib/completion-next-step';
+import { readSeriesWeeks, withholdsWeekPromise } from '@/lib/series-weeks';
+import { markActOutcome } from '@/lib/act-outcome';
+import { copySeed, takeCompletionOrdinal } from '@/lib/copy-variation';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { resolveStackRoute, tabGroupToFrom, type TabGroup } from '@/lib/tab-stack-routes';
 import { readAutoTrialIntent, transitionAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -285,10 +294,11 @@ type SyncCheckOutcome = 'found' | 'missing' | 'failed' | 'rate-limited' | 'skipp
 
 export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = {}) {
   const calendarNow = useCalendarNow();
+  const calendarDayKey = localDayKey(calendarNow);
   const readBudgetBlocked = useReadBudgetBlocked();
   const router = useRouter();
   const isReadingFocused = useIsFocused();
-  const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
+  const params = useLocalSearchParams<{ bookOpening?: string; dayNumber?: string; dayRequest?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string; readOnly?: string; focus?: string; from?: string; practice?: string; practiceMethod?: string }>();
   const { handleBack: navigateReaderBack } = useCrossTabBack();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -325,7 +335,6 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
-  const setActOutcome = useUnfoldStore((s) => s.setActOutcome);
   const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -399,6 +408,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     savedPassage?: SavedScripturePassage;
   } | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
+  // This completion's place in the reader's history: the readings finished
+  // before it, and past the last overlay this device opened. The overlay
+  // draws its copy by it, once, when the day completes.
+  const [celebrationOrdinal, setCelebrationOrdinal] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [dailySyncRecoveryKey, setDailySyncRecoveryKey] = useState<string | null>(null);
@@ -425,7 +438,16 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // follows through the silent HIGHLIGHTS_CHANGED that comes back.
   const [highlightToast, setHighlightToast] = useState<{ message: string; undo: () => void } | null>(null);
   const highlightCommandRef = useRef<DevotionalWebViewCommands | null>(null);
-  const [lockedDayToast, setLockedDayToast] = useState(false);
+  // Undo replays a change into the open page by character position, so it
+  // belongs to the page it came from. Leaving that page ends its toast, and an
+  // Undo that still arrives for it is dropped.
+  const highlightPage = `${effectiveDevotionalId ?? ''}:${viewingDay}`;
+  const highlightPageRef = useRef(highlightPage);
+  useLayoutEffect(() => {
+    highlightPageRef.current = highlightPage;
+    setHighlightToast(null);
+  }, [highlightPage]);
+  const [lockedDayToast, setLockedDayToast] = useState<string | null>(null);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number; key: string } | null>(null);
   const [layoutGeneration, setLayoutGeneration] = useState(1);
@@ -439,6 +461,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
   const missingDevotionalHydrationOwnerRef = useRef<string | null>(null);
+  // Series whose pull failed: offline, a 5xx. That says nothing about the
+  // series, so the screen offers Try again instead of saying it is not here.
+  const missingDevotionalPullFailedRef = useRef<Record<string, true>>({});
+  const [missingDevotionalRetryKey, setMissingDevotionalRetryKey] = useState(0);
   const readingMountedRef = useRef(true);
   const pausedRecoveryContextRef = useRef<PausedSeriesRecoveryContext | null>(null);
   const continuationDialogRef = useRef<PausedSeriesRecoveryContext | null>(null);
@@ -492,7 +518,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   useAutoHide(bookmarkToast, 2500, useCallback(() => setBookmarkToast(false), []));
 
   // Locked-day toast (blocked forward swipe) auto-dismiss after 2.5s
-  useAutoHide(lockedDayToast, 2500, useCallback(() => setLockedDayToast(false), []));
+  useAutoHide(lockedDayToast != null, 2500, useCallback(() => setLockedDayToast(null), []));
 
   useEffect(() => {
     readingMountedRef.current = true;
@@ -958,6 +984,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   const canGoBack = viewingDay > 1;
   const canGoForward = viewingDay < availableDays;
   const isLastDay = viewingDay === totalDays;
+  // Week framing of a chaptered series, or null for a legacy series (R6).
+  const seriesWeeks = useMemo(
+    () => readSeriesWeeks(currentDevotional?.seriesArc, { totalDays }),
+    [currentDevotional?.seriesArc, totalDays],
+  );
   const isDayCompleted = currentDayData?.isRead ?? false;
 
   // Tomorrow preview data — next renderable day in the series.
@@ -1065,9 +1096,11 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
   // Respect deep-linked day number (used by Resume card), but never let a
   // stale route reopen tomorrow after today's reading has already completed.
   // Apply each route dayNumber once; after that, manual swipes own viewingDay.
+  // The day menu sends a new request with each choice, so picking the day the
+  // route already names opens it even after a swipe.
   useEffect(() => {
     if (!currentDevotional || !requestedDayNumber) return;
-    const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}`;
+    const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}:${params.dayRequest ?? ''}`;
     if (lastResolvedRouteKeyRef.current === routeKey) return;
     lastResolvedRouteKeyRef.current = routeKey;
 
@@ -1076,7 +1109,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       requestedDayNumber,
     );
     setViewingDay((current) => (current === resolvedDay ? current : resolvedDay));
-  }, [currentDevotional, effectiveDevotionalId, requestedDayNumber]);
+  }, [currentDevotional, effectiveDevotionalId, requestedDayNumber, params.dayRequest]);
 
   // If currentDay advances to tomorrow while this screen is mounted, keep the
   // reader anchored to today's completed reading instead of exposing tomorrow.
@@ -1318,6 +1351,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     );
 
     if (event.silent) {
+      // A replay saves a change the reader made on the page a font switch
+      // replaced. It was not an Undo, and its own event was never logged.
+      if (event.reason === 'replay') return;
       const name = event.reason === 'heal' ? AnalyticsEvents.HIGHLIGHT_HEALED : AnalyticsEvents.HIGHLIGHT_UNDONE;
       logEvent(name, { added: event.added.length, removed: event.removed.length });
       if (event.reason === 'heal') addAppBreadcrumb('highlights', 'Re-anchored highlights after text change', { devotionalId: effectiveDevotionalId, day: viewingDay, count: event.added.length });
@@ -1331,11 +1367,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       logEvent(AnalyticsEvents.HIGHLIGHT_CREATED, { color: primary?.color ?? 'yellow', chars: primary?.text.length ?? 0, recolor: event.reason === 'recolor' });
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '' }[event.reason];
+    const message = { create: 'Highlighted', remove: 'Highlight removed', recolor: 'Color changed', undo: '', heal: '', replay: '' }[event.reason];
+    const page = highlightPageRef.current;
     setHighlightToast({
       message,
       undo: () => {
-        highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed });
+        if (highlightPageRef.current === page) {
+          highlightCommandRef.current?.applyInverse({ added: event.added, removed: event.removed, docId: event.docId });
+        }
         setHighlightToast(null);
       },
     });
@@ -1366,6 +1405,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     Keyboard.dismiss();
   }, []);
 
+  // The reason is fixed when the swipe is blocked, so moving to another day
+  // while the toast shows does not rewrite it.
+  const showBlockedForwardToast = useCallback(() => {
+    setLockedDayToast(blockedForwardMessage(currentDevotional, viewingDay, totalDays, !isViewingActiveSeries));
+  }, [currentDevotional, viewingDay, totalDays, isViewingActiveSeries]);
+
   const panGesture = useMemo(() =>
     Gesture.Pan()
       // Reserve the leading edge for the native stack back gesture.
@@ -1395,7 +1440,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           // locked-day case — surface why nothing happened instead of just
           // the haptic.
           if (event.translationX < -80 && viewingDay >= availableDays) {
-            runOnJS(setLockedDayToast)(true);
+            runOnJS(showBlockedForwardToast)();
           }
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
@@ -1405,7 +1450,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           translateX.value = withTiming(0, { duration: Duration.normal });
         }
       }),
-    [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe]
+    [viewingDay, availableDays, reflectionToolbar, handlePrevious, handleNext, dismissKeyboardForSwipe, showBlockedForwardToast]
   );
 
   const handleShare = useCallback(() => {
@@ -1469,6 +1514,15 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         },
         completedTimeZone: getDeviceTimezone(),
       });
+      // Counted at the read time this day is about to get, and never below one
+      // past the last overlay this device opened, so a series deleted since
+      // cannot move the count back onto that overlay. The order is kept for
+      // this day too, before it is marked read, so its act note
+      // (DevotionalContent) draws at the same place.
+      setCelebrationOrdinal(takeCompletionOrdinal(
+        countReadsBefore(store.devotionals, clock.at),
+        { devotionalId: effectiveDevotionalId, dayNumber: viewingDay },
+      ));
       markDayAsRead(effectiveDevotionalId, viewingDay, clock.iso);
       if (currentDevotional && currentDayData) {
         void syncDevotionalDayRead({
@@ -1520,9 +1574,8 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       });
 
       // Announce completion to screen reader
-      const announcement = completingLastDay
-        ? 'Congratulations! You\'ve completed this devotional series.'
-        : `Day ${viewingDay} completed. Great job!`;
+      // Days 7, 14 and 21 of a chaptered series name the finished week (row 20).
+      const announcement = completionAnnouncement(seriesWeeks, viewingDay, completingLastDay);
       AccessibilityInfo.announceForAccessibility(announcement);
 
       if (viewingDay < expectedTotal) {
@@ -1541,9 +1594,22 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         justCompletedSeries: completingLastDay,
       };
     }
-  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets]);
+  }, [isReadingFocused, isOnline, effectiveDevotionalId, isViewingActiveSeries, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, setScripturePracticeReturn, recordStreakRead, syncWidgets, seriesWeeks]);
 
-  const completionNextStep = getCompletionNextStep(currentDevotional, viewingDay, celebrationType);
+  // Only the open overlay reads the step, so a hidden render skips the draw.
+  const completionNextStep = showCelebration
+    ? getCompletionNextStep(currentDevotional, viewingDay, celebrationType, new Date(), copySeed(), celebrationOrdinal)
+    : null;
+  // The restrained week moment after day 7, 14 or 21 of a chaptered series.
+  // It never replaces the series celebration on the last day.
+  // Only the current series gets new days, and none unless premium is granted (R4).
+  const weekSeriesPaused = withholdsWeekPromise(isPausedSeries(currentDevotional, currentDevotionalId), premiumPolicy);
+  const weekMoment = useMemo(
+    () => (showCelebration && celebrationType === 'day'
+      ? resolveWeekCompletion(currentDevotional, seriesWeeks, viewingDay, new Date(), { seriesPaused: weekSeriesPaused })
+      : null),
+    [showCelebration, celebrationType, currentDevotional, seriesWeeks, viewingDay, weekSeriesPaused],
+  );
   const completionDismissTarget = getCompletionDismissRoute(celebrationType, params.from, hostTab);
   const completionReturnLabel = completionDismissTarget === '/(tabs)/(study)'
     ? 'Return to Study'
@@ -1933,9 +1999,12 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       viewingDay: day.dayNumber,
     });
   }, [updateDevotionalDays, seriesTitle]);
+  // Re-asked when the local day turns, so a missing day left open overnight
+  // is watched once it is due without a store write.
   const shouldWatchViewingDay = useMemo(
-    () => shouldWatchForGeneratedDay(currentDevotional, viewingDay),
-    [currentDevotional, viewingDay],
+    () => shouldWatchForGeneratedDay(currentDevotional, viewingDay, calendarNow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calendarDayKey stands in for calendarNow
+    [currentDevotional, viewingDay, calendarDayKey],
   );
   const dailyRecoveryKey = currentDevotional ? `${currentDevotional.id}:${viewingDay}` : null;
   const dailyGeneration = useGeneratedDayWatch({
@@ -2059,7 +2128,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         if (missingDevotionalHydrationOwnerRef.current === devotionalId
           && effectiveDevotionalIdRef.current === devotionalId
           && params.readOnly !== '1' && !useUnfoldStore.getState().currentDevotionalId
-          && !useUnfoldStore.getState().devotionals.find((item) => item.id === devotionalId)?.archivedAt) {
+          && canPulledSeriesTakeEmptyToday(devotionalId, useUnfoldStore.getState().devotionals, pulled.canonicalSeries)) {
           setCurrentDevotional(devotionalId);
         }
 
@@ -2076,6 +2145,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             retryAfterSeconds: err.retryAfterSeconds,
           }, 'warn');
         } else {
+          missingDevotionalPullFailedRef.current[devotionalId] = true;
           void logBugError('reading-sync-recovery', err, {
             phase: 'missing-devotional-hydration',
             devotionalId,
@@ -2088,7 +2158,24 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
         }
       }
     })();
-  }, [effectiveDevotionalId, currentDevotional, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays]);
+  }, [effectiveDevotionalId, currentDevotional, params.readOnly, readBudgetBlocked, setCurrentDevotional, updateDevotionalDays, missingDevotionalRetryKey]);
+
+  const retryMissingDevotionalPull = useCallback((devotionalId: string) => {
+    delete missingDevotionalHydrationAttemptRef.current[devotionalId];
+    delete missingDevotionalPullFailedRef.current[devotionalId];
+    setMissingDevotionalRetryKey((key) => key + 1);
+  }, []);
+
+  // Coming back to the reader asks again after a failed pull. This runs on a
+  // focus change only: a retry while the screen stays open would repeat a
+  // failing pull in a loop.
+  useEffect(() => {
+    if (!isReadingFocused) return;
+    const devotionalId = effectiveDevotionalIdRef.current;
+    if (devotionalId && missingDevotionalPullFailedRef.current[devotionalId]) {
+      retryMissingDevotionalPull(devotionalId);
+    }
+  }, [isReadingFocused, retryMissingDevotionalPull]);
 
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
@@ -2126,7 +2213,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
     // While the series is hydrating, show a serif-toned reader skeleton instead
     // of a bare spinner so the screen reads as "your reading is arriving" rather
     // than an empty/crashed state. After hydration finishes empty, say what
-    // happened and how to leave.
+    // happened and how to leave. After a failed pull, offer Try again.
+    const missingDevotionalPullFailed = Boolean(
+      effectiveDevotionalId && missingDevotionalPullFailedRef.current[effectiveDevotionalId],
+    );
     if (shouldShowMissingSeriesRecovery) {
       return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -2163,8 +2253,55 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 marginBottom: 14,
               }}
             >
-              This series isn’t on the device.
+              {missingDevotionalPullFailed ? 'This series couldn’t load.' : 'This series isn’t on the device.'}
             </Text>
+            {missingDevotionalPullFailed && effectiveDevotionalId ? (
+              <>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    marginBottom: 22,
+                  }}
+                >
+                  Check your connection and try again.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    retryMissingDevotionalPull(effectiveDevotionalId);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  accessibilityHint="Checks for this series again"
+                  style={{
+                    backgroundColor: retryCtaButtonBg,
+                    paddingVertical: 18,
+                    paddingHorizontal: Spacing['7'],
+                    borderRadius: Radius.card,
+                    borderWidth: 1,
+                    borderColor: retryCtaButtonBorder,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 200,
+                    marginBottom: Spacing['3'],
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: 15,
+                      color: btnText,
+                    }}
+                  >
+                    Try again
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => {
@@ -2409,7 +2546,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 ? dailyBody
                 : isRetrying
                 ? 'Preparing the rest of this series.\nThis may take a moment.'
-                : `Day ${viewingDay} isn't ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
+                : `Day ${viewingDay} isn’t ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
             </Text>
 
             {!usesDailyRecovery && isWaitingForConnection && !isRetrying && (
@@ -2422,7 +2559,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   marginTop: 10,
                 }}
               >
-                Waiting for connection… we'll retry automatically when you're back online.
+                Waiting for connection… we’ll retry automatically when you’re back online.
               </Text>
             )}
 
@@ -2802,7 +2939,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                 onActLocated={handleTargetHighlightLocated}
                 onActOutcome={(outcome) => {
                   if (!effectiveDevotionalId) return;
-                  setActOutcome(effectiveDevotionalId, viewingDay, outcome);
+                  markActOutcome(effectiveDevotionalId, viewingDay, outcome);
                   logEvent('act_outcome', { outcome, source: 'reading' });
                 }}
                 onScriptureTap={(ref, savedPassage) => {
@@ -2945,6 +3082,20 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                   </TouchableOpacity>
                 </View>
 
+                {/* One quiet way on from a finished day: the return the
+                    completion celebration offers, in the reader's link style. */}
+                {isCompleted ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => router.replace(completionDismissTarget)}
+                    testID="reading-completed-return"
+                    accessibilityRole="button"
+                    style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: Spacing['2'] }}
+                  >
+                    <Text style={[Typography.uiMd, { color: colors.accent }]}>{completionReturnLabel}</Text>
+                  </TouchableOpacity>
+                ) : null}
+
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
                   {showIncompleteJourneyRetry && (
                     <View style={{ marginTop: 28, alignItems: 'center', paddingHorizontal: Spacing['5'] }}>
@@ -2970,7 +3121,7 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
                             marginBottom: Spacing['4'],
                           }}
                         >
-                          Waiting for connection… we'll retry automatically when you're back online.
+                          Waiting for connection… we’ll retry automatically when you’re back online.
                         </Text>
                       )}
                       {!isWaitingForConnection && autoRetrySecondsLeft !== null && !isGeneratingMore && (
@@ -3087,6 +3238,14 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
               </Animated.View>
               </View>
             </Animated.ScrollView>
+            {/* A soft edge under the header: text fades as it scrolls under
+                the header instead of being cut off. */}
+            <LinearGradient
+              testID="reader-header-fade"
+              pointerEvents="none"
+              colors={[colors.background, alpha(colors.background, 0)]}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: Spacing['6'] }}
+            />
             </Animated.View>
             </View>
               }
@@ -3135,8 +3294,10 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
       <CompletionCelebration
         visible={showCelebration}
         onDismiss={() => dismissCelebration()}
-        nextStep={{
+        week={weekMoment}
+        nextStep={completionNextStep ? {
           ...completionNextStep,
+          title: weekMoment?.nextLine ?? completionNextStep.title,
           primaryLabel: celebrationType === 'series'
             ? 'Choose next study'
             : completionNextStep.nextDay
@@ -3154,8 +3315,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
           },
           secondaryLabel: completionNextStep.nextDay ? completionReturnLabel : 'Keep reflecting',
           onSecondary: () => dismissCelebration(completionNextStep.nextDay ? undefined : null),
-        }}
+        } : undefined}
         type={celebrationType}
+        ordinal={celebrationOrdinal}
         seriesReflectionSummary={
           celebrationType === 'series'
             ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary
@@ -3191,7 +3353,9 @@ export function ReadingScreen({ hostTab = '(today)' }: { hostTab?: TabGroup } = 
             { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
           ]}
         >
-          <Text style={styles.toastText}>Tomorrow's reading unlocks after midnight</Text>
+          <Text style={styles.toastText}>
+            {lockedDayToast}
+          </Text>
         </Animated.View>
       )}
 

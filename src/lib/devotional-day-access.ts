@@ -16,6 +16,23 @@ function isSameLocalDate(value: string | undefined, now: Date): boolean {
   return parsed.toDateString() === now.toDateString();
 }
 
+/**
+ * How many readings were finished before `at`, across every series, from
+ * their read timestamps. It is a reading's place in the reader's history:
+ * the completion overlay and the act note start from it
+ * (takeCompletionOrdinal, actNoteOrdinal), so they step once per completion.
+ * A day marked read with no timestamp is never counted, so it cannot move a
+ * later reading's place.
+ */
+export function countReadsBefore(
+  devotionals: readonly Pick<DevotionalReadingProgress, 'days'>[],
+  at: Date,
+): number {
+  return devotionals.reduce((count, devotional) => count + (devotional.days ?? []).filter((day) => (
+    day.isRead && Date.parse(day.readAt ?? '') < at.getTime()
+  )).length, 0);
+}
+
 function isDevotionalDayRead(devotional: Devotional, dayNumber: number): boolean {
   return devotional.days.some((day) => day.dayNumber === dayNumber && day.isRead);
 }
@@ -78,6 +95,63 @@ export function getLockedTodayDayNumber(
 
   // Completion sets the daily pace even when the series started before the first reading.
   return currentDayIsTomorrowCandidate ? latestReadToday : null;
+}
+
+export type BlockedForwardReason =
+  | 'series-finished'
+  | 'paused'
+  | 'daily-pace'
+  | 'finish-current'
+  | 'not-ready';
+
+/**
+ * Why a forward swipe from `viewingDay` went nowhere: the series has no later
+ * day; a paused series lacks the next day and will not get it; today's
+ * reading already set the daily pace; the next day is here but this one is
+ * unfinished; or the next day is not on this device yet.
+ */
+export function resolveBlockedForwardReason(
+  devotional: Devotional | null | undefined,
+  viewingDay: number,
+  totalDays: number,
+  seriesPaused: boolean,
+  now = new Date(),
+): BlockedForwardReason {
+  if (viewingDay >= totalDays) return 'series-finished';
+  const nextDayReady = selectRenderableDevotionalDay(devotional, viewingDay + 1).status === 'ready';
+  // Only the current series gets new days, so waiting will not bring a
+  // missing day to a paused one.
+  if (seriesPaused && !nextDayReady) return 'paused';
+  if (getLockedTodayDayNumber(devotional, now) != null) return 'daily-pace';
+  if (nextDayReady) return 'finish-current';
+  return 'not-ready';
+}
+
+export const BLOCKED_FORWARD_MESSAGES: Record<BlockedForwardReason, string> = {
+  'series-finished': 'This is the last day of this series',
+  paused: 'This series is paused, and its next day isn’t on this device',
+  'daily-pace': 'Tomorrow’s reading unlocks after midnight',
+  'finish-current': 'Finish this reading to open the next day',
+  'not-ready': 'The next day isn’t ready yet',
+};
+
+/**
+ * The toast text for a blocked forward swipe. The day to finish is the
+ * series' current day, which can sit before a read day the reader is on.
+ */
+export function blockedForwardMessage(
+  devotional: Devotional | null | undefined,
+  viewingDay: number,
+  totalDays: number,
+  seriesPaused: boolean,
+  now = new Date(),
+): string {
+  const reason = resolveBlockedForwardReason(devotional, viewingDay, totalDays, seriesPaused, now);
+  const currentDay = devotional?.currentDay || viewingDay;
+  if (reason === 'finish-current' && currentDay !== viewingDay) {
+    return `Finish Day ${currentDay} to open the next day`;
+  }
+  return BLOCKED_FORWARD_MESSAGES[reason];
 }
 
 export function getTodayReaderDayNumber(

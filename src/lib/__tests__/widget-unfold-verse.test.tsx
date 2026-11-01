@@ -21,6 +21,7 @@ type Props = {
   lockReadToday: boolean;
   totalDays: number;
   hasReadToday: boolean;
+  dayReadyLine: string;
 };
 type Node = { type: string; props: { children?: unknown; value?: number; modifiers?: unknown[] } };
 
@@ -63,6 +64,7 @@ const render = (family: Family, over: Partial<Props> = {}): Node =>
       lockReadToday: false,
       totalDays: 7,
       hasReadToday: false,
+      dayReadyLine: '',
       ...over,
     },
     { widgetFamily: family }
@@ -125,6 +127,22 @@ describe('UnfoldVerse accessoryRectangular', () => {
 
   it('asks to start a series when there is none', () => {
     expect(texts(render('accessoryRectangular', NO_SERIES))).toEqual(['Open Unfold to start a series']);
+  });
+
+  it('names the day at midnight while its text is not on the device yet', () => {
+    const tree = render('accessoryRectangular', { ...NO_VERSE, dayReadyLine: 'Day 4 is ready to open' });
+    expect(texts(tree)).toEqual(['Day 4 is ready to open']);
+    expect(tree.props.modifiers).toContainEqual({
+      modifier: 'accessibilityLabel',
+      args: ['Day 4 is ready to open.'],
+    });
+  });
+
+  it('keeps the verse when one is there, whatever the ready line says', () => {
+    expect(texts(render('accessoryRectangular', { dayReadyLine: 'Day 4 is ready to open' }))).toEqual([
+      LINE,
+      'MATTHEW 11:28–30',
+    ]);
   });
 });
 

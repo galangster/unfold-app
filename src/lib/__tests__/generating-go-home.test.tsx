@@ -100,15 +100,22 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// Every line an Animated.Text renders, in order, so a test can see each
+// frame inside one act() as well as where it ends up.
+const mockAnimatedTextRenders: unknown[] = [];
 jest.mock('react-native-reanimated', () => {
   const { View, Text } = require('react-native');
   const chain: Record<string, unknown> = {};
   chain.duration = () => chain;
   chain.delay = () => chain;
   chain.easing = () => chain;
+  const AnimatedText = (props: { children?: React.ReactNode }) => {
+    mockAnimatedTextRenders.push(props.children);
+    return <Text {...props} />;
+  };
   return {
     __esModule: true,
-    default: { View, Text },
+    default: { View, Text: AnimatedText },
     FadeIn: chain,
     FadeInUp: chain,
     FadeOut: chain,
@@ -157,6 +164,7 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 import { act, create } from 'react-test-renderer';
+import { Text } from 'react-native';
 
 import GeneratingScreen from '@/app/generating';
 import {
@@ -174,13 +182,25 @@ import {
   INITIAL_GENERATION_REQUEST_ID_KEY,
   readInitialGenerationRequestId,
 } from '../initial-generation-request';
-import { createAutoTrialIntent, transitionAutoTrialIntent } from '../auto-trial-intent';
+import {
+  createAutoTrialIntent,
+  readAutoTrialIntent,
+  transitionAutoTrialIntent,
+  type CreateAutoTrialIntentInput,
+} from '../auto-trial-intent';
+import { LONG_SERIES_LONG_RUNNING_AFTER_MS, SHORT_SERIES_LONG_RUNNING_AFTER_MS } from '../generation-poll-outcome';
+import { rememberDeletedSeries, resetDeletedSeriesForTesting } from '../deleted-series';
 import { mmkvStorage } from '../mmkv-storage';
+import { clearReplacedSeries, readReplacedSeries, readReplacementSeries, recordReplacedSeries } from '../series-replacement';
 import { useUnfoldStore, type Devotional, type UserProfile } from '../store';
+import { resolveCreateNewDuringPendingInitial } from '../support-clarity';
 import { useUIState } from '@/lib/ui-state';
+import { generatingStatusLines } from '@/constants/daily-copy';
+import { copyVariationFor } from '../copy-variation';
 
 const GO_HOME_LABEL = 'Go to Today';
 const EXPO_LOST_CONNECTION = 'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)';
+const RECONNECTING = 'Reconnecting\u2026';
 
 const user = {
   name: 'Jordan',
@@ -193,6 +213,25 @@ const user = {
 } as unknown as UserProfile;
 
 type Tree = ReturnType<typeof create>;
+
+function makeTrialIntent(overrides: Partial<CreateAutoTrialIntentInput> = {}): CreateAutoTrialIntentInput {
+  return {
+    deviceId: 'test-device-id',
+    entry: 'onboarding',
+    surface: 'onboarding_paywall',
+    source: 'purchase',
+    simulated: false,
+    trialDays: 3,
+    purchasedAt: '2026-09-08T17:00:00.000Z',
+    expiresAt: '2026-09-11T17:00:00.000Z',
+    timeZone: 'America/Chicago',
+    isSandbox: false,
+    productIdentifier: 'unfold_premium_yearly',
+    switchFetchedAt: '2026-09-08T17:00:00.000Z',
+    nowMs: 1_800_000_000_000,
+    ...overrides,
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -255,6 +294,7 @@ beforeEach(() => {
   mmkvStorage.removeItem(INFLIGHT_GENERATION_JOB_KEY);
   mmkvStorage.removeItem(INITIAL_GENERATION_REQUEST_ID_KEY);
   mmkvStorage.removeItem('auto-trial-series-intent-v1');
+  clearReplacedSeries();
   // The reveal guard is session state; an earlier test's key must not mark this mount as a repeat.
   useUIState.getState().setAutoTrialRevealGuardKey(null);
   useUIState.getState().setSeriesRevealMountedIntentId(null);
@@ -626,24 +666,337 @@ describe('regression: Jordan item 6 — Go home from /generating', () => {
   });
 });
 
+describe('Go home after the server ruled on the first series', () => {
+  // How the worker stores a provider abort. The friendly copy reads it as a
+  // lost connection, but it is the server's verdict on the job.
+  const PROVIDER_TIMEOUT = 'The operation timed out.';
+
+  function hasPressable(tree: Tree, label: string): boolean {
+    return tree.root.findAll(
+      (n) => n.props?.accessibilityLabel === label && typeof n.props?.onPress === 'function',
+    ).length > 0;
+  }
+
+  function showsError(tree: Tree): boolean {
+    const json = JSON.stringify(tree.toJSON());
+    return json.includes('Something went') || json.includes('Lost connection');
+  }
+
+  // Polls run on timers; walk them until the screen shows its error state.
+  async function settleOnError(tree: Tree) {
+    for (let step = 0; step < 6 && !showsError(tree); step++) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        jest.advanceTimersByTime(3_000);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await flush();
+    }
+    expect(showsError(tree)).toBe(true);
+  }
+
+  // The question Today's "Start a new series" asks before it opens
+  // new-series setup, built as Today's handleCreateNew builds it. The reader
+  // has no series yet.
+  function todayCreateNewAction() {
+    return resolveCreateNewDuringPendingInitial({
+      inflight: readInflightGenerationJob(),
+      requestId: readInitialGenerationRequestId(),
+      generationSessionStatus: useUnfoldStore.getState().generationSession.status,
+      hasReadableCurrentSeries: false,
+      autoTrialOwnsFlow: readAutoTrialIntent()?.status === 'purchased',
+    });
+  }
+
+  async function renderSubmittedJob(): Promise<Tree> {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(tree);
+    return tree;
+  }
+
+  it('offers Start over when a failed verdict with no retries left reads like a lost connection', async () => {
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+
+    const tree = await renderSubmittedJob();
+
+    expect(hasPressable(tree, 'Try again')).toBe(false);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).not.toContain('Lost connection');
+  });
+
+  it('retires the request id so Today opens new-series setup instead of the failed job', async () => {
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+
+    const tree = await renderSubmittedJob();
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Go home');
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(readInflightGenerationJob()).toBeNull();
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it.each([
+    ['an unopenable result', () => mockPollJobStatus.mockResolvedValue({ status: 'complete' })],
+    ['an unknown status', () => mockPollJobStatus.mockResolvedValue({ status: 'archived' })],
+    ['no such job', () => mockPollJobStatus.mockRejectedValue(Object.assign(new Error('Job not found'), { status: 404 }))],
+  ])('retires the request id after %s', async (_verdict, arrangePoll) => {
+    arrangePoll();
+
+    const tree = await renderSubmittedJob();
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  // 2026-10-09 release audit round 4: another device can spend the last retry
+  // first, and the server's refusal is its final verdict on the job.
+  it('retires the request id after the server refuses a retry for an exhausted job', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: true });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    mockRetryJob.mockRejectedValue(Object.assign(new Error('Job has exhausted all manual retries'), { status: 409, code: 'MAX_RETRIES_EXCEEDED' }));
+    await press(tree, 'Try again');
+    await flush();
+    expect(showsError(tree)).toBe(true);
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  // 2026-10-09 release 1.1.19 lane: the refusal left Try again on screen, and
+  // each tap asked the server for a retry it had already refused.
+  it('stops offering Try again once the server refuses a retry for an exhausted job', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: true });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    mockRetryJob.mockRejectedValue(Object.assign(new Error('Job has exhausted all manual retries'), { status: 409, code: 'MAX_RETRIES_EXCEEDED' }));
+    await press(tree, 'Try again');
+    await flush();
+
+    expect(showsError(tree)).toBe(true);
+    expect(hasPressable(tree, 'Try again')).toBe(false);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(true);
+  });
+
+  it('binds a waiting "Start a new series" choice to the series its job generates', async () => {
+    recordReplacedSeries('old-series');
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    expect(readReplacementSeries()).toBe('devo-1');
+  });
+
+  // 2026-10-09 release audit round 4: an adopted job was recorded under the
+  // session's series, which can be the replaced one or none, so its result
+  // never ended the series it replaced.
+  it.each([
+    ['polled to completion', false],
+    ['recovered at once', true],
+  ])('ends a waiting replaced series with the result of a job the submission adopted (%s)', async (_label, recovered) => {
+    const landed = { devotionalId: 'devo-1', seriesTitle: 'New', totalDays: 3, devotionalDay: { dayNumber: 1, title: 'Day one' } };
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'old-series', title: 'Old', totalDays: 7, currentDay: 3, days: [], createdAt: '2026-10-01T08:00:00.000Z',
+        updatedAt: '2026-10-08T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'old-series',
+      generationSession: { status: 'running', devotionalId: 'old-series', totalDays: 3, generatedDayNumbers: [] },
+    });
+    recordReplacedSeries('old-series');
+    mockSubmitGenerationJob.mockRejectedValue(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    if (recovered) {
+      (jest.requireMock('@/lib/generation-api') as { recoverCompletedGenerationResult: jest.Mock })
+        .recoverCompletedGenerationResult.mockResolvedValueOnce(landed);
+    }
+    mockPollJobStatus.mockResolvedValue({ status: 'complete', result: landed });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await act(async () => { jest.advanceTimersByTime(3_000); });
+    await flush();
+
+    expect(useUnfoldStore.getState().devotionals.find((d) => d.id === 'old-series')?.archivedAt).toBeTruthy();
+    expect(readReplacedSeries()).toBeNull();
+  });
+
+  it('keeps a waiting "Start a new series" choice through Start over, for the series the new answers generate', async () => {
+    recordReplacedSeries('old-series');
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const tree = await renderSubmittedJob();
+    expect(readReplacementSeries()).toBe('devo-1');
+
+    await press(tree, 'Start over with new answers');
+
+    expect(readReplacedSeries()).toBe('old-series');
+    expect(readReplacementSeries()).toBeNull();
+  });
+
+  it('retires the request id after a verdict on the job its submission adopted', async () => {
+    mockSubmitGenerationJob.mockRejectedValue(
+      Object.assign(new Error('Already generated today'), { existingJobId: 'job-existing' }),
+    );
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settleOnError(tree);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-existing', expect.any(Number));
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  // 2026-10-09 release audit: a screen that resumed the job after a restart
+  // did not know the request behind it, so Go home kept the failed request
+  // and Today's next tap returned to the same failed job.
+  it('retires the request id after a verdict on a job the screen resumed after a restart', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const first = await renderScreen();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    // The app closes while the job runs.
+    await act(async () => { first.unmount(); });
+
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const resumed = await renderScreen();
+    mounted.push(resumed);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(resumed);
+
+    await press(resumed, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('retires the request id after a verdict on a job an older build saved without one', async () => {
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const first = await renderScreen();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await act(async () => { first.unmount(); });
+    // The record as 1.1.18 saved it: no request id and no format stamp.
+    const saved = readInflightGenerationJob()!;
+    mmkvStorage.setItem(INFLIGHT_GENERATION_JOB_KEY, JSON.stringify({
+      jobId: saved.jobId,
+      devotionalId: saved.devotionalId,
+      submittedAt: saved.submittedAt,
+    }));
+    expect(readInflightGenerationJob()).toEqual(expect.objectContaining({ savedByOlderBuild: true }));
+    expect(readInitialGenerationRequestId()).not.toBeNull();
+
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: PROVIDER_TIMEOUT, canRetry: false });
+    const resumed = await renderScreen();
+    mounted.push(resumed);
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(1);
+    await settleOnError(resumed);
+
+    await press(resumed, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBeNull();
+    expect(todayCreateNewAction()).toBe('start-fresh');
+  });
+
+  it('keeps the request id when the submission never got an answer', async () => {
+    // The POST may have reached the server. The same id is what lets the next
+    // submit find that job instead of writing a second series.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    const requestId = readInitialGenerationRequestId();
+    expect(requestId).not.toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(hasPressable(tree, 'Start over with new answers')).toBe(false);
+
+    await press(tree, 'Go home');
+
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+    expect(todayCreateNewAction()).toBe('resume-existing');
+  });
+
+  it('keeps the request id when the resubmit after a gone job never got an answer', async () => {
+    mockPollJobStatus.mockRejectedValue(Object.assign(new Error('Job not found'), { status: 404 }));
+    const tree = await renderSubmittedJob();
+    const requestId = readInitialGenerationRequestId();
+
+    // Try again submits fresh under the same request id, and that POST is
+    // lost. The earlier verdict says nothing about what it created.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+    await press(tree, 'Try again');
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(mockSubmitGenerationJob.mock.calls[1][0].requestId).toBe(requestId);
+    expect(showsError(tree)).toBe(true);
+
+    await press(tree, 'Go home');
+
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+  });
+
+  it('keeps a newer unanswered request id when an older failure push is opened and left', async () => {
+    // A new series' POST is lost and the reader goes home. The kept id is
+    // the only thing that can find a job the server may have made.
+    mockSubmitGenerationJob.mockRejectedValue(new Error(EXPO_LOST_CONNECTION));
+    const first = await renderScreen();
+    const requestId = readInitialGenerationRequestId();
+    expect(requestId).not.toBeNull();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await flush();
+    await press(first, 'Go home');
+    await act(async () => {
+      first.unmount();
+    });
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+
+    // iOS kept "We hit a snag" for an older series. Opening it polls that
+    // job, which the server failed. Its verdict says nothing about the newer
+    // request.
+    mockSearchParams.jobId = 'job-old';
+    mockSearchParams.devotionalId = 'devo-old';
+    mockPollJobStatus.mockResolvedValue({ status: 'failed', error: 'The writer stumbled', canRetry: false });
+    const second = await renderScreen();
+    mounted.push(second);
+    await settleOnError(second);
+    expect(mockPollJobStatus).toHaveBeenCalledWith('job-old', expect.any(Number));
+
+    await press(second, 'Go home');
+
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(readInitialGenerationRequestId()).toBe(requestId);
+    expect(todayCreateNewAction()).toBe('resume-existing');
+  });
+});
+
 describe('H10 generating auto-trial handoff', () => {
   it('routes a declined auto claim to series setup instead of the error card', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: Date.parse('2026-09-10T17:00:00.000Z'),
-    });
+    createAutoTrialIntent(makeTrialIntent({ nowMs: Date.parse('2026-09-10T17:00:00.000Z') }));
     useUnfoldStore.setState({
       user: { ...user, hasCompletedOnboarding: true } as UserProfile,
     });
@@ -672,21 +1025,7 @@ describe('H10 generating auto-trial handoff', () => {
 
   it('keeps auto-trial on generating without the screen submit or a generation session write', async () => {
     const { createAutoTrialIntent } = jest.requireActual('../auto-trial-intent') as typeof import('../auto-trial-intent');
-    createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    createAutoTrialIntent(makeTrialIntent());
     const sessionBefore = useUnfoldStore.getState().generationSession;
     const tree = await renderScreen();
     mounted.push(tree);
@@ -695,21 +1034,7 @@ describe('H10 generating auto-trial handoff', () => {
   });
 
   it('ready copy on the auto path uses trial days, not profile length', async () => {
-    const created = createAutoTrialIntent({
-      deviceId: 'test-device-id',
-      entry: 'onboarding',
-      surface: 'onboarding_paywall',
-      source: 'purchase',
-      simulated: false,
-      trialDays: 3,
-      purchasedAt: '2026-09-08T17:00:00.000Z',
-      expiresAt: '2026-09-11T17:00:00.000Z',
-      timeZone: 'America/Chicago',
-      isSandbox: false,
-      productIdentifier: 'unfold_premium_yearly',
-      switchFetchedAt: '2026-09-08T17:00:00.000Z',
-      nowMs: 1_800_000_000_000,
-    });
+    const created = createAutoTrialIntent(makeTrialIntent());
     transitionAutoTrialIntent(
       'submitted',
       { jobId: 'job-ready', devotionalId: 'devo-ready' },
@@ -770,5 +1095,417 @@ describe('H10 generating auto-trial handoff', () => {
     expect(labels.length).toBeGreaterThan(0);
     expect(tree.root.findAll((node) => joined(node.props?.children) === 'Your 7-day series')).toHaveLength(0);
     expect(mockRevealBackdrop).toHaveBeenLastCalledWith({ variant: 'prism' });
+  });
+});
+
+describe('a series the sync pull landed before /generating resumed its job', () => {
+  // A cold relaunch after the job finished: the app-start pull put the series
+  // and day 1 in the store before this screen resumed the record.
+  async function renderPullFirstCompletion(): Promise<Tree> {
+    const createdAt = '2026-09-04T08:05:00.000Z';
+    const day = {
+      id: 'devo-1:1',
+      devotionalId: 'devo-1',
+      dayNumber: 1,
+      title: 'Trust before understanding',
+      scriptureReference: 'Psalm 56:3-4',
+      scriptureText: 'When I am afraid, I put my trust in you.',
+      bodyText: 'Body',
+      quotableLine: 'Line',
+      isRead: false,
+    };
+    useUnfoldStore.setState({
+      devotionals: [{
+        id: 'devo-1',
+        title: 'Learning to Trust Again',
+        totalDays: 3,
+        currentDay: 1,
+        days: [day],
+        createdAt,
+        seriesStartDate: createdAt,
+        userContext: { name: '', aboutMe: '', currentSituation: '', emotionalState: '' },
+        generationMode: 'progressive',
+      } as Devotional],
+      currentDevotionalId: null,
+    });
+    writeInflightGenerationJob({ jobId: 'job-1', devotionalId: 'devo-1', submittedAt: Date.now() - 30_000 });
+    mockPollJobStatus.mockResolvedValue({
+      status: 'complete',
+      result: { devotionalId: 'devo-1', seriesTitle: 'Learning to Trust Again', totalDays: 3, devotionalDay: day },
+    });
+
+    const tree = await renderScreen();
+    mounted.push(tree);
+    expect(useUnfoldStore.getState().generationSession.status).toBe('complete');
+    return tree;
+  }
+
+  it('makes the landed series current', async () => {
+    await renderPullFirstCompletion();
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('devo-1');
+  });
+
+  it('opens the landed series from Begin Day 1', async () => {
+    const tree = await renderPullFirstCompletion();
+
+    await press(tree, 'Begin Day 1');
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(tabs)/(today)/reading',
+      params: { devotionalId: 'devo-1' },
+    });
+  });
+});
+
+describe('a finished job for a series deleted here', () => {
+  const deletedResult = (devotionalId: string) => ({
+    status: 'complete',
+    result: { devotionalId, seriesTitle: 'Deleted', totalDays: 3, devotionalDay: { dayNumber: 1, title: 'Day one' } },
+  });
+
+  async function settlePoll() {
+    await act(async () => { jest.advanceTimersByTime(3_000); });
+    await flush();
+  }
+
+  // 2026-10-09 release audit round 8 review: the result was refused after the poll stopped, so the screen kept showing generation in progress.
+  it('retires the job and its request and opens Today', async () => {
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-1', '2026-10-09T09:00:00.000Z');
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-1', devotionalId: 'devo-1' });
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-1'));
+    try {
+      const tree = await renderScreen();
+      mounted.push(tree);
+      await settlePoll();
+
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+      expect(readInflightGenerationJob()).toBeNull();
+      expect(readInitialGenerationRequestId()).toBeNull();
+      expect(useUnfoldStore.getState().generationSession.status).toBe('idle');
+      expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-1')).toBe(false);
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
+  // 2026-10-09 release audit round 8 review: the trial's refused result read as a lost connection, so the reveal kept polling a finished job.
+  it('retires a trial job and opens Today', async () => {
+    const created = createAutoTrialIntent(makeTrialIntent());
+    transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
+    writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+      generationSession: { status: 'running', devotionalId: 'devo-trial', totalDays: 3, generatedDayNumbers: [] },
+    });
+    resetDeletedSeriesForTesting();
+    rememberDeletedSeries('devo-trial', '2026-10-09T09:00:00.000Z');
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-trial'));
+    try {
+      const tree = await renderScreen();
+      mounted.push(tree);
+      await settlePoll();
+
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(today)');
+      expect(readInflightGenerationJob()).toBeNull();
+      expect(useUnfoldStore.getState().generationSession.status).toBe('idle');
+      expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(false);
+      // Round 8 review again: a submitted intent reopened /generating on the deleted job at the next launch.
+      expect(readAutoTrialIntent()).toMatchObject({ status: 'abandoned', abandonReason: 'series_deleted' });
+    } finally {
+      resetDeletedSeriesForTesting();
+    }
+  });
+
+  // 2026-10-09 release audit round 8 review: the trial hook settled the trial
+  // a second time without the undated guard and handed it Today.
+  it('keeps an undated trial off Today beside a chosen series the phone holds', async () => {
+    const created = createAutoTrialIntent(makeTrialIntent());
+    transitionAutoTrialIntent('submitted', { jobId: 'job-trial', devotionalId: 'devo-trial' }, { nowMs: 1_800_000_000_000 });
+    writeInflightGenerationJob({ jobId: 'job-trial', devotionalId: 'devo-trial', submittedAt: Date.now() - 30_000 });
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({
+      user: { ...user, hasCompletedOnboarding: true } as UserProfile,
+      devotionals: [{
+        id: 'held-series', title: 'Held', totalDays: 7, currentDay: 2, days: [], createdAt: '2026-10-05T08:00:00.000Z',
+        updatedAt: '2026-10-05T08:00:00.000Z', generationMode: 'progressive',
+      } as unknown as Devotional],
+      currentDevotionalId: 'held-series',
+      generationSession: { status: 'running', devotionalId: 'devo-trial', totalDays: 3, generatedDayNumbers: [] },
+    });
+    mockPollJobStatus.mockResolvedValue(deletedResult('devo-trial'));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    await settlePoll();
+
+    expect(useUnfoldStore.getState().devotionals.some((d) => d.id === 'devo-trial')).toBe(true);
+    expect(useUnfoldStore.getState().currentDevotionalId).not.toBe('devo-trial');
+  });
+});
+
+async function renderPolling(devotionalLength: number): Promise<Tree> {
+  useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+  mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-wait', devotionalId: 'devo-1' });
+  mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+  const tree = await renderScreen();
+  mounted.push(tree);
+  return tree;
+}
+
+describe('honest wait line on /generating', () => {
+  const TWO_MINUTES = 'This usually takes about two minutes.';
+  const THREE_MINUTES = 'This usually takes about three minutes.';
+  const THIRTY_DAYS = 'A 30-day series usually takes four to six minutes.';
+  const LONGER = 'A longer series usually takes four to six minutes.';
+  const LEAVE_NOTE = 'You can leave this screen. We\u2019ll let you know when Day 1 is ready.';
+
+  async function renderWaiting(devotionalLength: number): Promise<Tree> {
+    useUnfoldStore.setState({ user: { ...user, devotionalLength } as UserProfile });
+    mockSubmitGenerationJob.mockReturnValue(new Promise(() => undefined));
+    const tree = await renderScreen();
+    mounted.push(tree);
+    return tree;
+  }
+
+  function textNodes(tree: Tree, text: string) {
+    return tree.root.findAllByType(Text).filter((node) => node.props.children === text);
+  }
+
+  it.each([
+    [3, TWO_MINUTES],
+    [7, TWO_MINUTES],
+    [8, THREE_MINUTES],
+    [14, THREE_MINUTES],
+    [15, LONGER],
+    [21, LONGER],
+    [30, THIRTY_DAYS],
+  ])('a %i-day series shows one fixed wait line', async (days, line) => {
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, line)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('keeps one wait line while the waiting messages step forward, then holds the last', async () => {
+    // The screen draws the same lines for today's date and this install.
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    const tree = await renderWaiting(7);
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
+    expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+
+    // No loop back to the first line: the last one holds.
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    expect(textNodes(tree, lines[0])).toHaveLength(0);
+  });
+
+  it('holds the line while a dropped connection shows Reconnecting…, then shows the line it paused on', async () => {
+    // The first submission loses its connection, and the screen submits
+    // again. That attempt is held for five 3.8 s cycles behind 'Reconnecting…'.
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    const held = deferred<{ jobId: string; devotionalId: string }>();
+    mockSubmitGenerationJob
+      .mockRejectedValueOnce(new Error(EXPO_LOST_CONNECTION))
+      .mockReturnValueOnce(held.promise);
+    mockPollJobStatus.mockReturnValue(new Promise(() => undefined));
+    const tree = await renderWaiting(7);
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * 5);
+    });
+    await flush();
+    expect(mockSubmitGenerationJob).toHaveBeenCalledTimes(2);
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(1);
+
+    await act(async () => {
+      held.resolve({ jobId: 'job-held', devotionalId: 'devo-held' });
+    });
+    await flush();
+    // None of the five cycles moved the line while nobody could see it.
+    expect(textNodes(tree, RECONNECTING)).toHaveLength(0);
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+  });
+
+  it('starts the waiting lines over when Try again starts a new wait', async () => {
+    const lines = generatingStatusLines(copyVariationFor(new Date()));
+    let failFirstWait!: (error: Error) => void;
+    mockSubmitGenerationJob.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      failFirstWait = reject;
+    }));
+    const tree = await renderWaiting(7);
+
+    // A first wait long enough to reach the held last line, then a failure.
+    await act(async () => {
+      jest.advanceTimersByTime(3800 * lines.length);
+    });
+    await flush();
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(1);
+    await act(async () => {
+      failFirstWait(new Error('Request rejected'));
+    });
+    await flush();
+
+    mockAnimatedTextRenders.length = 0;
+    await press(tree, 'Try again');
+    expect(textNodes(tree, lines[0])).toHaveLength(1);
+    expect(textNodes(tree, lines[lines.length - 1])).toHaveLength(0);
+    // The retry's first frame is already the first line: the held last line
+    // never renders again, not even for one frame before an effect.
+    const retryLines = mockAnimatedTextRenders.filter((line) => lines.includes(line as string));
+    expect(retryLines[0]).toBe(lines[0]);
+    expect(retryLines).not.toContain(lines[lines.length - 1]);
+
+    await act(async () => {
+      jest.advanceTimersByTime(3800);
+    });
+    await flush();
+    expect(textNodes(tree, lines[1])).toHaveLength(1);
+  });
+
+  it.each([
+    [30, THIRTY_DAYS],
+    [21, LONGER],
+  ])('a %i-day series with notifications on says the reader can leave', async (days, line) => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(days);
+
+    expect(textNodes(tree, `${line} ${LEAVE_NOTE}`)).toHaveLength(1);
+  });
+
+  it('a long series with notifications off does not promise a notification', async () => {
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a long series whose token registration failed does not promise a notification', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('failed');
+    const tree = await renderWaiting(30);
+
+    expect(textNodes(tree, THIRTY_DAYS)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  it('a 14-day series with notifications on keeps the short line', async () => {
+    mockAreNotificationsEnabled.mockResolvedValue(true);
+    mockRegisterPushToken.mockResolvedValue('registered');
+    const tree = await renderWaiting(14);
+
+    expect(textNodes(tree, THREE_MINUTES)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LEAVE_NOTE);
+  });
+
+  describe('one notification promise at a time', () => {
+    const joined = (children: unknown): string => {
+      if (typeof children === 'string' || typeof children === 'number') return String(children);
+      if (Array.isArray(children)) return children.map(joined).join('');
+      return '';
+    };
+
+    function notificationPromises(tree: Tree): string[] {
+      return tree.root.findAllByType(Text)
+        .map((node) => joined(node.props.children))
+        .filter((text) => /We\u2019ll (notify you|let you know)/.test(text));
+    }
+
+    async function renderAccepted(devotionalLength: number): Promise<Tree> {
+      const tree = await renderPolling(devotionalLength);
+      findPressable(tree, GO_HOME_LABEL);
+      return tree;
+    }
+
+    beforeEach(() => {
+      mockAreNotificationsEnabled.mockResolvedValue(true);
+      mockRegisterPushToken.mockResolvedValue('registered');
+    });
+
+    it('a 30-day series says it once on the wait line before the job is accepted', async () => {
+      const tree = await renderWaiting(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+    });
+
+    it('a 30-day series says it once on the wait line after the job is accepted', async () => {
+      const tree = await renderAccepted(30);
+
+      expect(notificationPromises(tree)).toEqual([`${THIRTY_DAYS} ${LEAVE_NOTE}`]);
+      expect(textNodes(tree, 'We\u2019ll keep writing your first devotional.')).toHaveLength(1);
+    });
+
+    it('a 7-day series keeps its one promise beside the exit', async () => {
+      const tree = await renderAccepted(7);
+
+      expect(notificationPromises(tree)).toEqual([
+        'We\u2019ll keep writing your first devotional.\nWe\u2019ll notify you when it\u2019s ready.',
+      ]);
+      expect(textNodes(tree, TWO_MINUTES)).toHaveLength(1);
+    });
+  });
+});
+
+describe('long-running copy on /generating follows the series length', () => {
+  const LONG_RUNNING = 'Still writing \u2014 taking a little longer';
+
+  async function advancePolling(ms: number) {
+    for (let elapsed = 0; elapsed < ms; elapsed += 5000) {
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+      });
+      await flush();
+    }
+  }
+
+  it.each([
+    [3, SHORT_SERIES_LONG_RUNNING_AFTER_MS],
+    [30, LONG_SERIES_LONG_RUNNING_AFTER_MS],
+  ])('softens a %i-day wait only at its long-running threshold', async (days, thresholdMs) => {
+    const tree = await renderPolling(days);
+
+    await advancePolling(thresholdMs - 30_000);
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
+  });
+
+  it('softens a 3-day trial wait four minutes after the trial job is accepted', async () => {
+    const nowMs = Date.now();
+    const created = createAutoTrialIntent(makeTrialIntent({
+      purchasedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 3 * 24 * 60 * 60_000).toISOString(),
+      switchFetchedAt: new Date(nowMs).toISOString(),
+      nowMs,
+    }));
+    mockSearchParams.autoTrialIntentId = created.intentId;
+    useUnfoldStore.setState({ user: { ...user, hasCompletedOnboarding: true, devotionalLength: 30 } as UserProfile });
+    mockSubmitGenerationJob.mockResolvedValue({ jobId: 'job-trial', devotionalId: 'devo-trial' });
+    mockPollJobStatus.mockResolvedValue({ status: 'processing' });
+    const tree = await renderScreen();
+    mounted.push(tree);
+
+    await advancePolling(SHORT_SERIES_LONG_RUNNING_AFTER_MS - 30_000);
+    expect(readAutoTrialIntent()?.status).toBe('submitted');
+    expect(JSON.stringify(tree.toJSON())).toContain('This usually takes about two minutes.');
+    expect(JSON.stringify(tree.toJSON())).not.toContain(LONG_RUNNING);
+
+    await advancePolling(60_000);
+    expect(JSON.stringify(tree.toJSON())).toContain(LONG_RUNNING);
   });
 });

@@ -42,6 +42,8 @@ type VerseWidgetProps = {
   lockDaysRead: number;
   lockReadToday: boolean;
   totalDays: number;
+  /** The midnight entry's line for a day not on the device yet, or ''. */
+  dayReadyLine: string;
 };
 
 const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) => {
@@ -67,12 +69,19 @@ const VerseWidget = (props: VerseWidgetProps, environment: WidgetEnvironment) =>
   const hasVerse = verse !== '';
   const hasReference = reference !== '';
   const hasSeries = day > 0;
+  const readyLine = props.dayReadyLine ?? '';
 
   // Tap target: Today tab, the same canonical route as the other widgets.
   const deepLink = 'unfold://(tabs)/(today)';
 
-  // A series whose day has no text yet is not the same as no series.
-  const emptyText = hasSeries ? "Open Unfold for today's reading" : 'Open Unfold to start a series';
+  // A series whose day has no text yet is not the same as no series. The
+  // midnight entry names that day while its text is not on the device.
+  const emptyText =
+    readyLine !== ''
+      ? readyLine
+      : hasSeries
+        ? "Open Unfold for today's reading"
+        : 'Open Unfold to start a series';
   // No second stop when the line already ends a sentence, a quotation or a bracket.
   const verseStop = '.!?…”’")'.includes(verse.slice(-1)) ? '' : '.';
   const label = hasVerse

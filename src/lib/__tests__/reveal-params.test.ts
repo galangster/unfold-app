@@ -2,7 +2,12 @@
  * P3-4 item 2b — reveal params must resolve to a local devotional + day
  * before the screen writes anything to the store.
  */
-import { parsePositiveInteger, resolveRevealOutcome, type RevealDevotional } from '../reveal-params';
+import {
+  missingRevealSeriesId,
+  parsePositiveInteger,
+  resolveRevealOutcome,
+  type RevealDevotional,
+} from '../reveal-params';
 
 const series: RevealDevotional = {
   id: 'devotional-1725000000000-abc123xyz',
@@ -164,5 +169,23 @@ describe('resolveRevealOutcome: locked days', () => {
 
   it('still opens a day the reader already finished', () => {
     expect(outcomeFor('3', noon)).toMatchObject({ kind: 'open', target: { dayNumber: 3 } });
+  });
+});
+
+describe('missingRevealSeriesId', () => {
+  const local = [{ id: 'local-series' }];
+
+  it('names a series the push points at that this device does not hold', () => {
+    expect(missingRevealSeriesId({ devotionalId: 'other-device-series', dayNumber: '1' }, local))
+      .toBe('other-device-series');
+    expect(missingRevealSeriesId({ devotionalId: ['other-device-series'], dayNumber: ['2'] }, local))
+      .toBe('other-device-series');
+  });
+
+  it('pulls nothing for a series already here, or for params a pull cannot fix', () => {
+    expect(missingRevealSeriesId({ devotionalId: 'local-series', dayNumber: '99' }, local)).toBeNull();
+    expect(missingRevealSeriesId({ devotionalId: undefined, dayNumber: '1' }, local)).toBeNull();
+    expect(missingRevealSeriesId({ devotionalId: 'other-device-series', dayNumber: '0' }, local)).toBeNull();
+    expect(missingRevealSeriesId({ devotionalId: 'other-device-series', dayNumber: 'junk' }, local)).toBeNull();
   });
 });

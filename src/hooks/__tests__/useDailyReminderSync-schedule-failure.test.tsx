@@ -9,8 +9,12 @@ import {
 } from '../../lib/sync-session-fence';
 import { useDailyReminderSync } from '../useDailyReminderSync';
 
-const mockScheduleDailyReminder = jest.fn<Promise<string | null>, unknown[]>(
-  async () => null,
+type MorningsWrite = { complete: boolean; holdsFirstMorning: boolean };
+const NOTHING_WRITTEN: MorningsWrite = { complete: false, holdsFirstMorning: false };
+const ALL_WRITTEN: MorningsWrite = { complete: true, holdsFirstMorning: true };
+
+const mockScheduleDailyReminderMornings = jest.fn<Promise<MorningsWrite>, unknown[]>(
+  async () => NOTHING_WRITTEN,
 );
 const mockAreNotificationsEnabled = jest.fn(async () => true);
 const mockCancelNotificationById = jest.fn<Promise<void>, unknown[]>(
@@ -40,6 +44,7 @@ const mockStoreState = {
 
 let mockOperation = 0;
 let emitAppState: ((next: AppStateStatus) => void) | null = null;
+let mockDeviceTimezone: string | null = 'America/New_York';
 
 jest.mock('@/lib/store', () => ({
   useUnfoldStore: Object.assign(
@@ -56,18 +61,26 @@ jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
 jest.mock('@/lib/daily-reminder-content', () => ({
   buildDailyReminderFingerprint: () => 'unchanged-fingerprint',
   getDailyReminderOwner: () => 'local',
-  getDailyReminderTrigger: () => ({ kind: 'daily' }),
+  buildDailyReminderSchedule: () => [],
 }));
 
 jest.mock('@/lib/analytics', () => ({ logEvent: jest.fn() }));
+
+jest.mock('@/lib/device-timezone', () => ({
+  getDeviceTimezone: () => mockDeviceTimezone,
+}));
 
 jest.mock('@/lib/logger', () => ({
   logger: { log: jest.fn(), error: jest.fn() },
 }));
 
+jest.mock('@/lib/user-profile-sync', () => ({
+  syncUserProfileToBackend: jest.fn(async () => undefined),
+}));
+
 jest.mock('@/lib/notifications', () => ({
   NOTIFICATION_IDS: { DAILY_REMINDER: 'unfold-daily-reminder' },
-  scheduleDailyReminder: (...args: unknown[]) => mockScheduleDailyReminder(...args),
+  scheduleDailyReminderMornings: (...args: unknown[]) => mockScheduleDailyReminderMornings(...args),
   areNotificationsEnabled: () => mockAreNotificationsEnabled(),
   cancelNotificationById: (...args: unknown[]) => mockCancelNotificationById(...args),
   beginDailyReminderOperation: () => mockBeginDailyReminderOperation(),
@@ -85,15 +98,15 @@ function hold<T>() {
 
 function installSchedule() {
   const started: ReturnType<typeof hold<void>>[] = [];
-  const gates: ReturnType<typeof hold<string | null>>[] = [];
+  const gates: ReturnType<typeof hold<MorningsWrite>>[] = [];
 
   function ensure(index: number) {
     started[index] ??= hold<void>();
-    gates[index] ??= hold<string | null>();
+    gates[index] ??= hold<MorningsWrite>();
   }
 
-  mockScheduleDailyReminder.mockImplementation(async () => {
-    const index = mockScheduleDailyReminder.mock.calls.length - 1;
+  mockScheduleDailyReminderMornings.mockImplementation(async () => {
+    const index = mockScheduleDailyReminderMornings.mock.calls.length - 1;
     ensure(index);
     started[index].resolve();
     return gates[index].promise;
@@ -104,9 +117,10 @@ function installSchedule() {
       ensure(index);
       return started[index].promise;
     },
+    /** A request id stands for a complete write, null for nothing written. */
     release(index: number, value: string | null) {
       ensure(index);
-      gates[index].resolve(value);
+      gates[index].resolve(value === null ? NOTHING_WRITTEN : ALL_WRITTEN);
     },
   };
 }
@@ -124,9 +138,10 @@ describe('useDailyReminderSync schedule failure', () => {
     resetSyncSessionFenceForTesting();
     mockOperation = 0;
     emitAppState = null;
+    mockDeviceTimezone = 'America/New_York';
     mockStoreState.user.dailyReminderEnabled = true;
     mockStoreState.user.reminderTime = '8:00 AM';
-    mockScheduleDailyReminder.mockReset();
+    mockScheduleDailyReminderMornings.mockReset();
     mockAreNotificationsEnabled.mockReset();
     mockCancelNotificationById.mockReset();
     mockBeginDailyReminderOperation.mockClear();
@@ -157,7 +172,7 @@ describe('useDailyReminderSync schedule failure', () => {
     await schedule.started(index);
     await act(async () => {
       schedule.release(index, value);
-      await mockScheduleDailyReminder.mock.results[index].value;
+      await mockScheduleDailyReminderMornings.mock.results[index].value;
     });
   }
 
@@ -173,13 +188,13 @@ describe('useDailyReminderSync schedule failure', () => {
     await mountHook();
     await settleSchedule(0, null, schedule);
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
     expect(mockAreNotificationsEnabled).toHaveBeenCalledTimes(1);
 
     await becomeActive();
     await settleSchedule(1, 'retry-request', schedule);
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(2);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(2);
     expect(mockAreNotificationsEnabled).toHaveBeenCalledTimes(2);
   });
 
@@ -188,12 +203,32 @@ describe('useDailyReminderSync schedule failure', () => {
     await mountHook();
     await settleSchedule(0, 'first-request', schedule);
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
 
     await becomeActive();
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
     expect(mockAreNotificationsEnabled).toHaveBeenCalledTimes(1);
+  });
+
+  it('rewrites on a same-day foreground after the device timezone changes', async () => {
+    const schedule = installSchedule();
+    await mountHook();
+    await settleSchedule(0, 'first-request', schedule);
+
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
+
+    // New York to Los Angeles, same date. Nothing in the store changed and
+    // nothing re-rendered, so only a live read of the zone can tell.
+    mockDeviceTimezone = 'America/Los_Angeles';
+    await becomeActive();
+
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(2);
+    await settleSchedule(1, 'rewritten-request', schedule);
+
+    // The rewrite is recorded: the next foreground in the new zone skips.
+    await becomeActive();
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -219,16 +254,16 @@ describe('useDailyReminderSync schedule failure', () => {
 
     await act(async () => {
       schedule.release(0, 'stale-request');
-      await mockScheduleDailyReminder.mock.results[0].value;
+      await mockScheduleDailyReminderMornings.mock.results[0].value;
     });
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(1);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(1);
     expect(mockAreNotificationsEnabled).toHaveBeenCalledTimes(1);
 
     await becomeActive();
     await settleSchedule(1, 'fresh-request', schedule);
 
-    expect(mockScheduleDailyReminder).toHaveBeenCalledTimes(2);
+    expect(mockScheduleDailyReminderMornings).toHaveBeenCalledTimes(2);
     expect(mockAreNotificationsEnabled).toHaveBeenCalledTimes(2);
   });
 });

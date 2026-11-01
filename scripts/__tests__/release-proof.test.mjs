@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   HEALTHY_BOOT_MS,
   analyzeBuildLog,
+  analyzeLiveness,
   captureSimulatorReleaseProof,
   evaluateReleaseGate,
   evaluateSimulatorReleaseProof,
@@ -615,6 +616,47 @@ test('too-early and splash-only observations cannot pass', () => {
   const splashOnly = splash.capture();
   assert.equal(splashOnly.ok, false);
   assert.equal(splashOnly.code, 'splash-only');
+});
+
+test('a rendered welcome button without a test ID proves post-boot UI', () => {
+  const snapshot = JSON.parse(screenJson());
+  snapshot.accessibility.tree = [
+    { role: 'Application', label: 'Unfold', visible: true, enabled: true, ref: 'e0',
+      frame: { x: 0, y: 0, width: 402, height: 874 } },
+    { role: 'GenericElement', label: 'Unfold', visible: true, enabled: true, ref: 'e1' },
+    { role: 'GenericElement', label: 'The world’s most personal Bible experience', visible: true, enabled: true, ref: 'e2' },
+    { role: 'Button', label: "Let's get started.", visible: true, enabled: true, ref: 'e3',
+      frame: { x: 24, y: 767, width: 354, height: 56 } },
+  ];
+  const options = { simulator: SIM, registeredAt: '2026-09-05T22:31:39.534Z' };
+  assert.equal(analyzeLiveness(JSON.stringify(snapshot), options).ok, true);
+
+  for (const [name, change] of [
+    ['missing label', (node) => { delete node.label; }],
+    ['blank label', (node) => { node.label = ' '; }],
+    ['missing ref', (node) => { delete node.ref; }],
+    ['blank ref', (node) => { node.ref = ' '; }],
+    ['hidden', (node) => { node.visible = false; }],
+    ['disabled', (node) => { node.enabled = false; }],
+    ['missing frame', (node) => { delete node.frame; }],
+    ['zero width', (node) => { node.frame.width = 0; }],
+    ['zero height', (node) => { node.frame.height = 0; }],
+    ['invalid coordinate', (node) => { node.frame.x = null; }],
+    ['offscreen', (node) => { node.frame.y = 874; }],
+    ['generic text', (node) => { node.role = 'GenericElement'; }],
+    ['splash with ref', (node) => { node.role = 'Image'; node.label = 'Splash'; }],
+  ]) {
+    const invalid = structuredClone(snapshot);
+    change(invalid.accessibility.tree[3]);
+    assert.equal(analyzeLiveness(JSON.stringify(invalid), options).ok, false, name);
+  }
+  const noAppFrame = structuredClone(snapshot);
+  delete noAppFrame.accessibility.tree[0].frame;
+  assert.equal(analyzeLiveness(JSON.stringify(noAppFrame), options).ok, false);
+  assert.equal(analyzeLiveness(JSON.stringify(snapshot), { ...options, simulator: 'OTHER' }).code, 'wrong-target');
+  assert.equal(analyzeLiveness(JSON.stringify(snapshot), { ...options, registeredAt: snapshot.timestamp }).code, 'too-early-observation');
+  snapshot.accessibility.tree[0].visible = false;
+  assert.equal(analyzeLiveness(JSON.stringify(snapshot), options).code, 'immediate-crash');
 });
 
 test('directory symlink in a clean candidate and prepared native binds target and kind', () => {

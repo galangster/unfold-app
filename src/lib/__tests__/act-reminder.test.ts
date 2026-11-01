@@ -2,6 +2,8 @@ import {
   buildActReminderFingerprint,
   buildActReminderPlan,
   getActReminderFireAt,
+  getEveningActClaim,
+  getMiddayActClaim,
   inferActSlot,
 } from '../act-reminder';
 import type { Devotional, DevotionalDay } from '../store';
@@ -106,6 +108,39 @@ describe('buildActReminderPlan', () => {
     });
   });
 
+  it('keeps the midday slot on a replan inside the lead, so it never disagrees with the check-in claim', () => {
+    // Read at 07:40, cold launch at 12:20: the hydration replan must still
+    // land at 12:30, where today's check-in already stepped aside.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const relaunch = new Date(2026, 8, 8, 12, 20, 0);
+    const plan = buildActReminderPlan({ devotional: devotional(), day: midday, now: relaunch, middayTime: '12:30' });
+    expect(plan?.fireAt).toEqual(new Date(2026, 8, 8, 12, 30, 0));
+    const claim = getMiddayActClaim(
+      { devotionals: [{ ...devotional(), days: [midday] }], currentDevotionalId: 'dev-1', user: { dailyReminderEnabled: true, reminderTime: '8:00 AM' }, middayCheckInTime: '12:30' },
+      relaunch,
+    );
+    expect(claim).toEqual(plan?.fireAt);
+  });
+
+  it('plans nothing more once a reminder for the day has fired, so a later replan adds no evening banner', () => {
+    // Read at 07:40, the 12:30 reminder fired, then a timezone change replans at 15:00.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const afternoon = new Date(2026, 8, 8, 15, 0, 0);
+    const lastWrite = { devotionalId: 'dev-1', dayNumber: midday.dayNumber, fireAt: new Date(2026, 8, 8, 12, 30).toISOString() };
+    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30', lastWrite })).toBeNull();
+  });
+
+  it('rolls an unwritten midday reminder to the evening when the replan comes after midday', () => {
+    // Read at 07:40 with reminders off or permission denied; switched on at 13:00.
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    const afternoon = new Date(2026, 8, 8, 13, 0, 0);
+    const plan = buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30' });
+    expect(plan?.fireAt).toEqual(new Date(2026, 8, 8, 20, 30));
+    const yesterdays = { devotionalId: 'dev-1', dayNumber: midday.dayNumber - 1, fireAt: new Date(2026, 8, 7, 12, 30).toISOString() };
+    expect(buildActReminderPlan({ devotional: devotional(), day: midday, now: afternoon, middayTime: '12:30', lastWrite: yesterdays })?.fireAt)
+      .toEqual(new Date(2026, 8, 8, 20, 30));
+  });
+
   it('uses the profile reminder time for a next-morning act', () => {
     const plan = buildActReminderPlan({
       devotional: devotional(),
@@ -126,85 +161,47 @@ describe('buildActReminderPlan', () => {
     expect(buildActReminderPlan({ devotional: null, day: day(), now })).toBeNull();
   });
 
-  it('does not schedule an evening act reminder when wind-down is scheduled at the same time', () => {
+  it('schedules an evening act at the wind-down clock, where the wind-down steps aside (design call 1)', () => {
     const plan = buildActReminderPlan({
       devotional: devotional(),
       day: day(),
       now,
       eveningTime: '20:30',
-      eveningWindDownEnabled: true,
-      eveningWindDownByDay: null,
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
     });
-    expect(plan).toBeNull();
+    expect(plan!.slot).toBe('evening');
+    expect(plan!.fireAt).toEqual(new Date(2026, 8, 8, 20, 30));
   });
 
-  it('drops a missed midday that rolled into a scheduled wind-down clock', () => {
+  it('rolls a missed midday into the wind-down clock and keeps it', () => {
     const afternoon = new Date(2026, 8, 8, 14, 0);
     const plan = buildActReminderPlan({
       devotional: devotional(),
       day: day({ actSlot: 'midday' }),
       now: afternoon,
       eveningTime: '20:30',
-      eveningWindDownEnabled: true,
-      eveningWindDownByDay: null,
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
     });
-    expect(plan).toBeNull();
-  });
-
-  it('still schedules an evening act reminder when wind-down is disabled for that day', () => {
-    const plan = buildActReminderPlan({
-      devotional: devotional(),
-      day: day(),
-      now,
-      eveningTime: '20:30',
-      eveningWindDownEnabled: true,
-      eveningWindDownByDay: {
-        Mon: '20:30',
-        Tue: null,
-        Wed: '20:30',
-        Thu: '20:30',
-        Fri: '20:30',
-        Sat: '20:30',
-        Sun: '20:30',
-      },
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
-    });
-    expect(plan).not.toBeNull();
-    expect(plan!.slot).toBe('evening');
     expect(plan!.fireAt).toEqual(new Date(2026, 8, 8, 20, 30));
   });
 
-  it('keeps a late evening act reminder once today\'s wind-down time has passed', () => {
+  it('nudges 45 minutes out once today\'s wind-down time has passed', () => {
     const late = new Date(2026, 8, 8, 20, 45);
     const plan = buildActReminderPlan({
       devotional: devotional(),
       day: day(),
       now: late,
       eveningTime: '20:30',
-      eveningWindDownEnabled: true,
-      eveningWindDownByDay: null,
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
     });
     expect(plan).not.toBeNull();
     expect(plan!.slot).toBe('evening');
     expect(plan!.fireAt).toEqual(new Date(2026, 8, 8, 21, 30));
   });
 
-  it('keeps midday and morning-next act reminders when evening wind-down is scheduled', () => {
+  it('keeps midday and morning-next act reminders at their own clocks', () => {
     const midday = buildActReminderPlan({
       devotional: devotional(),
       day: day({ act: 'At lunch, text the friend you thought of.' }),
       now,
       eveningTime: '20:30',
-      eveningWindDownEnabled: true,
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
     });
     expect(midday!.slot).toBe('midday');
     expect(midday!.fireAt).toEqual(new Date(2026, 8, 8, 12, 30));
@@ -215,9 +212,6 @@ describe('buildActReminderPlan', () => {
       now,
       eveningTime: '20:30',
       morningTime: '8:00 AM',
-      eveningWindDownEnabled: true,
-      notificationsEnabled: true,
-      premiumPolicy: 'granted',
     });
     expect(morning!.slot).toBe('morning-next');
     expect(morning!.fireAt).toEqual(new Date(2026, 8, 9, 8, 0));
@@ -233,16 +227,90 @@ describe('fingerprint', () => {
     expect(buildActReminderFingerprint({ ...base, enabled: false })).not.toBe(a);
     expect(buildActReminderFingerprint(base)).toBe(a);
   });
+});
 
-  it('changes when evening wind-down enablement changes', () => {
-    const base = {
-      devotional: devotional(),
-      day: day(),
-      enabled: true,
-      eveningTime: '20:30',
-      eveningWindDownEnabled: false,
+describe('getMiddayActClaim', () => {
+  function state(today: DevotionalDay, reminders = true) {
+    return {
+      devotionals: [{ ...devotional(), days: [today] }],
+      currentDevotionalId: 'dev-1',
+      user: { dailyReminderEnabled: reminders, reminderTime: '8:00 AM' },
+      middayCheckInTime: '13:00',
     };
-    const a = buildActReminderFingerprint(base);
-    expect(buildActReminderFingerprint({ ...base, eveningWindDownEnabled: true })).not.toBe(a);
+  }
+
+  it('claims the midday check-in clock for a midday act read today', () => {
+    const claim = getMiddayActClaim(state(day({ act: 'At lunch, text the friend you thought of.' })), now);
+    expect(claim).toEqual(new Date(2026, 8, 8, 13, 0, 0));
+  });
+
+  it('claims nothing for an evening act, a done act, a day read yesterday, or reminders off', () => {
+    const midday = { act: 'At lunch, text the friend you thought of.' };
+    expect(getMiddayActClaim(state(day()), now)).toBeNull();
+    expect(getMiddayActClaim(state(day({ ...midday, actOutcome: 'done' })), now)).toBeNull();
+    expect(getMiddayActClaim(state(day({ ...midday, readAt: new Date(2026, 8, 7, 7, 40).toISOString() })), now)).toBeNull();
+    expect(getMiddayActClaim(state(day(midday), false), now)).toBeNull();
+  });
+
+  it('counts the lead from the read, so a later replan keeps the claim and a late read makes none', () => {
+    const midday = { act: 'At lunch, text the friend you thought of.' };
+    const afterLunch = new Date(2026, 8, 8, 12, 50, 0);
+    expect(getMiddayActClaim(state(day(midday)), afterLunch)).toEqual(new Date(2026, 8, 8, 13, 0, 0));
+    const lateRead = day({ ...midday, readAt: new Date(2026, 8, 8, 12, 50, 0).toISOString() });
+    expect(getMiddayActClaim(state(lateRead), afterLunch)).toBeNull();
+  });
+
+  it('gives the slot back to the check-in while the act reminder write is failing', () => {
+    const midday = day({ act: 'At lunch, text the friend you thought of.' });
+    expect(getMiddayActClaim(state(midday), now, true)).toBeNull();
+  });
+});
+
+describe('getEveningActClaim (design call 1, 2026-10-29)', () => {
+  const READ = new Date(2026, 8, 8, 7, 40, 0).toISOString();
+  function state(today: DevotionalDay, reminders = true) {
+    return {
+      devotionals: [{ ...devotional(), days: [today] }],
+      currentDevotionalId: 'dev-1',
+      user: { dailyReminderEnabled: reminders, reminderTime: '8:00 AM' },
+      middayCheckInTime: '12:30',
+      eveningWindDownTime: '21:00',
+    };
+  }
+  const midday = { act: 'At lunch, text the friend you thought of.', actSlot: 'midday' as const };
+
+  it('claims the wind-down clock for an evening act read today', () => {
+    expect(getEveningActClaim(state(day()), now)).toEqual(new Date(2026, 8, 8, 21, 0, 0));
+  });
+
+  it('claims the wind-down clock for a midday act read too late for midday', () => {
+    const lateRead = day({ ...midday, readAt: new Date(2026, 8, 8, 12, 25, 0).toISOString() });
+    expect(getEveningActClaim(state(lateRead), new Date(2026, 8, 8, 12, 26, 0))).toEqual(new Date(2026, 8, 8, 21, 0, 0));
+  });
+
+  it('claims nothing for a midday act, a done act, a day read yesterday, or reminders off', () => {
+    expect(getEveningActClaim(state(day(midday)), now)).toBeNull();
+    expect(getEveningActClaim(state(day({ actOutcome: 'done' })), now)).toBeNull();
+    expect(getEveningActClaim(state(day({ readAt: new Date(2026, 8, 7, 7, 40).toISOString() })), now)).toBeNull();
+    expect(getEveningActClaim(state(day(), false), now)).toBeNull();
+  });
+
+  it('gives the slot back to the wind-down while the act reminder write is failing', () => {
+    expect(getEveningActClaim(state(day()), now, true)).toBeNull();
+  });
+
+  it('claims nothing once the act reminder for the day has fired', () => {
+    const fired = { devotionalId: 'dev-1', dayNumber: 4, fireAt: new Date(2026, 8, 8, 12, 30).toISOString() };
+    expect(getEveningActClaim(state(day(midday)), new Date(2026, 8, 8, 15, 0, 0), false, fired)).toBeNull();
+  });
+
+  it('counts the lead from the read, so the claim and the planner agree on a replan near the slot', () => {
+    const nearSlot = new Date(2026, 8, 8, 20, 50, 0);
+    const claim = getEveningActClaim(state(day({ readAt: READ })), nearSlot);
+    const plan = buildActReminderPlan({ devotional: devotional(), day: day({ readAt: READ }), now: nearSlot, eveningTime: '21:00' });
+    expect(claim).toEqual(new Date(2026, 8, 8, 21, 0, 0));
+    expect(plan?.fireAt).toEqual(claim);
+    const lateRead = day({ readAt: new Date(2026, 8, 8, 20, 50, 0).toISOString() });
+    expect(getEveningActClaim(state(lateRead), nearSlot)).toBeNull();
   });
 });

@@ -17,7 +17,8 @@
  * 1. Build a fingerprint string from all state that affects notification copy.
  * 2. Subscribe to that fingerprint in a single hook mounted at the root layout.
  * 3. On change, debounce 750ms (to coalesce rapid switches) then reschedule.
- * 4. Also reschedule on app foreground (catches midnight rollover / overdue).
+ * 4. Also reschedule on app foreground (catches midnight rollover / overdue,
+ *    and a device timezone change: the horizon is absolute instants).
  * 5. Hydration-gate the first run so we don't overwrite a good pending payload
  *    with the pre-hydration fallback copy.
  * 6. Never prompt for permission from passive sync — only use existing
@@ -30,7 +31,6 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import {
-  scheduleDailyReminder,
   cancelNotificationById,
   areNotificationsEnabled,
   beginDailyReminderOperation,
@@ -39,14 +39,13 @@ import {
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { buildDailyReminderFingerprint } from '@/lib/daily-reminder-content';
 import {
-  buildDailyReminderFingerprint,
-  getDailyReminderOwner,
-  getDailyReminderTrigger,
-} from '@/lib/daily-reminder-content';
-import { logEvent } from '@/lib/analytics';
+  mirrorLocalReminderScheduled,
+  scheduleDailyReminderHorizon,
+  withDeviceTimezone,
+} from '@/lib/daily-reminder-sync';
 import { getCurrentDevotional, hasReadAnyDayToday } from '@/lib/home-devotional-state';
-import { parseReminderClock } from '@/lib/push-notification-helpers';
 import { captureSyncSession } from '@/lib/sync-session-fence';
 import { useUIState } from '@/lib/ui-state';
 
@@ -59,6 +58,9 @@ const DEBOUNCE_MS = 750;
  * NOTE: This must mirror EXACTLY the fields that `getNotificationContent()` reads
  * in src/lib/notifications.ts. If you add a branch in that function, add the
  * dependent fields here.
+ *
+ * The device timezone is not here: a render can be stale by the time a
+ * foreground run executes. runSync appends it live (withDeviceTimezone).
  */
 function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAccessPolicy>): string {
   const notificationPermissionEpoch = useUIState((s) => s.notificationPermissionEpoch);
@@ -76,17 +78,6 @@ function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAcces
       readToday: hasReadAnyDayToday(state.devotionals),
     })}|${notificationPermissionEpoch}`;
   });
-}
-
-/**
- * Mirrors "a local daily reminder sits in the OS queue" onto the profile so
- * the backend knows whether the morning slot is taken. Only writes on change:
- * the profile sync hook ships every user write to the server.
- */
-function mirrorLocalReminderScheduled(scheduled: boolean): void {
-  const state = useUnfoldStore.getState();
-  if (!state.user || state.user.localDailyReminderScheduled === scheduled) return;
-  state.updateUser({ localDailyReminderScheduled: scheduled });
 }
 
 export function useDailyReminderSync() {
@@ -122,11 +113,15 @@ export function useDailyReminderSync() {
       return;
     }
 
-    const target = latestFingerprintRef.current;
+    // The device timezone is read now, not at the last render: a foreground
+    // after a flight re-renders nothing, and the horizon's dated mornings
+    // keep the zone they were built in until rewritten.
+    const target = withDeviceTimezone(latestFingerprintRef.current);
     const todayStr = new Date().toDateString();
 
     // Skip no-op runs. A sync is a no-op iff:
     //   - fingerprint is unchanged (same content inputs), AND
+    //   - the device timezone is unchanged (part of `target`), AND
     //   - the wall-clock day is unchanged (overdue branch can't have flipped)
     // We apply the skip to fingerprint AND foreground runs — foreground used
     // to be unconditional, which caused a race: rescheduling at 7:59:59 would
@@ -167,7 +162,7 @@ export function useDailyReminderSync() {
           return;
         }
         mirrorLocalReminderScheduled(false);
-        lastAppliedRef.current = latestFingerprintRef.current;
+        lastAppliedRef.current = withDeviceTimezone(latestFingerprintRef.current);
         lastAppliedDayRef.current = todayStr;
         logger.log(`[useDailyReminderSync] Daily reminder disabled; cancelled daily reminder (reason=${reason})`);
         return;
@@ -184,51 +179,26 @@ export function useDailyReminderSync() {
         return;
       }
 
-      // Hand the morning slot to the server when it can reach this device
-      // and the next day is not on it yet: the server generates that day
-      // overnight and pushes its real quotable line at reminderTime. The
-      // local copy could only say "your next reading is waiting".
-      const owner = getDailyReminderOwner({
-        currentDevotional: getCurrentDevotional(state.devotionals, state.currentDevotionalId),
-        premiumPolicy: targetPremiumPolicy,
-        pushRegistered: Boolean(state.user?.pushRegisteredAt),
-      });
-      if (owner === 'server') {
-        await cancelNotificationById(
-          NOTIFICATION_IDS.DAILY_REMINDER,
-          originatingSession,
-          originatingOperation,
-        );
-        if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
-          return;
-        }
-        mirrorLocalReminderScheduled(false);
-        lastAppliedRef.current = latestFingerprintRef.current;
-        lastAppliedDayRef.current = todayStr;
-        logEvent('notification_scheduled', { type: 'daily_reminder', owner: 'server' });
-        logger.log(`[useDailyReminderSync] Server owns the morning slot; local reminder cancelled (reason=${reason})`);
-        return;
-      }
-
-      // Already read today: skip today's fire with a one-shot for tomorrow.
-      const trigger = getDailyReminderTrigger({
-        readToday: hasReadAnyDayToday(state.devotionals),
-        clock: parseReminderClock(reminderTime),
-      });
-      const scheduledId = await scheduleDailyReminder(
+      // A dated horizon of mornings, skipping today after a read. When the
+      // server can reach this device and the next day is not on it yet, its
+      // ready push takes the morning that day opens (it knows the real
+      // quotable line); every later morning stays local, because the server
+      // pushes only when a day finishes generating.
+      const { owner, complete, holdsNextMorning } = await scheduleDailyReminderHorizon(
         reminderTime,
+        targetPremiumPolicy,
         originatingSession,
         originatingOperation,
-        trigger,
       );
       if (!isDailyReminderOriginCurrent(originatingSession, originatingOperation)) {
         return;
       }
-      if (scheduledId == null) {
-        mirrorLocalReminderScheduled(false);
+      // Mirror what the queue holds even after a partial write; record the
+      // run only when complete, so the next foreground retries.
+      mirrorLocalReminderScheduled(holdsNextMorning);
+      if (!complete) {
         return;
       }
-      mirrorLocalReminderScheduled(true);
 
       // Post-schedule stale-check: if state changed during the await (e.g.
       // user tapped "Delete Everything" mid-flight and we just recreated a
@@ -238,7 +208,11 @@ export function useDailyReminderSync() {
       const freshState = useUnfoldStore.getState();
       const freshReminderTime = freshState.user?.reminderTime;
       const freshDailyReminderEnabled = freshState.user?.dailyReminderEnabled ?? Boolean(freshReminderTime);
-      if (!freshReminderTime || !freshDailyReminderEnabled || latestFingerprintRef.current !== target) {
+      if (
+        !freshReminderTime
+        || !freshDailyReminderEnabled
+        || withDeviceTimezone(latestFingerprintRef.current) !== target
+      ) {
         await cancelNotificationById(
           NOTIFICATION_IDS.DAILY_REMINDER,
           originatingSession,
@@ -251,9 +225,9 @@ export function useDailyReminderSync() {
         return;
       }
 
-      lastAppliedRef.current = latestFingerprintRef.current;
+      lastAppliedRef.current = target;
       lastAppliedDayRef.current = todayStr;
-      logger.log(`[useDailyReminderSync] Rescheduled daily reminder (reason=${reason})`);
+      logger.log(`[useDailyReminderSync] Rescheduled daily reminder (owner=${owner}, reason=${reason})`);
     } catch (error) {
       logger.error('[useDailyReminderSync] Sync failed:', error);
     } finally {
@@ -290,6 +264,7 @@ export function useDailyReminderSync() {
 
   // Foreground reconciliation. Catches:
   //  - Midnight rollover (overdue copy branch in getNotificationContent)
+  //  - A device timezone change (runSync reads the zone live)
   //  - Permission changes from OS settings
   //  - Drift if the app sat in the background through state changes
   useEffect(() => {

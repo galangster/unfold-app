@@ -29,66 +29,12 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
+import { companionGreeting } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 
 const EASE_OUT = Easing.out(Easing.cubic);
-
-// ── 50 rotating greetings ──────────────────────────────────────────────────
-
-const GREETINGS_WITH_NAME = [
-  (n: string) => `Hey ${n}, what’s on your heart?`,
-  (n: string) => `Good to see you, ${n}.`,
-  (n: string) => `What are you thinking about, ${n}?`,
-  (n: string) => `Hey ${n}. What’s stirring in you?`,
-  (n: string) => `${n}, what’s been on your mind?`,
-  (n: string) => `Welcome back, ${n}.`,
-  (n: string) => `Hey ${n}. Anything weighing on you?`,
-  (n: string) => `What’s God been putting on your heart, ${n}?`,
-  (n: string) => `${n}, what are you wrestling with?`,
-  (n: string) => `Hey ${n}. I’m here whenever you’re ready.`,
-  (n: string) => `What brought you here, ${n}?`,
-  (n: string) => `${n}, what do you want to explore?`,
-  (n: string) => `Hey ${n}. Let’s dig into something.`,
-  (n: string) => `What are you curious about, ${n}?`,
-  (n: string) => `${n}, what questions are you sitting with?`,
-  (n: string) => `Hey ${n}. Where should we start?`,
-  (n: string) => `What do you need right now, ${n}?`,
-  (n: string) => `${n}, I’m glad you’re here.`,
-  (n: string) => `Hey ${n}. What’s pulling at you?`,
-  (n: string) => `Talk to me, ${n}. What’s going on?`,
-  (n: string) => `${n}, anything on your mind?`,
-  (n: string) => `Hey ${n}. What would be helpful right now?`,
-  (n: string) => `What’s stirring in your spirit, ${n}?`,
-  (n: string) => `${n}, what do you want to talk about?`,
-  (n: string) => `Hey ${n}. Ask me anything.`,
-];
-
-const GREETINGS_NO_NAME = [
-  "What’s on your heart?",
-  "What are you thinking about?",
-  "What’s been on your mind?",
-  "Anything weighing on you?",
-  "What brought you here?",
-  "What are you curious about?",
-  "Where should we start?",
-  "What do you need right now?",
-  "What’s stirring in you?",
-  "What are you wrestling with?",
-  "What questions are you sitting with?",
-  "What do you want to explore?",
-  "What would be helpful right now?",
-  "Talk to me. What’s going on?",
-  "I’m here. Ask me anything.",
-  "What do you want to talk about?",
-  "What’s pulling at you?",
-  "What’s God been putting on your heart?",
-  "Glad you’re here. What’s up?",
-  "Let’s dig into something.",
-  "I’m here whenever you’re ready.",
-  "Anything on your mind?",
-  "What’s stirring in your spirit?",
-  "What brought you here today?",
-  "Ready when you are.",
-];
 
 interface Props {
   onSelectStarter: (text: string) => void;
@@ -136,14 +82,15 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
   const reducedMotion = useReducedMotion();
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
 
-  const greeting = useMemo(() => {
-    if (userName) {
-      const idx = Math.floor(Math.random() * GREETINGS_WITH_NAME.length);
-      return GREETINGS_WITH_NAME[idx](userName);
-    }
-    const idx = Math.floor(Math.random() * GREETINGS_NO_NAME.length);
-    return GREETINGS_NO_NAME[idx];
-  }, [userName]);
+  // One greeting per local day from the bag, so it does not come back
+  // tomorrow. The day moves at midnight and on resume, so a tab left mounted
+  // overnight greets with the next day's line.
+  const calendarNow = useCalendarNow();
+  const greetingDay = dayIndexFor(calendarNow);
+  const greeting = useMemo(
+    () => companionGreeting(userName, { seed: copySeed(), dayIndex: greetingDay }),
+    [userName, greetingDay],
+  );
 
   const hasHistory = useUnfoldStore((s) => (s.devotionals?.length ?? 0) > 0);
 

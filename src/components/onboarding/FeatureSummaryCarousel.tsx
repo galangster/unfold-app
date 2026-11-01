@@ -1,7 +1,7 @@
-import { useCallback, memo } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, memo } from 'react';
 import { useIsFocused } from 'expo-router';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Keyboard, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -20,7 +20,11 @@ import {
 } from '@/app/how-it-works';
 import type { FeatureCard } from '@/app/how-it-works';
 import type { ColorTheme } from '@/constants/colors';
-import { COMPANION_INTRO_BODY } from '@/lib/support-clarity';
+import {
+  COMPANION_INTRO_BODY,
+  COMPANION_NAME_LATER_HINT,
+  COMPANION_NAME_MAX_LENGTH,
+} from '@/lib/support-clarity';
 import { COMPANION_PERSONALITIES, type CompanionPersonality } from '@/lib/companion-personality';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -43,6 +47,8 @@ const ALL_PAGES = [
 
 interface Props {
   colors: ColorTheme;
+  companionName: string;
+  onCompanionNameChange: (name: string) => void;
   companionPersonality: CompanionPersonality;
   onCompanionPersonalityChange: (personality: CompanionPersonality) => void;
   currentPage: number;
@@ -52,6 +58,8 @@ interface Props {
 
 export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   colors,
+  companionName,
+  onCompanionNameChange,
   companionPersonality,
   onCompanionPersonalityChange,
   currentPage,
@@ -66,6 +74,26 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
   const isCompanionPage = 'type' in page && page.type === 'companion';
+  // The keyboard lifts the whole step, so the page area shrinks. While the
+  // name field has focus, each shrink scrolls the page to its end, where the
+  // field sits, so the field stays above Next.
+  const scrollRef = useRef<ScrollView>(null);
+  const nameFocusedRef = useRef(false);
+  // A page change unmounts the field without a blur event, so the flag
+  // resets with the page. Otherwise later pages would open scrolled to the end.
+  useLayoutEffect(() => { nameFocusedRef.current = false; }, [currentPage]);
+  const keepNameFieldInView = useCallback(() => {
+    if (nameFocusedRef.current) scrollRef.current?.scrollToEnd({ animated: false });
+  }, []);
+  // The avoiding view takes its frame relative to its parent, so it needs the
+  // distance from the top of the window. The step fills its parent, so that is
+  // the step's own top. The avoiding view's ref never attaches under
+  // NativeWind, so an opted-out view at its top edge measures it.
+  const frameRef = useRef<View>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const measureKeyboardOffset = useCallback(() => {
+    frameRef.current?.measureInWindow((_x, y) => setKeyboardOffset(y));
+  }, []);
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLastPage) {
@@ -97,7 +125,15 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
     });
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={keyboardOffset} style={{ flex: 1 }}>
+      <View
+        ref={frameRef}
+        cssInterop={false}
+        collapsable={false}
+        onLayout={measureKeyboardOffset}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
       {/* Swipeable pages */}
       <GestureDetector gesture={swipeGesture}>
         <View style={{ flex: 1 }}>
@@ -107,19 +143,21 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={StyleSheet.absoluteFill}
           >
-            <KeyboardAwareScrollView
+            <ScrollView
+              ref={scrollRef}
+              cssInterop={false}
               style={{ flex: 1 }}
-              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: Spacing['6'] }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'], paddingVertical: isCompanionPage ? Spacing['3'] : Spacing['6'] }}
               keyboardShouldPersistTaps="handled"
-              bottomOffset={24}
+              onLayout={keepNameFieldInView}
             >
-              <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
+              <View style={{ alignItems: 'center', gap: isCompanionPage ? 20 : 36, alignSelf: 'stretch' }}>
                 {/* Animation or companion orb */}
                 <View>
                   {isCompanionPage ? (
                     <CompanionOrb
                       accentColor={colors.accent}
-                      size={96}
+                      size={64}
                       isActive
                       showBadge={false}
                       expression="welcome"
@@ -184,9 +222,43 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                       })}
                     </Animated.View>
                   )}
+
+                  {/* Companion name — optional, enters after the personality choices */}
+                  {isCompanionPage && (
+                    <Animated.View
+                      entering={reducedMotion ? undefined : FadeIn.delay(750).duration(Duration.slow).easing(Ease.out)}
+                      style={styles.nameGroup}
+                    >
+                      <Text key={`companion-name-label-${fontScale}`} style={[styles.nameLabel, { color: colors.textMuted }]}>Companion name (optional)</Text>
+                      <TextInput
+                        value={companionName}
+                        onChangeText={onCompanionNameChange}
+                        accessibilityLabel="Companion name"
+                        accessibilityHint={COMPANION_NAME_LATER_HINT}
+                        placeholder="e.g. Selah or Guide"
+                        placeholderTextColor={colors.textMuted}
+                        selectionColor={colors.accent}
+                        cursorColor={colors.accent}
+                        style={[
+                          styles.nameInput,
+                          {
+                            color: colors.text,
+                            backgroundColor: colors.inputBackground,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                        maxLength={COMPANION_NAME_MAX_LENGTH}
+                        returnKeyType="done"
+                        submitBehavior="blurAndSubmit"
+                        onSubmitEditing={Keyboard.dismiss}
+                        onFocus={() => { nameFocusedRef.current = true; }}
+                        onBlur={() => { nameFocusedRef.current = false; }}
+                      />
+                    </Animated.View>
+                  )}
                 </View>
               </View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
           </Animated.View>
         </View>
       </GestureDetector>
@@ -239,7 +311,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
           </View>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 });
 
@@ -253,8 +325,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['1'],
   },
   personalityChoice: {
-    minHeight: 64,
-    paddingVertical: Spacing['3'],
+    minHeight: 56,
+    paddingVertical: Spacing['2.5'],
     paddingHorizontal: Spacing['4'],
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -270,5 +342,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     lineHeight: 20,
     flexShrink: 1,
+  },
+  nameGroup: {
+    marginTop: Spacing['4'],
+  },
+  nameLabel: {
+    ...Typography.cardMeta,
+    marginBottom: Spacing['2'],
+  },
+  nameInput: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.lg,
+    minHeight: 54,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['5'],
+    borderRadius: Radius.lg,
+    borderWidth: 1,
   },
 });

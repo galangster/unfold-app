@@ -1,3 +1,5 @@
+import { rememberDeletedSeries, resetDeletedSeriesForTesting, wasSeriesDeleted } from '../deleted-series';
+
 jest.mock('../api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -31,12 +33,13 @@ jest.mock('../mmkv-storage', () => {
 });
 
 import { useUnfoldStore } from '../store';
-import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData } from '../full-sync-pull';
+import { applyPulledUserData, LAST_PULLED_AT_KEY, pullAllUserData, resetUserDataPullForTesting, triggerUserDataPull, triggerUserDataPullAfterInFlight } from '../full-sync-pull';
 import { persistNoteSnapshot } from '../note-detail-editor';
 import { drainSyncOutbox, peekSyncOutbox, replaceSyncOutbox, resetDrainStateForTesting } from '../sync-outbox';
-import { useCompanionChatStore } from '../companion-chat-store';
+import { flushCompanionChatPersist, useCompanionChatStore } from '../companion-chat-store';
 import { readCompanionDraft, writeCompanionDraft } from '../companion-drafts';
 import { mmkvStorage } from '../mmkv-storage';
+import { beginLocalResetSession, endLocalResetSession, SyncSessionInvalidatedError } from '../sync-session-fence';
 import type { SyncPushChange, SyncTable } from '../sync-types';
 
 const mockFetch = jest.fn();
@@ -241,6 +244,22 @@ describe('full user-data sync', () => {
     expect(useUnfoldStore.getState().notes.find((note) => note.id === noteId)).toBeUndefined();
   });
 
+  // 2026-10-09 release audit sweep: a delete handed to the full sync joined a
+  // pull already out, whose reply could predate the delete.
+  it('runs a pull after the one already out when a change must be seen', async () => {
+    resetUserDataPullForTesting();
+    let pulls = 0;
+    serveSync({ pull: () => { pulls += 1; return { timestamp: '2026-07-01T12:00:00.000Z', changes: {} }; } });
+
+    const first = triggerUserDataPull('app-start');
+    const joined = triggerUserDataPull('app-start');
+    const fresh = triggerUserDataPullAfterInFlight('series-deleted');
+    await Promise.all([first, joined, fresh]);
+
+    expect(pulls).toBe(2);
+    resetUserDataPullForTesting();
+  });
+
   it('sends the persisted lastPulledAt cursor and advances it after apply', async () => {
     mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-07-01T11:00:00.000Z');
     serveSync({
@@ -258,6 +277,79 @@ describe('full user-data sync', () => {
     expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
   });
 
+
+  it('saves the cursor only after the pulled rows are written to disk', async () => {
+    serveSync({
+      pull: () => ({
+        timestamp: '2026-07-01T12:00:00.000Z',
+        changes: recordsFromChanges([{
+          table: 'bookmarks',
+          id: 'bookmark-from-another-device',
+          clientUpdatedAt: '2026-07-01T11:30:00.000Z',
+          data: { devotionalId: 'dev-1', dayNumber: 2, createdAt: '2026-07-01T11:30:00.000Z' },
+          deleted: false,
+        }]),
+      }),
+    });
+    jest.mocked(mmkvStorage.setItem).mockClear();
+
+    await pullAllUserData();
+
+    const keys = jest.mocked(mmkvStorage.setItem).mock.calls.map(([key]) => key);
+    const storeWrite = keys.indexOf('unfold-storage');
+    expect(storeWrite).toBeGreaterThanOrEqual(0);
+    expect(storeWrite).toBeLessThan(keys.indexOf(LAST_PULLED_AT_KEY));
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T12:00:00.000Z');
+  });
+
+  it('saves the cursor only after pulled Companion rows are written to disk', async () => {
+    useCompanionChatStore.setState({
+      conversations: [{
+        id: 'conv-pulled',
+        messages: [{ id: 'msg-pulled', role: 'user', content: 'hi', timestamp: Date.now(), status: 'sent', updatedAt: '2026-06-01T00:00:00.000Z' }],
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        title: 'Open',
+        topicTags: [],
+        archived: false,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      } as never],
+    });
+    flushCompanionChatPersist();
+    const deletedAt = '2026-07-01T11:30:00.000Z';
+    serveSync({
+      pull: () => ({
+        timestamp: '2026-07-01T12:00:00.000Z',
+        changes: {
+          companion_messages: [{ id: 'msg-pulled', data: { conversationId: 'conv-pulled', clientUpdatedAt: deletedAt }, updatedAt: deletedAt, deleted: true }],
+        },
+      }),
+    });
+    jest.mocked(mmkvStorage.setItem).mockClear();
+
+    await pullAllUserData();
+
+    const keys = jest.mocked(mmkvStorage.setItem).mock.calls.map(([key]) => key);
+    const companionWrite = keys.indexOf('unfold-companion-chat');
+    expect(companionWrite).toBeGreaterThanOrEqual(0);
+    expect(companionWrite).toBeLessThan(keys.indexOf(LAST_PULLED_AT_KEY));
+  });
+
+  it('keeps the old cursor when a reset begins while the pulled rows are written', async () => {
+    mmkvStorage.setItem(LAST_PULLED_AT_KEY, '2026-07-01T11:00:00.000Z');
+    serveSync({ pull: () => ({ timestamp: '2026-07-01T12:00:00.000Z', changes: {} }) });
+    const write = jest.mocked(mmkvStorage.setItem).getMockImplementation()!;
+    let resetToken: number | undefined;
+    jest.mocked(mmkvStorage.setItem).mockImplementation((key: string, value: string) => {
+      if (key === 'unfold-storage' && resetToken === undefined) resetToken = beginLocalResetSession();
+      return write(key, value);
+    });
+
+    await expect(pullAllUserData()).rejects.toBeInstanceOf(SyncSessionInvalidatedError);
+    expect(resetToken).toBeDefined();
+    expect(mmkvStorage.getItem(LAST_PULLED_AT_KEY)).toBe('2026-07-01T11:00:00.000Z');
+    endLocalResetSession(resetToken!);
+  });
 
   it('rejects a pulled tombstone while a fresh local change is still un-pushed (WR-25 guard)', async () => {
     const store = useUnfoldStore.getState();
@@ -982,6 +1074,44 @@ describe('J6 full-sync day mapper', () => {
     expect(emptyLine?.shapedByCheckIn).toBeUndefined();
     expect(emptyLine?.nextPick).toBeUndefined();
   });
+
+  it('keeps the local act answer when a newer pulled row replaces a read day', () => {
+    seedMappedDevotional();
+    const readAt = '2026-07-01T08:00:00.000Z';
+    useUnfoldStore.setState((state) => ({
+      devotionals: state.devotionals.map((devotional) => ({
+        ...devotional,
+        days: [{
+          id: 'day-devotional-1-2',
+          devotionalId: 'devotional-1',
+          dayNumber: 2,
+          title: 'Day 2',
+          scriptureReference: 'John 1:1',
+          scriptureText: 'Text',
+          bodyText: 'Body',
+          quotableLine: 'Line',
+          isRead: true,
+          readAt,
+          actOutcome: 'done' as const,
+          updatedAt: '2026-07-01T09:00:00.000Z',
+        }],
+      })),
+    }));
+
+    // The server row changed after the answer (another device read the day,
+    // or the read push landed late). It never carries the act answer.
+    const row = pulledDay({});
+    applyPulledUserData({
+      timestamp: '2026-07-01T12:00:00.000Z',
+      changes: { devotional_days: [{ ...row, data: { ...row.data, isRead: true, readAt } }] },
+    });
+
+    expect(useUnfoldStore.getState().devotionals[0]?.days[0]).toMatchObject({
+      isRead: true,
+      updatedAt: '2026-07-01T12:00:00.000Z',
+      actOutcome: 'done',
+    });
+  });
 });
 
 describe('pulled series lifecycle', () => {
@@ -1154,6 +1284,96 @@ describe('pulled series lifecycle', () => {
     });
   });
 
+  // 2026-10-09 release audit round 5: a shell a pull built without series
+  // dates carries this phone's guess for its creation, and a full sync ranked
+  // that guess above a newer series started on another device. After a full
+  // sync that newer series, held here, is the series the server writes.
+  it('ranks a held series by the creation time the full sync returned for it', () => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ createdAt: '2026-10-09T13:00:00.000Z', archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', createdAt: '2026-09-12T18:00:00.000Z', days: [] }),
+      ],
+      currentDevotionalId: null,
+    });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T19:00:00.000Z',
+      changes: {
+        devotionals: [{
+          id: 'series-1',
+          updatedAt: '2026-09-12T17:00:00.000Z',
+          deleted: false,
+          data: {
+            createdAt: '2026-09-01T00:00:00.000Z',
+            archivedAt: null,
+            archivedStateAt: '2026-09-12T17:00:00.000Z',
+            clientUpdatedAt: '2026-09-12T17:00:00.000Z',
+          },
+        }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
+  });
+
+  it('remembers a series another device deleted, so a pull already out cannot restore it', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    applyPulledUserData({
+      timestamp: '2026-09-12T19:00:00.000Z',
+      changes: {
+        devotionals: [{ id: 'series-1', updatedAt: '2026-09-12T18:00:00.000Z', deleted: true, data: {} }],
+      },
+    });
+
+    expect(useUnfoldStore.getState().devotionals).toEqual([]);
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 7 too: once the server acknowledged a delete made here, nothing on
+  // this phone said the series was deleted.
+  it('remembers a series deleted here after its delete leaves the outbox', () => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+
+    useUnfoldStore.getState().removeDevotional('series-1');
+    replaceSyncOutbox([]);
+
+    expect(wasSeriesDeleted('series-1')).toBe(true);
+    expect(wasSeriesDeleted('series-2')).toBe(false);
+    resetDeletedSeriesForTesting();
+  });
+
+  // Round 7 again: a full sync that was out when the delete applied answered
+  // with the older live row, and inserted it.
+  it.each([0, 100])('rejects stale rows and accepts newer rows after %i later deletes', (laterDeletes) => {
+    resetDeletedSeriesForTesting();
+    useUnfoldStore.setState({ devotionals: [localSeries()], currentDevotionalId: 'series-1' });
+    useUnfoldStore.getState().removeDevotional('series-1');
+    const deletedAtMs = Date.parse(peekSyncOutbox().find((change) => change.deleted && change.id === 'series-1')?.clientUpdatedAt ?? '');
+    replaceSyncOutbox([]);
+    const at = (offsetMs: number) => new Date(deletedAtMs + offsetMs).toISOString();
+    for (let index = 0; index < laterDeletes; index += 1) {
+      rememberDeletedSeries(`series-later-${index}`, at(index + 1));
+    }
+    const liveRow = (updatedAt: string) => ({
+      id: 'series-1',
+      updatedAt,
+      deleted: false,
+      data: { title: 'Stillness', totalDays: 14, currentDay: 4, createdAt: '2026-09-01T00:00:00.000Z', generationMode: 'progressive', clientUpdatedAt: updatedAt },
+    });
+
+    applyPulledUserData({ timestamp: at(1_000), changes: { devotionals: [liveRow(at(-60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(false);
+
+    applyPulledUserData({ timestamp: at(120_000), changes: { devotionals: [liveRow(at(60_000))] } });
+    expect(useUnfoldStore.getState().devotionals.some((row) => row.id === 'series-1')).toBe(true);
+    resetDeletedSeriesForTesting();
+  });
+
   it('does not restore a stale remote resume or steal a different live selection', () => {
     useUnfoldStore.setState({
       devotionals: [
@@ -1260,5 +1480,47 @@ describe('pulled series lifecycle', () => {
     const state = useUnfoldStore.getState();
     expect(state.currentDevotionalId).toBe('series-2');
     expect(state.devotionals.find((item) => item.id === 'series-2')?.archivedAt).toBeUndefined();
+  });
+
+  // "Continue this series" on another device resumes series-1 at once and
+  // pauses series-2 on the same clock through its outbox, which can drain
+  // later. One pull carrying both moves Today to series-1. In separate pulls
+  // the resume no longer reads as newer once the pause lands, but series-1 is
+  // then the series the server writes, and a full sync holds every series.
+  it.each([
+    ['separate pulls', 'series-1'],
+    ['one pull', 'series-1'],
+  ] as const)('follows a series resumed elsewhere only when the pause arrives in one pull with it: %s', (order, landsOn) => {
+    useUnfoldStore.setState({
+      devotionals: [
+        localSeries({ archivedAt: LOCAL_ARCHIVE_AT, archivedStateAt: LOCAL_ARCHIVE_AT }),
+        localSeries({ id: 'series-2', title: 'Other', createdAt: '2026-09-05T00:00:00.000Z' }),
+      ],
+      currentDevotionalId: 'series-2',
+    });
+    const resume = {
+      id: 'series-1', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: null, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+    const pause = {
+      id: 'series-2', updatedAt: REMOTE_ARCHIVE_AT, deleted: false,
+      data: { archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, clientUpdatedAt: '2026-09-11T12:00:00.000Z' },
+    };
+
+    if (order === 'separate pulls') {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume] } });
+      // The pause has not reached the server yet: series-2 is still live here.
+      expect(useUnfoldStore.getState().currentDevotionalId).toBe('series-2');
+      applyPulledUserData({ timestamp: '2026-09-12T16:05:00.000Z', changes: { devotionals: [pause] } });
+    } else {
+      applyPulledUserData({ timestamp: REMOTE_ARCHIVE_AT, changes: { devotionals: [resume, pause] } });
+    }
+
+    const state = useUnfoldStore.getState();
+    expect(state.currentDevotionalId).toBe(landsOn);
+    expect(state.devotionals.find((item) => item.id === 'series-2')).toMatchObject({
+      archivedAt: REMOTE_ARCHIVE_AT, archivedStateAt: REMOTE_ARCHIVE_AT, currentDay: 4,
+    });
+    expect(state.devotionals.find((item) => item.id === 'series-1')?.days[0]).toMatchObject({ isRead: true });
   });
 });

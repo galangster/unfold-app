@@ -61,6 +61,9 @@ const baseline: CheckInFingerprintInputs = {
   eveningByDay: null,
   hasCompletedOnboarding: true,
   todayCarryLine: '',
+  todayCompanionNudge: '',
+  todayMiddayActClaim: '',
+  todayEveningActClaim: '',
   notificationPermissionEpoch: 0,
   trialNoticeEpoch: 0,
   deviceTimezone: 'Pacific/Honolulu',
@@ -182,6 +185,27 @@ describe('useCheckInFingerprint — invariants', () => {
     it('changes when todayCarryLine changes', () => {
       const a = buildFingerprint(baseline);
       const b = buildFingerprint({ ...baseline, todayCarryLine: 'Carry this: you are already home.' });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayCompanionNudge changes', () => {
+      // A read brings the nudge into today's banner (V-03), with or without a carry line.
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayCompanionNudge: 'Before Thursday’s interview, remember whose name you carry.' });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayMiddayActClaim changes', () => {
+      // Reading a midday act moves today's check-in out of the act's way; marking it done brings it back.
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayMiddayActClaim: new Date(2026, 8, 8, 12, 30).toISOString() });
+      expect(a).not.toBe(b);
+    });
+
+    it('changes when todayEveningActClaim changes', () => {
+      // Reading an evening act moves today's wind-down out of the act's way; marking it done brings it back.
+      const a = buildFingerprint(baseline);
+      const b = buildFingerprint({ ...baseline, todayEveningActClaim: new Date(2026, 8, 8, 20, 30).toISOString() });
       expect(a).not.toBe(b);
     });
 

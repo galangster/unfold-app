@@ -9,7 +9,13 @@
  * called at mmkv-storage module init on every non-recovery boot.
  */
 
-import { mergeRecoveryOutbox, RECOVERY_OUTBOX_KEY, type KVAccessor } from '../mmkv-recovery-outbox';
+import {
+  DELETED_SERIES_KEY,
+  mergeRecoveryDeletedSeries,
+  mergeRecoveryOutbox,
+  RECOVERY_OUTBOX_KEY,
+  type KVAccessor,
+} from '../mmkv-recovery-outbox';
 
 function makeKV(initial: Record<string, string> = {}): KVAccessor & { store: Map<string, string> } {
   const store = new Map(Object.entries(initial));
@@ -115,5 +121,47 @@ describe('mergeRecoveryOutbox (RS2-1)', () => {
     const real = JSON.parse(realKV.getString(RECOVERY_OUTBOX_KEY) ?? '[]');
     expect(real).toHaveLength(1);
     expect(real[0].id).toBe('d1');
+  });
+});
+
+describe('mergeRecoveryDeletedSeries', () => {
+  it.each([50, 300])('retains all 101 clocks when the recovery clock is %i', (recoveryClock) => {
+    const realClocks = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [`series-real-${index}`, 100 + index]),
+    );
+    const realKV = makeKV({ [DELETED_SERIES_KEY]: JSON.stringify(realClocks) });
+    const recoveryKV = makeKV({
+      [DELETED_SERIES_KEY]: JSON.stringify({ 'series-recovery': recoveryClock }),
+    });
+
+    mergeRecoveryDeletedSeries(realKV, recoveryKV);
+
+    const merged = JSON.parse(realKV.getString(DELETED_SERIES_KEY) ?? 'null');
+    expect(Object.keys(merged)).toHaveLength(101);
+    expect(merged['series-real-0']).toBe(100);
+    expect(merged['series-real-99']).toBe(199);
+    expect(merged['series-recovery']).toBe(recoveryClock);
+    expect(recoveryKV.store.has(DELETED_SERIES_KEY)).toBe(false);
+  });
+
+  it('carries recovery delete clocks into the real store, newest clock per id', () => {
+    const realKV = makeKV({
+      [DELETED_SERIES_KEY]: JSON.stringify({ 'series-both': 200, 'series-real': 100 }),
+    });
+    const recoveryKV = makeKV({
+      [DELETED_SERIES_KEY]: JSON.stringify({ 'series-both': 150, 'series-recovery': 300 }),
+    });
+
+    mergeRecoveryDeletedSeries(realKV, recoveryKV);
+
+    expect(JSON.parse(realKV.getString(DELETED_SERIES_KEY) ?? 'null')).toEqual({
+      'series-both': 200,
+      'series-real': 100,
+      'series-recovery': 300,
+    });
+    expect(recoveryKV.store.has(DELETED_SERIES_KEY)).toBe(false);
+
+    mergeRecoveryDeletedSeries(realKV, makeKV({ [DELETED_SERIES_KEY]: JSON.stringify({ 'series-both': 250 }) }));
+    expect(JSON.parse(realKV.getString(DELETED_SERIES_KEY) ?? 'null')['series-both']).toBe(250);
   });
 });

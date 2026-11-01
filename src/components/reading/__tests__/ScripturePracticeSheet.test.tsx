@@ -260,7 +260,7 @@ describe('ScripturePracticeSheet', () => {
       tree = renderSheet({ methodId: 'scripture_meditation', assignedMethodId: 'scripture_meditation' });
     });
     const text = collectText(tree!.toJSON()).join(' ');
-    expect(text).toContain("This passage isn't available in the app Bible");
+    expect(text).toContain('This passage isn’t available in the app Bible');
     expect(text).toContain('physical Bible');
     expect(text).not.toContain('AI_FALLBACK_TEXT');
     expect(text).not.toContain('AI_CROSS_REF_TEXT');

@@ -82,6 +82,7 @@ let nativeIdentityMutationsPending = 0;
 let identityReadinessTimer: ReturnType<typeof setTimeout> | null = null;
 const identityEpochListeners = new Set<(epoch: number) => void>();
 const identityVerifiedListeners = new Set<(epoch: number) => void>();
+const identityStateListeners = new Set<() => void>();
 const IDENTITY_READINESS_TIMEOUT_MS = 5_000;
 const RESET_UNAVAILABLE_ERROR = 'RevenueCat unavailable during reset';
 const PENDING_IDENTITY_MUTATION_ERROR = 'RevenueCat native identity mutation is still pending';
@@ -166,10 +167,17 @@ function notifyIdentityEpoch(epoch: number): void {
   }
 }
 
+function notifyIdentityState(): void {
+  for (const listener of [...identityStateListeners]) {
+    listener();
+  }
+}
+
 function settleIdentityReady(): void {
   const resolve = identityReadyResolve;
   identityReadyResolve = null;
   resolve?.();
+  notifyIdentityState();
 }
 
 function clearIdentityReadinessBound(): void {
@@ -279,6 +287,18 @@ function markIdentityVerified(appUserID: string): void {
 }
 
 /**
+ * Fires each time the identity behind getRevenueCatSupportId() changes: it
+ * verifies, fails, times out, or is invalidated. A screen that shows the ID
+ * reads it again. This is neither an epoch nor a verification signal.
+ */
+export function subscribeRevenueCatIdentityState(listener: () => void): () => void {
+  identityStateListeners.add(listener);
+  return () => {
+    identityStateListeners.delete(listener);
+  };
+}
+
+/**
  * Fires when the wrapper has verified the current deterministic target.
  * This is not an identity-epoch notification. Invalidation does not emit it.
  */
@@ -310,6 +330,7 @@ export function invalidateRevenueCatIdentityReadiness(): void {
   startIdentityReadinessBound(identityEpoch);
   previousResolve?.();
   notifyIdentityEpoch(identityEpoch);
+  notifyIdentityState();
 }
 
 /**

@@ -34,6 +34,15 @@ describe('deep-link allowlist — legitimate producers', () => {
     expectRejected('unfold://life-update?next=series');
   });
 
+  it('opens the feelings check-in, directly on one feeling when a link names it', () => {
+    expectAllowed('unfold://feelings', '/feelings');
+    expectAllowed('unfold://feelings?feeling=weary', '/feelings');
+    // The screen ignores ids it does not know, so a link from newer content still opens the list.
+    expectAllowed('unfold://feelings?feeling=overjoyed', '/feelings');
+    expectRejected('unfold://feelings?feeling=%3Cscript%3E', 'invalid-param');
+    expectRejected('unfold://feelings?passage=2', 'unknown-param');
+  });
+
   it('opens the gated replay fixture without accepting action parameters', () => {
     expectAllowed('unfold://qa-replay-check', '/qa-replay-check');
     expectRejected('unfold://qa-replay-check?send=true');

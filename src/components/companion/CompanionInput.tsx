@@ -33,13 +33,10 @@ import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { COMPANION_MESSAGE_MAX_CHARS } from '@/lib/companion-limits';
 import { companionDraftKey, companionRecordingSlot, holdCompanionDraftForSend, readCompanionDraft, startCompanionRecording, writeCompanionDraft } from '@/lib/companion-drafts';
-
-const PLACEHOLDERS = [
-  'What’s on your mind?',
-  'Ask me anything…',
-  'What are you thinking about?',
-  'How can I help today?',
-];
+import { companionInputPlaceholder } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
+import { dayIndexFor } from '@/lib/variation-bag';
+import { useCalendarNow } from '@/hooks/useCalendarNow';
 
 const COMPANION_MESSAGE_COUNTER_THRESHOLD = 3500;
 const MAX_APP_FONT_SCALE = 1.8;
@@ -99,9 +96,13 @@ export const CompanionInput = memo(function CompanionInput({ onSend, onStop, isS
   const inputRef = useRef<TextInput>(null);
   const sendScale = useSharedValue(1);
 
+  // One placeholder per local day from the bag. The day moves at midnight
+  // and on resume, so a tab left mounted overnight shows the next day's.
+  const calendarNow = useCalendarNow();
+  const placeholderDay = dayIndexFor(calendarNow);
   const placeholder = useMemo(
-    () => PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)],
-    []
+    () => companionInputPlaceholder({ seed: copySeed(), dayIndex: placeholderDay }),
+    [placeholderDay],
   );
 
   const canSend = text.trim().length > 0 && !isStreaming;

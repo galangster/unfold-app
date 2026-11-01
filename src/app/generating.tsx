@@ -17,10 +17,12 @@ import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, buildInitialArcUserContext } from '@/lib/generation-api';
+import { bindReplacementSeries } from '@/lib/series-replacement';
 import {
   clearInflightGenerationJob,
   markInflightJobLeftForHome,
   readInflightGenerationJob,
+  requestAnsweredByInflightJob,
   supersedeInflightGenerationJob,
   writeInflightGenerationJob,
   GENERATING_SESSION_TITLE_PLACEHOLDER,
@@ -31,7 +33,7 @@ import {
   INITIAL_ARC_UNKNOWN_STATUS_MESSAGE,
   INITIAL_ARC_UNREACHABLE_MESSAGE,
 } from '@/lib/inflight-initial-arc-watch';
-import { applyInitialArcResult, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DeletedSeriesResultError, DEFAULT_SERIES_TITLE, requireCanonicalDevotionalId, type InitialArcResult } from '@/lib/initial-arc-result';
 import {
   clearInitialGenerationRequestId,
   ensureInitialGenerationRequestId,
@@ -42,6 +44,7 @@ import {
   isGenerationSessionInvalidatedError,
   isSyncSessionCurrent,
 } from '@/lib/generation-session';
+import { seriesLengthPhrase } from '@/lib/series-length-copy';
 import {
   classifyPollFailure,
   countConsecutiveNetworkErrors,
@@ -51,6 +54,7 @@ import {
   resolveGenerationRetryAction,
   resolveGenerationSubmitFailure,
   resolveGoHomeCleanup,
+  resolveLongRunningAfterMs,
   resolveRetryFailureCleanup,
   shiftPollStart,
   MAX_CONSECUTIVE_POLL_NETWORK_ERRORS,
@@ -66,26 +70,37 @@ import {
 import { registerPushToken } from '@/lib/push-notifications';
 import {
   getNotifyControlState,
+  NOTIFY_NOTE_COPY,
   resolveAcceptedGenerationExitCopy,
+  resolveNotifyPromisePlacement,
   resolveNotifyRequestOutcome,
   type NotifyRequestOutcome,
 } from '@/lib/generating-notify-state';
-import { NOTIFY_NOTE_COPY, NotifyNote } from '@/components/generating/NotifyNote';
+import { resolveGeneratingWaitCopy } from '@/lib/generating-wait-copy';
+import { NotifyNote } from '@/components/generating/NotifyNote';
 import { GenerationPulse } from '@/components/generating/GenerationPulse';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useAutoTrialGeneration } from '@/hooks/useAutoTrialGeneration';
-import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
+import { useRerenderAt } from '@/hooks/useRerenderAt';
+import { abandonAutoTrialIntentForDeletedSeries, readAutoTrialIntent } from '@/lib/auto-trial-intent';
 import { resolveGeneratingEntry } from '@/lib/generating-entry';
 import { resolveGeneratingCloseCopy, resolveGeneratingGoHomeLabel } from '@/lib/support-clarity';
 import { resolveGeneratingPalette } from '@/lib/generating-palette';
-import { canRetrySeriesReveal, type SeriesRevealState } from '@/lib/series-reveal-machine';
+import {
+  canRetrySeriesReveal,
+  seriesRevealRetryOpensAtMs,
+  type SeriesRevealState,
+} from '@/lib/series-reveal-machine';
 import { askNotificationPermissionInContext } from '@/lib/notification-ask';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { Typography } from '@/constants/typography';
 import { RevealBackdrop } from '@/components/reveal/RevealBackdrop';
+import { generatingStatusLines } from '@/constants/daily-copy';
+import { copyVariationFor } from '@/lib/copy-variation';
 
-// Soft copy once a job outlives LONG_RUNNING_AFTER_MS. Time alone is never a
+// Soft copy once a job outlives its long-running threshold, which follows the
+// series length (resolveLongRunningAfterMs). Time alone is never a
 // failure: the server decides, and polling continues at the slow tier.
 const LONG_RUNNING_MESSAGE = 'Still writing — taking a little longer';
 // Grace period to wait for the persisted user to hydrate before erroring out
@@ -107,15 +122,6 @@ const SAMPLE_PREVIEW = {
 // Delay before showing the sample preview card (ms)
 const SAMPLE_PREVIEW_DELAY_MS = 5000;
 
-// Contemplative messages shown while generating
-const WAITING_MESSAGES = [
-  'Reading your story',
-  'Choosing scripture',
-  'Finding the right words',
-  'Weaving your\u00A0narrative',
-  'Crafting something\u00A0personal',
-];
-
 const MESSAGE_CYCLE_MS = 3800;
 
 function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed' | 'retry_exhausted' }>): string {
@@ -125,12 +131,25 @@ function autoTrialErrorMessage(state: Extract<SeriesRevealState, { kind: 'failed
   return 'Generation failed on server';
 }
 
-function autoReadySeriesDays(state: SeriesRevealState): number | undefined {
-  const landedId = state.kind === 'revealed' ? state.devotionalId : null;
-  const landed = landedId
-    ? useUnfoldStore.getState().devotionals.find((row) => row.id === landedId)
+/**
+ * What an auto-trial wait reads from one read of the intent: the series
+ * length, which a revealed series reports itself, and, while generating, when
+ * the server accepted the job. The trial hook owns its polling, so that is
+ * when the long-running clock starts.
+ */
+function readAutoTrialWait(
+  generating: boolean,
+  revealedId: string | null,
+): { seriesDays: number | undefined; acceptedAtMs: number | null } {
+  const intent = readAutoTrialIntent();
+  const landed = revealedId
+    ? useUnfoldStore.getState().devotionals.find((row) => row.id === revealedId)
     : undefined;
-  return getServerOwnedSeriesTotalDays(landed) || readAutoTrialIntent()?.trialDays;
+  const acceptedAtMs = Date.parse(intent?.submittedAt ?? '');
+  return {
+    seriesDays: getServerOwnedSeriesTotalDays(landed) || intent?.trialDays,
+    acceptedAtMs: generating && Number.isFinite(acceptedAtMs) ? acceptedAtMs : null,
+  };
 }
 
 function resolveEntryNow(params: {
@@ -151,6 +170,11 @@ function resolveEntryNow(params: {
     autoTrialIntent: readAutoTrialIntent(),
     initialGenerationRequestId: readInitialGenerationRequestId(),
   });
+}
+
+/** The server refused a retry: the job already spent every manual retry. */
+function isRetryLimitRefusal(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'MAX_RETRIES_EXCEEDED';
 }
 
 export default function GeneratingScreen() {
@@ -180,6 +204,12 @@ export default function GeneratingScreen() {
   const [devotionalTitle, setDevotionalTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canRetryJob, setCanRetry] = useState(true);
+  // Whether the error on screen is the server's verdict on the job (failed,
+  // an unopenable result, an unknown status, no such job) rather than a
+  // request that never got an answer. Set beside each of this screen's own
+  // setError calls so a later client-side failure cannot inherit an earlier
+  // verdict; the auto-trial handoff never sets it.
+  const [errorIsServerVerdict, setErrorIsServerVerdict] = useState(false);
 
   // Job polling state
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
@@ -191,6 +221,10 @@ export default function GeneratingScreen() {
   // instead of re-arming a second timer chain next to the current one.
   const pollRunRef = useRef(0);
   const jobSubmittedRef = useRef(false);
+  // The request id this screen sent and the server answered with a job. A
+  // resumed record or a failure push names a job, not the request behind it,
+  // so a verdict on such a job cannot retire a newer request id.
+  const answeredRequestIdRef = useRef<string | null>(null);
   // Set by "Go home — we'll keep writing". A job that resolves after the
   // reader left (a submission, a retry, an adopted job) persists its record
   // already marked for Today and does not start a poll loop on a screen
@@ -218,11 +252,17 @@ export default function GeneratingScreen() {
   // owns the watch. Reset invalidation must prevent that write.
   const recordJob = useCallback((jobId: string, devotionalId: string | undefined): void => {
     if (!isSyncSessionCurrent(generationSessionRef.current)) return;
+    // The record keeps the request the server answered with this job, so a
+    // screen that resumes it after a restart can retire that request.
+    const previous = readInflightGenerationJob();
+    const requestId = answeredRequestIdRef.current
+      ?? (previous?.jobId === jobId ? previous.requestId : undefined);
     writeInflightGenerationJob({
       jobId,
       devotionalId,
       submittedAt: Date.now(),
       leftForHome: leftForHomeRef.current,
+      ...(requestId ? { requestId } : {}),
     });
   }, []);
   // Consecutive unrecognized job statuses — bounded so we don't poll forever
@@ -234,7 +274,7 @@ export default function GeneratingScreen() {
   const observedJobStateRef = useRef<ObservedJobState>('unobserved');
   // When the app left the foreground; background time is not polling time.
   const backgroundedAtRef = useRef<number | null>(null);
-  // Soft "still writing" state past LONG_RUNNING_AFTER_MS (never an error).
+  // Soft "still writing" state past the long-running threshold (never an error).
   const [isLongRunning, setIsLongRunning] = useState(false);
 
   // Track when polling started for the long-running threshold and poll cadence
@@ -258,11 +298,35 @@ export default function GeneratingScreen() {
   });
   const auto = useAutoTrialGeneration(autoTrialHandoffId);
   const autoState = auto.state;
-  const autoReadyDays = useMemo(
-    () => (autoTrialHandoffId ? autoReadySeriesDays(autoState) : undefined),
-    [autoTrialHandoffId, autoState],
+  // Undefined unless the state is generating; null until the server accepts the job.
+  const autoGeneratingJobId = autoState.kind === 'generating' ? autoState.jobId : undefined;
+  const autoRevealedId = autoState.kind === 'revealed' ? autoState.devotionalId : null;
+  // Keyed on the generating job, not the whole state: accepting the job writes
+  // submittedAt while the state stays generating, and a poll's network-error
+  // count changes nothing read here.
+  const autoTrialWait = useMemo(
+    () => (autoTrialHandoffId ? readAutoTrialWait(autoGeneratingJobId !== undefined, autoRevealedId) : null),
+    [autoTrialHandoffId, autoGeneratingJobId, autoRevealedId],
   );
+  const autoReadyDays = autoTrialWait?.seriesDays;
+  const devotionalLength = user?.devotionalLength ?? 7;
+  // The one series length the wait copy and both long-running clocks follow.
+  const seriesDays = autoReadyDays ?? devotionalLength;
+  const longRunningAfterMs = resolveLongRunningAfterMs(seriesDays);
   const autoSetUpSeries = auto.setUpSeries;
+  // Try again stays hidden until a rate limit's retry time. Nothing else
+  // renders the error screen then, so the screen renders itself.
+  useRerenderAt(autoTrialHandoffId ? seriesRevealRetryOpensAtMs(autoState) : null);
+  const autoAcceptedAtMs = autoTrialWait?.acceptedAtMs ?? null;
+  useRerenderAt(autoAcceptedAtMs == null ? null : autoAcceptedAtMs + longRunningAfterMs);
+  const showLongRunning = autoTrialHandoffId
+    ? autoAcceptedAtMs != null && evaluateGenerationDeadline({
+      elapsedMs: Date.now() - autoAcceptedAtMs,
+      maxDurationMs: longRunningAfterMs,
+      // The trial hook owns the network-error cap.
+      consecutiveNetworkErrors: 0,
+    }) === 'long-running'
+    : isLongRunning;
   const canRetry = autoTrialHandoffId
     ? canRetrySeriesReveal(autoState, Date.now())
     : canRetryJob;
@@ -332,19 +396,32 @@ export default function GeneratingScreen() {
   // Sample preview state -- shows after a short delay to give users something to read
   const [showSamplePreview, setShowSamplePreview] = useState(false);
 
-  // Rotating message state
+  // Contemplative status lines: this local day's draw, each shown once from
+  // a start the bag picks, then the last one held instead of looping. A wait
+  // on another day opens on a different line.
+  const waitingMessages = useMemo(() => generatingStatusLines(copyVariationFor(new Date())), []);
   const [messageIndex, setMessageIndex] = useState(0);
+  // A new attempt on this screen (Try again) starts the lines over in the
+  // render that starts it, before anything commits, so a retry's first frame
+  // is the first line and never the held one that says the work is nearly done.
+  const [prevIsGenerating, setPrevIsGenerating] = useState(isGenerating);
+  if (prevIsGenerating !== isGenerating) {
+    setPrevIsGenerating(isGenerating);
+    if (isGenerating) setMessageIndex(0);
+  }
+  const lastMessageIndex = waitingMessages.length - 1;
+  const holdingLastMessage = messageIndex >= lastMessageIndex;
 
-  const devotionalLength = user?.devotionalLength ?? 7;
-
-  // Rotate through waiting messages
+  // Step through the waiting messages, and stop once the last one holds.
+  // The steps pause while 'Reconnecting…' covers the line, so the reader
+  // does not miss lines nobody could see.
   useEffect(() => {
-    if (!isGenerating || isComplete) return;
+    if (!isGenerating || isComplete || isReconnecting || holdingLastMessage) return;
     const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % WAITING_MESSAGES.length);
+      setMessageIndex((prev) => Math.min(prev + 1, lastMessageIndex));
     }, MESSAGE_CYCLE_MS);
     return () => clearInterval(interval);
-  }, [isGenerating, isComplete]);
+  }, [isGenerating, isComplete, isReconnecting, holdingLastMessage, lastMessageIndex]);
 
   // Show sample preview after a delay (only during initial loading, before complete)
   useEffect(() => {
@@ -491,6 +568,7 @@ export default function GeneratingScreen() {
     isComplete,
     outcome: notifyOutcome,
   });
+  const notifyPromise = resolveNotifyPromisePlacement(notifyControl, seriesDays);
 
   const handleDismissNotificationPrompt = () => {
     if (notificationPromptTimerRef.current) {
@@ -509,10 +587,26 @@ export default function GeneratingScreen() {
     // Store, scripture bookkeeping, in-flight record and session are landed by
     // the shared helper (Today lands the same job the same way after "Go home").
     let applied;
+    const requestId = answeredRequestIdRef.current;
     try {
-      applied = applyInitialArcResult(result, { user, devotionalLength, session });
+      applied = applyInitialArcResult(result, {
+        user,
+        devotionalLength,
+        session,
+        answersCurrentRequest: requestId !== null && requestId === readInitialGenerationRequestId(),
+      });
     } catch (err) {
       if (isGenerationSessionInvalidatedError(err)) return;
+      if (err instanceof DeletedSeriesResultError) {
+        // The reader deleted this series: its job is done, as on Today's
+        // watch, and nothing is left to wait for here.
+        clearInflightGenerationJob();
+        if (requestId !== null && requestId === readInitialGenerationRequestId()) clearInitialGenerationRequestId();
+        clearGenerationSession();
+        abandonAutoTrialIntentForDeletedSeries(result.devotionalId ?? '', Date.now());
+        router.replace('/(tabs)/(today)');
+        return;
+      }
       throw err;
     }
     const { devotionalId, seriesTitle, day1 } = applied;
@@ -532,7 +626,7 @@ export default function GeneratingScreen() {
       title: seriesTitle,
       dayTitle: day1.title,
     });
-  }, [user, devotionalLength]);
+  }, [user, devotionalLength, clearGenerationSession, router]);
 
   // ========== POLLING LOGIC ==========
 
@@ -572,6 +666,8 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(message);
+      // Every caller but the network give-up is a verdict.
+      setErrorIsServerVerdict(!options.keepInflight);
       setCanRetry(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
@@ -583,6 +679,7 @@ export default function GeneratingScreen() {
     const assessDeadline = (): GenerationDeadlineDecision => {
       const decision = evaluateGenerationDeadline({
         elapsedMs: Date.now() - pollStartTime.current,
+        maxDurationMs: longRunningAfterMs,
         consecutiveNetworkErrors: consecutiveNetworkErrorsRef.current,
       });
       setIsLongRunning(decision === 'long-running');
@@ -637,6 +734,7 @@ export default function GeneratingScreen() {
             setIsGenerating(false);
             setIsReconnecting(false);
             setError(errorMsg);
+            setErrorIsServerVerdict(true);
             setCanRetry(outcome.canRetry);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             return;
@@ -691,7 +789,7 @@ export default function GeneratingScreen() {
     };
 
     poll();
-  }, [handleGenerationComplete, failGenerationSession]);
+  }, [handleGenerationComplete, failGenerationSession, longRunningAfterMs]);
 
   // ========== JOB SUBMISSION ==========
 
@@ -707,6 +805,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError('We couldn’t load your details. Please try again.');
+        setErrorIsServerVerdict(false);
         setCanRetry(true);
       }, NO_USER_GRACE_MS);
       return () => clearTimeout(graceTimer);
@@ -731,6 +830,9 @@ export default function GeneratingScreen() {
     if (entry.kind === 'resume') {
       const { inflight } = entry;
       logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+      // The request this job answered, so a verdict on it can retire that
+      // request and no newer one.
+      answeredRequestIdRef.current = requestAnsweredByInflightJob(inflight, readInitialGenerationRequestId());
       if (inflight.devotionalId) {
         startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
       }
@@ -789,6 +891,7 @@ export default function GeneratingScreen() {
         });
 
         if (!isSyncSessionCurrent(origin)) return;
+        answeredRequestIdRef.current = requestId;
 
         const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
 
@@ -796,6 +899,9 @@ export default function GeneratingScreen() {
         // the session starts so Today, which re-reads the record when the
         // session changes, never sees the session without the record.
         recordJob(jobId, devotionalId);
+        // A "Start a new series" choice waits for the series the server named
+        // for this request: only its result ends the old one.
+        bindReplacementSeries(devotionalId);
         startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
         logger.log('[generating] Job submitted:', jobId);
 
@@ -813,6 +919,7 @@ export default function GeneratingScreen() {
           // The server already has a job for this user/day. Adopt it instead of
           // dead-ending on an error that would resubmit from scratch on retry.
           const existingJobId = failure.jobId;
+          answeredRequestIdRef.current = readInitialGenerationRequestId();
           logger.log('[generating] Submission reports an existing job; adopting it:', existingJobId);
           void logBugEvent('generation', 'generation-adopt-existing-job', { existingJobId });
           const sessionDevotionalId = useUnfoldStore.getState().generationSession.devotionalId;
@@ -864,6 +971,7 @@ export default function GeneratingScreen() {
         setIsGenerating(false);
         setIsReconnecting(false);
         setError(errorMessage);
+        setErrorIsServerVerdict(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     };
@@ -885,7 +993,10 @@ export default function GeneratingScreen() {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.replace('/(tabs)/(today)/reading');
+    // Name the series that landed; without it Reading opens whatever is current.
+    router.replace(landedRevealId
+      ? { pathname: '/(tabs)/(today)/reading', params: { devotionalId: landedRevealId } }
+      : '/(tabs)/(today)/reading');
   };
 
   const legacyTryAgain = async () => {
@@ -943,8 +1054,9 @@ export default function GeneratingScreen() {
           // Same builder as the primary path — a retried generation must not
           // silently lose the personalization fields (review finding: this
           // branch was missed in the buildInitialArcUserContext refactor).
+          const requestId = ensureInitialGenerationRequestId();
           const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
-            requestId: ensureInitialGenerationRequestId(),
+            requestId,
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: buildInitialArcUserContext(user),
@@ -952,10 +1064,12 @@ export default function GeneratingScreen() {
           });
 
           if (!isSyncSessionCurrent(origin)) return;
+          answeredRequestIdRef.current = requestId;
 
           const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
           // Record before the session starts, as on first submission.
           recordJob(jobId, devotionalId);
+          bindReplacementSeries(devotionalId);
           startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
@@ -973,6 +1087,12 @@ export default function GeneratingScreen() {
       setIsGenerating(false);
       setIsReconnecting(false);
       setError(errorMessage);
+      // The server refusing a retry because the job spent them all is its
+      // final verdict on that job, and no retry is left to offer. Any other
+      // failure leaves the job unanswered.
+      const retriesSpent = isRetryLimitRefusal(err);
+      setErrorIsServerVerdict(retriesSpent);
+      if (retriesSpent) setCanRetry(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -986,6 +1106,8 @@ export default function GeneratingScreen() {
     // and re-run the answers the reader just walked away from. The fresh
     // submission's own write replaces it.
     supersedeInflightGenerationJob(pendingJobId);
+    // Retiring the request also releases a waiting "Start a new series"
+    // choice from the abandoned series: the new answers' series binds it.
     clearInitialGenerationRequestId();
     clearGenerationSession();
     setError(null);
@@ -1000,6 +1122,15 @@ export default function GeneratingScreen() {
     if (cleanup === 'clear') {
       clearInflightGenerationJob();
       clearGenerationSession();
+      // The server has ruled on this request, and resubmitting its id only
+      // returns the same job, so Today's create and resume taps looped back
+      // here. A request that never got an answer keeps its id: the POST may
+      // have created a job, and the same id finds it instead of a second one.
+      // A verdict retires only the id this screen's submission was answered
+      // under; an older push's job says nothing about a newer request.
+      if (errorIsServerVerdict && answeredRequestIdRef.current === readInitialGenerationRequestId()) {
+        clearInitialGenerationRequestId();
+      }
     } else {
       // We only lost contact with the server; it may still own this job.
       // Keep the record, marked for Today so it watches the job from there
@@ -1054,7 +1185,11 @@ export default function GeneratingScreen() {
 
   if (error) {
     const displayError = toFriendlyOnboardingGenerationError(error);
-    const isConnectionError = displayError.toLowerCase().includes('connection');
+    // A server verdict is never a lost connection, whatever its text says. A
+    // provider timeout reads like one, and hiding Start over for it left Go
+    // home as the only way out once the retries were spent.
+    const isConnectionError = !errorIsServerVerdict
+      && displayError.toLowerCase().includes('connection');
     return (
       <View style={genStyles.transparentFlex}>
         <SafeAreaView style={genStyles.errorSafeArea}>
@@ -1133,7 +1268,7 @@ export default function GeneratingScreen() {
                   textAlign: 'left',
                 }}
               >
-                Your {autoReadyDays ?? user?.devotionalLength}-day series
+                Your {seriesLengthPhrase(autoReadyDays ?? user?.devotionalLength ?? 0)} series
               </Text>
             </Animated.View>
 
@@ -1248,7 +1383,7 @@ export default function GeneratingScreen() {
               >
                 {'Reconnecting\u2026'}
               </Animated.Text>
-            ) : isLongRunning ? (
+            ) : showLongRunning ? (
               <Animated.Text
                 key="long-running"
                 entering={entering(FadeIn.duration(600))}
@@ -1274,10 +1409,16 @@ export default function GeneratingScreen() {
                   textAlign: 'center',
                 }}
               >
-                {WAITING_MESSAGES[messageIndex]}
+                {waitingMessages[messageIndex]}
               </Animated.Text>
             )}
           </View>
+
+          {/* Fixed wait estimate. It sits outside the keyed message above, so
+              a message change never remounts it and VoiceOver reads it once. */}
+          <Text style={[genStyles.waitLine, { color: colors.textMuted }]}>
+            {resolveGeneratingWaitCopy(seriesDays, notifyPromise)}
+          </Text>
 
           {/* Series title reveal -- shows when server returns title from arc.
               Ternary, not `&&`: the empty-string default would otherwise be
@@ -1313,7 +1454,7 @@ export default function GeneratingScreen() {
                 onPress={handleLeaveForHome}
                 accessibilityRole="button"
                 accessibilityLabel={resolveGeneratingGoHomeLabel(pendingJobId != null)}
-                accessibilityHint={pendingJobId ? resolveAcceptedGenerationExitCopy(notifyControl) : undefined}
+                accessibilityHint={pendingJobId ? resolveAcceptedGenerationExitCopy(notifyPromise) : undefined}
                 style={pendingJobId
                   ? [genStyles.continueButton, { backgroundColor: colors.buttonBackground }]
                   : genStyles.secondaryAction}
@@ -1327,7 +1468,7 @@ export default function GeneratingScreen() {
               </TouchableOpacity>
               <Text style={[genStyles.exitNote, { color: colors.textMuted }]}>
                 {pendingJobId
-                  ? resolveAcceptedGenerationExitCopy(notifyControl)
+                  ? resolveAcceptedGenerationExitCopy(notifyPromise)
                   : resolveGeneratingCloseCopy(false)}
               </Text>
 
@@ -1408,8 +1549,8 @@ export default function GeneratingScreen() {
                 />
               )}
 
-              {/* A confirmed accepted job already includes the notification promise above. */}
-              {notifyControl === 'confirmed' && !pendingJobId && (
+              {/* An accepted job says the promise in its exit copy, a long series on the wait line. */}
+              {notifyPromise === 'exit' && !pendingJobId && (
                 <NotifyNote
                   entering={entering(FadeIn.duration(Duration.normal))}
                   colors={colors}
@@ -1659,6 +1800,14 @@ const genStyles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     marginTop: Spacing['4'],
+  },
+  waitLine: {
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.sm,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 420,
+    marginBottom: Spacing['3'],
   },
   notificationPrompt: {
     width: '100%',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  abandonAutoTrialIntentForDeletedSeries,
   buildRevealGuardKey,
   hasSupersedingUserSeries,
   isAutoTrialIntentExpired,
@@ -38,7 +39,7 @@ import {
   readInflightGenerationJob,
   writeInflightGenerationJob,
 } from '@/lib/inflight-generation-job';
-import { applyInitialArcResult, type InitialArcResult } from '@/lib/initial-arc-result';
+import { applyInitialArcResult, DeletedSeriesResultError, type InitialArcResult } from '@/lib/initial-arc-result';
 import { clearInitialGenerationRequestId } from '@/lib/initial-generation-request';
 import {
   reduceSeriesReveal,
@@ -330,13 +331,28 @@ export function useAutoTrialGeneration(intentId: string | null): {
         const payload = lastCompleteRef.current;
         const user = useUnfoldStore.getState().user;
         if (payload) {
-          applyInitialArcResult(payload, {
-            user,
-            devotionalLength: intent?.trialDays ?? user?.devotionalLength ?? 3,
-            session: captureSyncSession(),
-          });
+          try {
+            applyInitialArcResult(payload, {
+              user,
+              devotionalLength: intent?.trialDays ?? user?.devotionalLength ?? 3,
+              session: captureSyncSession(),
+            });
+          } catch (err) {
+            if (!(err instanceof DeletedSeriesResultError)) throw err;
+            // The reader deleted this series: its job is done, and nothing is
+            // left to poll or reveal.
+            clearInflightGenerationJob();
+            useUnfoldStore.getState().clearGenerationSession();
+            abandonAutoTrialIntentForDeletedSeries(payload.devotionalId ?? '', Date.now());
+            intent = readAutoTrialIntent();
+            apply({ type: 'go_to_today' });
+            return;
+          }
         }
-        if (intent?.devotionalId) {
+        // A landed payload for this trial was already settled inside
+        // applyInitialArcResult, which knows whether an undated result may
+        // take Today. Settling it again here would ignore that.
+        if (intent?.devotionalId && payload?.devotionalId !== intent.devotionalId) {
           settleLandedAutoTrialSeries(intent, intent.devotionalId);
         }
         const landedId = payload?.devotionalId ?? intent?.devotionalId;

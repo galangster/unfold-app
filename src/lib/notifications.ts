@@ -6,11 +6,12 @@ import { logger } from '@/lib/logger';
 import {
   getEveningWindDownCopy,
   getMiddayCheckInCopy,
+  type CheckInBannerCopy,
   type CopyVariation,
   type DayContext,
 } from '@/constants/check-in-messages';
-import { buildCheckInSchedule, getAllCheckInIdentifiers } from '@/lib/check-in-schedule';
-import { copySeed } from '@/lib/copy-variation';
+import { buildCheckInSchedule, getAllCheckInIdentifiers, type BuildCheckInScheduleArgs } from '@/lib/check-in-schedule';
+import { copySeed, cueCarriedBefore, readCarriedCues, rememberCarriedCues } from '@/lib/copy-variation';
 import { dayIndexFor } from '@/lib/variation-bag';
 import {
   getCurrentDevotional,
@@ -19,12 +20,14 @@ import {
 } from '@/lib/home-devotional-state';
 import {
   buildDevotionalReadyNotificationData,
+  DAILY_REMINDER_TODAY_TYPE,
   pushNamesAutoTrialIntent,
 } from '@/lib/push-notification-helpers';
-import { getDailyReminderContent, type DailyReminderTrigger } from '@/lib/daily-reminder-content';
+import { getDailyReminderContent, type DailyReminderOwner } from '@/lib/daily-reminder-content';
 import { deferPastQuietHours } from '@/lib/quiet-hours';
 import { logEvent } from '@/lib/analytics';
-import type { ActReminderPlan } from '@/lib/act-reminder';
+import { getMiddayActClaim, type ActReminderPlan } from '@/lib/act-reminder';
+import { readActReminderWriteFailed, readEveningActClaim } from '@/lib/act-reminder-write';
 import { captureSyncSession, isSyncSessionCurrent } from '@/lib/sync-session-fence';
 import { readTrialCheckInSkipDate } from '@/lib/trial-notification';
 import { readAutoTrialIntent } from '@/lib/auto-trial-intent';
@@ -47,9 +50,10 @@ export const NOTIFICATION_IDS = {
 
 const DAILY_REMINDER_ID_SEPARATOR = ':';
 
-// Last identifier this process successfully committed for the current owner.
-// Cross-launch leftovers also use the legacy fixed id or a session-scoped id.
-let lastDailyReminderIdentifier: string | null = null;
+// Identifiers this process last committed for the current owner: one DAILY
+// request, or one dated request per morning of the horizon. Cross-launch
+// leftovers also use the legacy fixed id or a session-scoped id.
+let lastDailyReminderIdentifiers: readonly string[] = [];
 
 // Distinguishes newer daily work from older work in the same reset session.
 // Session epoch alone cannot: two in-flight 8:00 / 9:00 schedules share a session.
@@ -101,9 +105,9 @@ async function cancelOwnedDailyReminderIdentifiers(
   const extras = new Set<string>();
   extras.add(dailyReminderIdentifierForSession(session));
   extras.add(dailyReminderIdentifierForOperation(session, operation));
-  const ownedAtStart = lastDailyReminderIdentifier;
-  if (ownedAtStart) {
-    extras.add(ownedAtStart);
+  const ownedAtStart = lastDailyReminderIdentifiers;
+  for (const identifier of ownedAtStart) {
+    extras.add(identifier);
   }
   try {
     const pending = await Notifications.getAllScheduledNotificationsAsync();
@@ -131,13 +135,13 @@ async function cancelOwnedDailyReminderIdentifiers(
   if (!isDailyReminderOriginCurrent(session, operation)) {
     return;
   }
-  if (lastDailyReminderIdentifier === ownedAtStart) {
-    lastDailyReminderIdentifier = null;
+  if (lastDailyReminderIdentifiers === ownedAtStart) {
+    lastDailyReminderIdentifiers = [];
   }
 }
 
 export function resetDailyReminderOwnershipForTesting(): void {
-  lastDailyReminderIdentifier = null;
+  lastDailyReminderIdentifiers = [];
   dailyOperationEpoch = 0;
 }
 
@@ -403,13 +407,15 @@ function parseTimeString(timeString: string): { hours: number; minutes: number }
   return { hours, minutes };
 }
 
-// Reading-state-aware notification content
-export function getNotificationContent(): { title: string; body: string } {
+// Reading-state-aware notification content, for the moment it fires.
+export function getNotificationContent(now?: Date): { title: string; body: string } {
   const state = useUnfoldStore.getState();
   const currentDevotional = state.devotionals.find((d) => d.id === state.currentDevotionalId);
   return getDailyReminderContent({
     currentDevotional,
     premiumPolicy: getEffectivePremiumAccessPolicy(),
+    now,
+    seed: copySeed(),
   });
 }
 
@@ -420,16 +426,27 @@ function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotion
   return buildDevotionalReadyNotificationData(currentDevotional, currentDevotional.currentDay);
 }
 
-// Schedule a daily reminder notification.
-// Wrappers that already awaited must pass the originating reset session and
-// daily operation so a stale call cannot capture a fresh session/operation
-// and write after reset or a newer same-session request.
-export async function scheduleDailyReminder(
-  timeString: string,
-  originatingSession: number = captureSyncSession(),
-  originatingOperation?: number,
-  triggerOverride: DailyReminderTrigger = { kind: 'daily' },
-): Promise<string | null> {
+/**
+ * What a daily reminder opens. A day this device holds opens its reveal. A
+ * day it does not hold yet (the server delivers it later) opens Today, which
+ * shows the day once it arrives: a reminder without tap data went nowhere.
+ */
+function dailyReminderTapContent(): { data: Record<string, unknown>; categoryIdentifier?: string } {
+  const data = getCurrentDevotionalNotificationData();
+  return data
+    ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY }
+    : { data: { type: DAILY_REMINDER_TODAY_TYPE } };
+}
+
+/**
+ * The shared start of a daily reminder write: claim the operation, clear the
+ * whole daily family, confirm permission. Returns the operation to write
+ * under, or null when the write must not go ahead.
+ */
+async function beginDailyReminderWrite(
+  originatingSession: number,
+  originatingOperation: number | undefined,
+): Promise<number | null> {
   if (Platform.OS === 'web') {
     logger.log('[Notifications] Not available on web');
     return null;
@@ -457,10 +474,26 @@ export async function scheduleDailyReminder(
     logger.log('[Notifications] Permission not granted');
     return null;
   }
+  return operation;
+}
+
+// Schedule a daily reminder notification.
+// Wrappers that already awaited must pass the originating reset session and
+// daily operation so a stale call cannot capture a fresh session/operation
+// and write after reset or a newer same-session request.
+export async function scheduleDailyReminder(
+  timeString: string,
+  originatingSession: number = captureSyncSession(),
+  originatingOperation?: number,
+): Promise<string | null> {
+  const operation = await beginDailyReminderWrite(originatingSession, originatingOperation);
+  if (operation === null) {
+    return null;
+  }
 
   const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
-  const data = getCurrentDevotionalNotificationData();
+  const tap = dailyReminderTapContent();
   const identifier = dailyReminderIdentifierForOperation(originatingSession, operation);
 
   try {
@@ -470,21 +503,14 @@ export async function scheduleDailyReminder(
         title,
         body,
         sound: true,
-        ...(data ? { data, categoryIdentifier: NOTIFICATION_CATEGORIES.DEVOTIONAL_READY } : {}),
+        ...tap,
       },
-      trigger:
-        triggerOverride.kind === 'date'
-          ? {
-              type: Notifications.SchedulableTriggerInputTypes.DATE,
-              date: triggerOverride.date,
-              ...channel(NOTIFICATION_CHANNELS.READING),
-            }
-          : {
-              type: Notifications.SchedulableTriggerInputTypes.DAILY,
-              hour: hours,
-              minute: minutes,
-              ...channel(NOTIFICATION_CHANNELS.READING),
-            },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: hours,
+        minute: minutes,
+        ...channel(NOTIFICATION_CHANNELS.READING),
+      },
     });
 
     if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
@@ -495,20 +521,115 @@ export async function scheduleDailyReminder(
       return null;
     }
 
-    lastDailyReminderIdentifier = scheduled;
+    lastDailyReminderIdentifiers = [scheduled];
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
     logEvent('notification_scheduled', {
       type: 'daily_reminder',
       owner: 'local',
-      specific: Boolean(data),
-      trigger: triggerOverride.kind,
+      specific: Boolean(tap.categoryIdentifier),
+      trigger: 'daily',
     });
     return scheduled;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
     return null;
   }
+}
+
+/** What a morning-horizon write left in the OS queue. */
+export interface DailyReminderMorningsWrite {
+  /** Every morning landed, so the caller may record the sync as applied. */
+  complete: boolean;
+  /**
+   * The soonest morning landed. The server's send-time skip asks about that
+   * morning, so this, not `complete`, decides what the profile mirrors.
+   */
+  holdsFirstMorning: boolean;
+}
+
+const NO_MORNINGS_WRITTEN: DailyReminderMorningsWrite = { complete: false, holdsFirstMorning: false };
+
+/**
+ * One dated request per morning of the horizon. Each carries the copy for
+ * the moment it fires, so a day left unread turns into the overdue copy
+ * instead of repeating its quotable line for two weeks. Identifiers extend
+ * this operation's, so the family cancel clears every one.
+ *
+ * A partial write keeps what landed as a floor and reports `complete:
+ * false`, so the caller retries instead of recording the sync as applied.
+ * It still says whether the soonest morning landed: mirroring "not held"
+ * while the queue holds that morning would let the server's ready push
+ * land on top of it.
+ *
+ * Logs one `notification_scheduled` event per write, under the owner the
+ * caller decided, so a dashboard split by owner counts each write once.
+ */
+export async function scheduleDailyReminderMornings(
+  dates: readonly Date[],
+  owner: DailyReminderOwner,
+  originatingSession: number,
+  originatingOperation: number,
+): Promise<DailyReminderMorningsWrite> {
+  const operation = await beginDailyReminderWrite(originatingSession, originatingOperation);
+  if (operation === null) {
+    return NO_MORNINGS_WRITTEN;
+  }
+
+  const tap = dailyReminderTapContent();
+  const operationIdentifier = dailyReminderIdentifierForOperation(originatingSession, operation);
+  const written = await Promise.all(
+    dates.map(async (date, index) => {
+      const { title, body } = getNotificationContent(date);
+      try {
+        return await Notifications.scheduleNotificationAsync({
+          identifier: `${operationIdentifier}${DAILY_REMINDER_ID_SEPARATOR}${index}`,
+          content: {
+            title,
+            body,
+            sound: true,
+            ...tap,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date,
+            ...channel(NOTIFICATION_CHANNELS.READING),
+          },
+        });
+      } catch (error) {
+        logger.error('[Notifications] Failed to schedule a daily reminder morning:', error);
+        return null;
+      }
+    }),
+  );
+  const scheduled = written.filter((id): id is string => id !== null);
+
+  if (!isDailyReminderOriginCurrent(originatingSession, operation)) {
+    await Promise.all(scheduled.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+    logger.log('[Notifications] Late daily schedule discarded — originating owner is not current');
+    return NO_MORNINGS_WRITTEN;
+  }
+
+  if (scheduled.length > 0) {
+    lastDailyReminderIdentifiers = scheduled;
+  }
+  const holdsFirstMorning = written.length > 0 && written[0] !== null;
+  if (scheduled.length === 0 || scheduled.length !== dates.length) {
+    logger.error(`[Notifications] Daily reminder: wrote ${scheduled.length} of ${dates.length} mornings`);
+    return { complete: false, holdsFirstMorning };
+  }
+
+  logger.log(
+    `[Notifications] Daily reminder: wrote ${scheduled.length} mornings to ${dates[dates.length - 1].toISOString()}`,
+  );
+  logEvent('notification_scheduled', {
+    type: 'daily_reminder',
+    owner,
+    specific: Boolean(tap.categoryIdentifier),
+    trigger: 'dates',
+    count: scheduled.length,
+  });
+  return { complete: true, holdsFirstMorning };
 }
 
 /**
@@ -789,14 +910,17 @@ interface CheckInSlot {
   byDay: Record<string, string | null> | null;
   fallback: { hour: number; minute: number };
   dataType: string;
+  skipAt?: BuildCheckInScheduleArgs['skipAt'];
   logNoun: string;
   eventType: 'midday_checkin' | 'evening_winddown';
   /**
    * Copy for one occurrence. `today` is the devotional context when this
    * occurrence lands on today, and null on every later day — those days have
-   * no content yet and draw from the seeded pools instead.
+   * no content yet and draw from the seeded pools instead. `previousCue` is
+   * the tap cue the slot's fire date before this one carried, and the copy's
+   * `cue` is the one this occurrence carries.
    */
-  copyFor: (today: DayContext | null, variation: CopyVariation) => { title: string; body: string };
+  copyFor: (today: DayContext | null, variation: CopyVariation, previousCue?: string) => CheckInBannerCopy;
 }
 
 /**
@@ -846,6 +970,7 @@ async function scheduleCheckInSlot(
     byDay: slot.byDay,
     fallback: slot.fallback,
     skipLocalDate: clock ? clock.localDate : readTrialCheckInSkipDate(),
+    skipAt: slot.skipAt,
     now,
   });
 
@@ -855,17 +980,29 @@ async function scheduleCheckInSlot(
   }
 
   const seed = copySeed();
+  // Copy in fire-date order, carrying each banner's tap cue to the next, so
+  // no banner repeats the cue the fire date before it carried. The first one
+  // looks up the cue the last batch wrote for the fire date before it.
+  const carried = readCarriedCues(slot.idBase);
+  let previousCue = cueCarriedBefore(carried, occurrences[0].dayIndex);
+  const copies = occurrences.map((occurrence) => {
+    const isToday = occurrence.dayIndex === todayDayIndex;
+    const copy = slot.copyFor(isToday ? today : null, { seed, dayIndex: occurrence.dayIndex }, previousCue);
+    previousCue = copy.cue;
+    return copy;
+  });
+  rememberCarriedCues(slot.idBase, carried, occurrences.map((occurrence, i) => ({
+    dayIndex: occurrence.dayIndex,
+    cue: copies[i].cue,
+  })));
+
   // Written concurrently: identifiers are unique per occurrence and no write
   // reads another's result, so 14 serial bridge round trips buy nothing. The
   // per-occurrence catch stays inside the map — one failed write must not
   // discard the other thirteen, which is what Promise.all's fail-fast would do.
   const written = await Promise.all(
-    occurrences.map(async (occurrence) => {
-      const isToday = occurrence.dayIndex === todayDayIndex;
-      const { title, body } = slot.copyFor(isToday ? today : null, {
-        seed,
-        dayIndex: occurrence.dayIndex,
-      });
+    occurrences.map(async (occurrence, i) => {
+      const { title, body } = copies[i];
       try {
         const id = await Notifications.scheduleNotificationAsync({
           identifier: occurrence.id,
@@ -910,6 +1047,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
   // The carry line of the day finished today — the devotional following the
   // reader into their afternoon. Only today's occurrence can carry it.
   const carryLine = getTodayCarryLine(store.devotionals, store.currentDevotionalId);
+  const now = clock?.now ?? new Date();
   return scheduleCheckInSlot(
     {
       idBase: NOTIFICATION_IDS.MIDDAY_CHECKIN,
@@ -917,15 +1055,13 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
       byDay: store.middayCheckInByDay ?? null,
       fallback: MIDDAY_FALLBACK,
       dataType: 'midday-checkin',
+      skipAt: getMiddayActClaim(store, now, readActReminderWriteFailed()),
       logNoun: 'Midday check-in',
       eventType: 'midday_checkin',
-      copyFor: (today, variation) => {
-        const copy = getMiddayCheckInCopy(today, today ? carryLine : null, variation);
-        return { ...copy, body: `${copy.body} Tap to talk or write an update.` };
-      },
+      copyFor: (today, variation, previousCue) => getMiddayCheckInCopy(today, today ? carryLine : null, variation, previousCue),
     },
     getTodayDayContext(currentDevotional),
-    dayIndexFor(clock?.now ?? new Date()),
+    dayIndexFor(now),
     cancelMiddayCheckIn,
     clock,
   );
@@ -934,6 +1070,7 @@ export async function scheduleMiddayCheckIn(clock?: CheckInClock): Promise<Check
 export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<CheckInWriteResult> {
   const store = useUnfoldStore.getState();
   const currentDevotional = getCurrentDevotional(store.devotionals, store.currentDevotionalId);
+  const now = clock?.now ?? new Date();
   return scheduleCheckInSlot(
     {
       idBase: NOTIFICATION_IDS.EVENING_WINDDOWN,
@@ -941,15 +1078,13 @@ export async function scheduleEveningWindDown(clock?: CheckInClock): Promise<Che
       byDay: store.eveningWindDownByDay ?? null,
       fallback: EVENING_FALLBACK,
       dataType: 'evening-winddown',
+      skipAt: readEveningActClaim(store, now),
       logNoun: 'Evening wind-down',
       eventType: 'evening_winddown',
-      copyFor: (today, variation) => {
-        const copy = getEveningWindDownCopy(today, variation);
-        return { ...copy, body: `${copy.body} Tap to talk or write an update.` };
-      },
+      copyFor: getEveningWindDownCopy,
     },
     getTodayDayContext(currentDevotional),
-    dayIndexFor(clock?.now ?? new Date()),
+    dayIndexFor(now),
     cancelEveningWindDown,
     clock,
   );

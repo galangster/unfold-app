@@ -190,6 +190,30 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  // A pull can swap the first reading's stored title, and can drop its arc.
+  it.each([
+    ['unread', {}],
+    ['complete-today', { currentDayData: makeDayData({ isRead: true }) }],
+    ['preparing', { currentDayData: null }],
+  ] as const)('names the first reading by its series name in the %s state', (type, overrides) => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ id: 'onboarding-sample-names', title: 'Walking by Faith', totalDays: 1 }),
+      ...overrides,
+    });
+
+    expect(state.type).toBe(type);
+    expect('seriesTitle' in state && state.seriesTitle).toBe('Your First Devotional');
+  });
+
+  it('writes the finished sentence with the streak line for an ordinary series', () => {
+    const state = computeDevotionalState({ ...baseInput, isJourneyComplete: true, progress: 100 });
+
+    expect(state.type === 'journey-complete' && state.subtitle).toBe(
+      'Faith Foundations is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.',
+    );
+  });
+
   it('keeps a completed journey out of the preparing state when the next pointer has no day data', () => {
     const state = computeDevotionalState({
       ...baseInput,

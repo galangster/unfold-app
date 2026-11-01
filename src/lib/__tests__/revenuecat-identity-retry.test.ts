@@ -126,6 +126,34 @@ describe('retryRevenueCatIdentitySync', () => {
     expect(client.getRevenueCatSupportId()).toBe('anon_11111111-1111-4111-8111-111111111111');
   });
 
+  it('tells identity-state listeners each time the Support ID changes', async () => {
+    const { client, purchasesMock, logIn } = await setupWithFailingLogin();
+    logIn.mockImplementation(async (id: string) => {
+      purchasesMock.getAppUserID.mockResolvedValue(id);
+      return { created: false, customerInfo: emptyCustomerInfo };
+    });
+    const listener = jest.fn(() => client.getRevenueCatSupportId());
+    const unsubscribe = client.subscribeRevenueCatIdentityState(listener);
+    const verifiedId = 'anon_11111111-1111-4111-8111-111111111111';
+
+    await client.retryRevenueCatIdentitySync();
+    expect(listener).toHaveLastReturnedWith(verifiedId);
+
+    // A later retry that fails leaves no verified ID, and fires no epoch or
+    // verification event.
+    purchasesMock.getAppUserID.mockRejectedValue(new Error('network down'));
+    await client.retryRevenueCatIdentitySync();
+    expect(listener).toHaveLastReturnedWith(null);
+
+    purchasesMock.getAppUserID.mockResolvedValue(verifiedId);
+    await client.retryRevenueCatIdentitySync();
+    expect(listener).toHaveLastReturnedWith(verifiedId);
+
+    client.invalidateRevenueCatIdentityReadiness();
+    expect(listener).toHaveLastReturnedWith(null);
+    unsubscribe();
+  });
+
   it('retry is single-flight', async () => {
     const { client, logIn } = await setupWithFailingLogin();
 

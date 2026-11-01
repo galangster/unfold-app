@@ -51,6 +51,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { useGuardedBack } from '@/hooks/useGuardedBack';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
+import { recapClosingMessage, recapLongRhythmDays } from '@/lib/series-length-copy';
 import { SparkleBurst } from '@/components/SparkleBurst';
 
 const TOTAL_CARDS = 8;
@@ -941,7 +942,7 @@ function StreakCard({ data }: { data: RecapData }) {
 // ═══════════════════════════════════════════════════════════════
 //  CARD 8: THE CLOSING — Keep Unfolding
 // ═══════════════════════════════════════════════════════════════
-function ClosingCard({ data, userName }: { data: RecapData; userName: string }) {
+function ClosingCard({ data, userName, longRhythmDays }: { data: RecapData; userName: string; longRhythmDays: number }) {
   const reducedMotion = useReducedMotion();
   const [showBurst, setShowBurst] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -993,11 +994,7 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
     }
   }, [isSharing, data]);
 
-  const closingMessage = data.totalDaysRead >= 30
-    ? 'You have built something rare — a rhythm of returning. Whatever comes next, you have the roots for it.'
-    : data.totalDaysRead >= 7
-      ? 'A week of showing up changes more than you think. The seeds are already taking root.'
-      : 'It has begun. The most important step is the next one.';
+  const closingMessage = recapClosingMessage(data.totalDaysRead, longRhythmDays);
 
   return (
     <View style={s.closingContainer}>
@@ -1099,6 +1096,7 @@ export default function UnfoldedScreen() {
 
   // Store data
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const longRhythmDays = useMemo(() => recapLongRhythmDays(devotionals), [devotionals]);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
   const usedScriptures = useUnfoldStore((s) => s.usedScriptures);
@@ -1246,7 +1244,7 @@ export default function UnfoldedScreen() {
       case 6:
         return <CardContent visible key="streak"><StreakCard data={data} /></CardContent>;
       case 7:
-        return <CardContent visible key="closing"><ClosingCard data={data} userName={userName} /></CardContent>;
+        return <CardContent visible key="closing"><ClosingCard data={data} userName={userName} longRhythmDays={longRhythmDays} /></CardContent>;
       default:
         return null;
     }

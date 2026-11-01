@@ -51,6 +51,7 @@ import { CompanionOrb } from '@/components/CompanionOrb';
 import { resolveCompanionPersonality } from '@/lib/companion-personality';
 import { ProfileEntryButton } from '@/components/ProfileEntryButton';
 import { COMPANION_MESSAGE_MAX_CHARS, useCompanionChat, type SendOutcome } from '@/lib/use-companion-chat';
+import { conversationCrisis, namesCrisis } from '@/lib/crisis-words';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
@@ -327,8 +328,19 @@ export default function CompanionScreen() {
   // generation) keep the creation gate. Quota is charged ONLY on a successful
   // response (NET-2): a free message is consumed iff a reply was received.
   // The in-flight guard inside the hook prevents concurrent over-spend.
+  // A conversation where the reader named suicide, self-harm or abuse skips
+  // the quota: help must not wait behind the paywall, so it is never gated
+  // and never charged. Its reply carries the crisis lines, or the crisis
+  // reply when none arrives.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const runWithQuota = useCallback(
-    (turn: () => Promise<SendOutcome>): boolean => {
+    (turn: () => Promise<SendOutcome>, text = ''): boolean => {
+      const conversation = [...messagesRef.current, { role: 'user' as const, content: text }];
+      if (namesCrisis(conversationCrisis(conversation))) {
+        void turn();
+        return true;
+      }
       if (!isPremium && !canSendCompanionMessage()) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setShowPremiumSheet(true);
@@ -360,7 +372,7 @@ export default function CompanionScreen() {
         return false;
       }
 
-      if (!runWithQuota(() => sendMessage(trimmed))) return false;
+      if (!runWithQuota(() => sendMessage(trimmed), trimmed)) return false;
 
       setTimeout(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });

@@ -1,12 +1,29 @@
+import {
+  FIRST_DAY_BODIES,
+  FIRST_DAY_TITLES,
+  IDLE_BODIES,
+  IDLE_TITLES,
+  NEXT_DAY_BODIES,
+  NEXT_DAY_TITLES,
+  OVERDUE_BODIES,
+  OVERDUE_TITLES,
+  PAST_END_BODIES,
+  PAUSED_NO_SERIES_BODIES,
+  PAUSED_SERIES_BODIES,
+  PAUSED_TITLES,
+} from '@/constants/reading-reminder-messages';
 import { getReadingDayLabel } from './devotional-day-access';
 import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import type { Devotional, DevotionalDay } from './store';
+import { copyVariationAt, drawCopy, type CopyVariation } from './variation-bag';
 
 export interface DailyReminderContentInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   now?: Date;
+  /** The install's copy seed (copySeed()), so two readers draw different lines. */
+  seed: string;
 }
 
 export interface DailyReminderFingerprintInput {
@@ -15,39 +32,85 @@ export interface DailyReminderFingerprintInput {
   currentDevotional: Devotional | null | undefined;
   premiumPolicy: PremiumAccessPolicy;
   pushRegistered?: boolean;
-  /** A read today changes the trigger (see getDailyReminderTrigger). */
+  /** A read today changes the schedule (see buildDailyReminderSchedule). */
   readToday?: boolean;
 }
 
 export type DailyReminderOwner = 'local' | 'server';
 
-export type DailyReminderTrigger =
-  | { kind: 'daily' }
-  | { kind: 'date'; date: Date };
+/**
+ * How many days ahead the morning reminder is pre-rolled. Same horizon as
+ * the check-ins (check-in-schedule.ts), and the same budget: two check-in
+ * slots plus this stay well inside the 64 pending requests iOS keeps, with
+ * room for the act reminder and the trial-ending notice.
+ */
+export const DAILY_REMINDER_HORIZON_DAYS = 14;
+
+export interface BuildDailyReminderScheduleArgs {
+  clock: { hour: number; minute: number };
+  owner: DailyReminderOwner;
+  /** The reader finished a reading today, so today's slot stays quiet. */
+  readToday: boolean;
+  /** When the reader last finished a day of the current series, if ever. */
+  lastReadAt: Date | null;
+  now: Date;
+  horizonDays?: number;
+}
 
 /**
- * A DAILY trigger cannot skip one occurrence. When the reader has already
- * read today and today's fire time is still ahead, the reminder would
- * announce tomorrow's reading on a day they already finished. Schedule a
- * one-shot for tomorrow instead; the next foreground sync (any open of the
- * app) restores the DAILY floor.
+ * The mornings the local reminder fires, soonest first: one dated request
+ * per day, built the same way as the check-ins.
+ *
+ * A DAILY trigger cannot skip one occurrence, and a one-shot leaves nothing
+ * behind once it fires. A dated horizon does both jobs: it skips today when
+ * the reader already read (the reminder would otherwise announce a day the
+ * app keeps locked until tomorrow), and every later morning stays queued
+ * until an open or the BGAppRefresh task rolls it forward.
+ *
+ * When the server owns the slot, it owns one morning: the one on which the
+ * day after the latest read opens, which its ready push takes. Every other
+ * morning stays local, so one ignored push no longer silences the reminder.
+ * That morning is anchored to the read, not to `now`, so a refill two days
+ * later keeps today.
+ *
+ * The anchor matches the backend's ready-push send time (push-timing.ts,
+ * readyPushSendAt) in the normal case, where the next day generates
+ * overnight. When the push lands on a later morning, that morning gets two
+ * banners: the local one here, and the server's, because the profile flag
+ * says the local queue does not hold the handed-off morning. That happens
+ * when generation slips past the morning the day opens, when a resumed
+ * series has no recent read, or when the owner is 'server' with no read in
+ * the series yet (`lastReadAt` null, so nothing is skipped). These are
+ * failure paths; skipping more mornings to cover them would bring back the
+ * silence this horizon exists to end.
+ *
+ * Dates are absolute instants built from the device's zone at `now`. The
+ * callers rewrite the horizon when that zone changes (see
+ * `withDeviceTimezone` in daily-reminder-sync.ts).
  */
-export function getDailyReminderTrigger({
-  readToday,
+export function buildDailyReminderSchedule({
   clock,
-  now = new Date(),
-}: {
-  readToday: boolean;
-  clock: { hour: number; minute: number };
-  now?: Date;
-}): DailyReminderTrigger {
-  if (!readToday) return { kind: 'daily' };
-  const todayFire = new Date(now);
-  todayFire.setHours(clock.hour, clock.minute, 0, 0);
-  if (todayFire <= now) return { kind: 'daily' };
-  const tomorrow = new Date(todayFire);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return { kind: 'date', date: tomorrow };
+  owner,
+  readToday,
+  lastReadAt,
+  now,
+  horizonDays = DAILY_REMINDER_HORIZON_DAYS,
+}: BuildDailyReminderScheduleArgs): Date[] {
+  const serverMorning = owner === 'server' && lastReadAt
+    ? new Date(lastReadAt.getFullYear(), lastReadAt.getMonth(), lastReadAt.getDate() + 1).toDateString()
+    : null;
+  const dates: Date[] = [];
+
+  for (let offset = 0; offset < horizonDays; offset += 1) {
+    const fireAt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    fireAt.setHours(clock.hour, clock.minute, 0, 0);
+    if (fireAt.getTime() <= now.getTime()) continue;
+    if (offset === 0 && readToday) continue;
+    if (fireAt.toDateString() === serverMorning) continue;
+    dates.push(fireAt);
+  }
+
+  return dates;
 }
 
 export interface DailyReminderOwnerInput {
@@ -58,15 +121,16 @@ export interface DailyReminderOwnerInput {
 }
 
 /**
- * Who fires the morning reminder.
+ * Who fires the morning the next day opens.
  *
- * The local DAILY trigger bakes its copy at schedule time. When the next day
- * is not on the device yet (the normal bedtime state for a progressive
- * series) that copy can only say "your next reading is waiting". The server
- * generates that day overnight and knows its quotable line, so when it can
- * reach the device it owns the slot and the client schedules nothing. Every
- * other state keeps the local reminder: it is the only guaranteed channel,
- * and its copy is specific whenever the day is already on device.
+ * A local reminder bakes its copy at schedule time. When the next day is not
+ * on the device yet (the normal bedtime state for a progressive series) that
+ * copy can only say "your next reading is waiting". The server generates
+ * that day overnight and knows its quotable line, so when it can reach the
+ * device its ready push takes that one morning. The server pushes only when
+ * a day finishes generating, so every later morning stays local
+ * (buildDailyReminderSchedule): the local queue is the only guaranteed
+ * channel, and its copy is specific whenever the day is already on device.
  */
 export function getDailyReminderOwner({
   currentDevotional,
@@ -110,25 +174,48 @@ function truncateBody(text: string, maxLength = 100): string {
   return truncateNotificationBody(text, maxLength);
 }
 
+/**
+ * Bible reading and a renewal invitation, with no claim that anything is
+ * being written. Only a reader whose series still has days ahead gets lines
+ * that name it and say it goes on.
+ */
+function pausedContent(variation: CopyVariation, seriesAhead: boolean): DailyReminderContent {
+  return {
+    title: drawCopy(PAUSED_TITLES, variation, 'reminder-paused-title'),
+    body: seriesAhead
+      ? drawCopy(PAUSED_SERIES_BODIES, variation, 'reminder-paused-series-body')
+      : drawCopy(PAUSED_NO_SERIES_BODIES, variation, 'reminder-paused-body'),
+  };
+}
+
+/** Day 1 is unread, on the device or not: no claim of a return or of earlier progress. */
+function firstDayContent(variation: CopyVariation, series: string): DailyReminderContent {
+  return {
+    title: drawCopy(FIRST_DAY_TITLES, variation, 'reminder-first-day-title'),
+    body: drawCopy(FIRST_DAY_BODIES, variation, 'reminder-first-day-body')(1, series),
+  };
+}
+
+/**
+ * Copy for the reminder that fires at `now`. Each pre-rolled occurrence
+ * passes its own fire date, so it draws that day's lines from the bag.
+ */
 export function getDailyReminderContent({
   currentDevotional,
   premiumPolicy,
   now = new Date(),
+  seed,
 }: DailyReminderContentInput): DailyReminderContent {
   const currentDay = getCurrentReminderDay(currentDevotional);
+  const variation = copyVariationAt(seed, now);
 
   // No active devotional
   if (!currentDevotional) {
-    if (premiumPolicy === 'denied') {
-      return {
-        title: 'Your Bible rhythm is still here',
-        body: 'Open scripture today, or renew Premium when you’re ready for another personal reading.',
-      };
-    }
+    if (premiumPolicy === 'denied') return pausedContent(variation, false);
 
     return {
-      title: 'Ready for something new?',
-      body: 'Start your next study when you\'re ready.',
+      title: drawCopy(IDLE_TITLES, variation, 'reminder-idle-title'),
+      body: drawCopy(IDLE_BODIES, variation, 'reminder-idle-body'),
     };
   }
 
@@ -139,9 +226,11 @@ export function getDailyReminderContent({
     const isOverdue = getReadingDayLabel(currentDevotional, currentDay, now) === 'Overdue';
 
     if (isOverdue) {
+      // An overdue Day 1 was never read, so there is nothing to return to.
+      if (currentDay.dayNumber <= 1) return firstDayContent(variation, currentDevotional.title);
       return {
-        title: 'Pick up where you left off',
-        body: `Day ${currentDay.dayNumber} of ${currentDevotional.title} is waiting for you.`,
+        title: drawCopy(OVERDUE_TITLES, variation, 'reminder-overdue-title'),
+        body: drawCopy(OVERDUE_BODIES, variation, 'reminder-overdue-body')(currentDay.dayNumber, currentDevotional.title),
       };
     }
 
@@ -162,15 +251,6 @@ export function getDailyReminderContent({
     return { title: currentDay.title, body: 'Your next reading is waiting.' };
   }
 
-  // Premium-denied users should never see generation or "next day is being
-  // prepared" copy. That implies work is happening when the series is paused.
-  if (premiumPolicy === 'denied') {
-    return {
-      title: 'Your Bible rhythm is still here',
-      body: 'Read scripture today, or renew Premium when you’re ready for the next personal reading.',
-    };
-  }
-
   // The next day is not on device yet. This is the NORMAL state at bedtime:
   // today's reading is done, tomorrow's is generated overnight and only
   // arrives when the app next opens. The reminder is baked into the OS at
@@ -178,10 +258,25 @@ export function getDailyReminderContent({
   // on a day that was already waiting. Name the day instead and let the app
   // fetch it on open.
   const nextDayNumber = Math.max(1, currentDevotional.currentDay || 1);
-  const inSeries = nextDayNumber <= getServerOwnedSeriesTotalDays(currentDevotional);
+  const totalDays = getServerOwnedSeriesTotalDays(currentDevotional);
+  // Past the last day there is no next day to promise, paused or not.
+  const pastEnd = totalDays > 0 && nextDayNumber > totalDays;
+
+  // Premium-denied users should never see generation or "next day is being
+  // prepared" copy. That implies work is happening when the series is paused.
+  // Past the end, the paused lines name no series, so none says it goes on.
+  if (premiumPolicy === 'denied') return pausedContent(variation, !pastEnd);
+
+  if (pastEnd) {
+    return { title: currentDevotional.title, body: drawCopy(PAST_END_BODIES, variation, 'reminder-past-end-body') };
+  }
+  if (nextDayNumber === 1) return firstDayContent(variation, currentDevotional.title);
+  const inSeries = nextDayNumber <= totalDays;
   return {
-    title: inSeries ? `Day ${nextDayNumber} of ${currentDevotional.title}` : currentDevotional.title,
-    body: 'Your next reading is waiting for you.',
+    title: inSeries
+      ? drawCopy(NEXT_DAY_TITLES, variation, 'reminder-next-title')(nextDayNumber, currentDevotional.title)
+      : currentDevotional.title,
+    body: drawCopy(NEXT_DAY_BODIES, variation, 'reminder-next-body'),
   };
 }
 

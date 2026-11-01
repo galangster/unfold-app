@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { CompanionPersonalitySection } from '../CompanionPersonalitySection';
 
@@ -7,8 +8,13 @@ const mockProfile = { companionPersonality: undefined as string | undefined, wri
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
 jest.mock('react-native-gesture-handler', () => ({ TouchableOpacity: require('react-native').TouchableOpacity }));
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: { text: '#fff', textMuted: '#aaa', accent: '#c8a55c', border: '#333', inputBackground: '#111' } }) }));
+let mockCompanionName: string | null = null;
 jest.mock('@/lib/store', () => ({
-  useUnfoldStore: (selector: (state: Record<string, unknown>) => unknown) => selector({ user: mockProfile, updateUser: mockUpdateUser }),
+  useUnfoldStore: (selector: (state: Record<string, unknown>) => unknown) => selector({
+    user: mockProfile,
+    companionName: mockCompanionName,
+    updateUser: mockUpdateUser,
+  }),
 }));
 
 it('changes the selected personality without writing devotional preferences', () => {
@@ -35,5 +41,21 @@ it('repairs an invalid saved personality when Gentle is selected', () => {
   expect(gentle.props.accessibilityState.checked).toBe(true);
   act(() => { gentle.props.onPress(); });
   expect(mockUpdateUser).toHaveBeenCalledWith({ companionPersonality: 'gentle' });
+  act(() => { tree.unmount(); });
+});
+
+it('names the saved Companion in the description, and says your Companion when none is saved', () => {
+  const description = (tree: renderer.ReactTestRenderer) => tree.root
+    .findAllByType(Text)
+    .map((node) => [node.props.children].flat().join(''))
+    .find((text) => text.startsWith('Choose how'));
+  let tree!: renderer.ReactTestRenderer;
+  act(() => { tree = renderer.create(<CompanionPersonalitySection />); });
+  expect(description(tree)).toContain('Choose how your Companion talks with you.');
+
+  mockCompanionName = 'Selah';
+  act(() => { tree.update(<CompanionPersonalitySection />); });
+  expect(description(tree)).toContain('Choose how Selah talks with you.');
+  mockCompanionName = null;
   act(() => { tree.unmount(); });
 });

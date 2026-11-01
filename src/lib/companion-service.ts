@@ -3,6 +3,7 @@ import { PERSONA_BRIEF } from '../constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { authenticatedFetch } from './device-credential';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
 
 export type CompanionMood = 'Grateful' | 'Peaceful' | 'Hopeful' | 'Restless' | 'Heavy' | 'Confused';
 export type CompanionResponseContext =
@@ -153,7 +154,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
           method: 'POST',
           headers: await getAuthHeaders(),
           body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
+            model: HAIKU_REQUEST_MODEL,
             max_tokens: 150,
             temperature: 0.8,
             system: systemPrompt,

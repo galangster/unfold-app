@@ -75,6 +75,19 @@ export function applyArchiveIntent<T extends DevotionalLifecycleFields & { updat
   };
 }
 
+/**
+ * Archives on the lifecycle clock alone. The content clock stays put, so a
+ * pause made as a side effect never outranks newer progress synced from
+ * another device.
+ */
+export function applyArchiveLifecycle<T extends DevotionalLifecycleFields>(
+  series: T,
+  at: string,
+): T & Required<DevotionalLifecycleFields> {
+  const archivedStateAt = nextIntentClock(series.archivedStateAt, at);
+  return { ...series, archivedAt: archivedStateAt, archivedStateAt };
+}
+
 export function applyUnarchiveIntent<T extends DevotionalLifecycleFields & { updatedAt?: string }>(
   series: T,
   at: string,

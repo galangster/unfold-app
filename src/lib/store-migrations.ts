@@ -4,6 +4,7 @@ import { compositeId, newId } from './sync-ids';
 import { bibleReadingCoordKey, isCollidingBibleReadingId } from './bible-reading-ids';
 import { normalizeSoapResponses } from './journal-entry-state';
 import { mergeJournalEntryDuplicates } from './journal-entry-merge';
+import type { JournalEntry } from './store';
 
 type PersistedUnfoldState = Record<string, any>;
 
@@ -66,6 +67,42 @@ function remapQueuedJournalWrites(): void {
   } catch (err) {
     reportMigrationFailure('v41→42 outbox', err);
   }
+}
+
+/**
+ * The stored journal rows with each newer live write still queued for them.
+ * A write reaches the outbox at once and the store's disk a moment later, so
+ * after a crash the queue can be ahead of a row, or hold a row the disk never
+ * got. Folding only the stored rows would leave that write out. Its re-keyed
+ * copy would then be newer than the day's folded entry, and launch would
+ * restore it over the entry, with only its own row's writing. A queued row
+ * joins only a day the store holds. Launch restores the other days.
+ */
+function withQueuedJournalWrites(entries: JournalEntry[]): JournalEntry[] {
+  let queued: JournalEntry[];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const records = require('./personal-data-sync-records') as typeof import('./personal-data-sync-records');
+    queued = records.queuedJournalEntries();
+  } catch (err) {
+    reportMigrationFailure('v41→42 queued journal writes', err);
+    return entries;
+  }
+  const dayKey = (entry: JournalEntry) => `${entry.devotionalId}|${entry.dayNumber}`;
+  const storedDays = new Set(entries.map(dayKey));
+  const result = [...entries];
+  for (const copy of queued) {
+    const index = result.findIndex((entry) => entry.id === copy.id);
+    if (index < 0) {
+      if (storedDays.has(dayKey(copy))) result.push(copy);
+      continue;
+    }
+    const stored = result[index];
+    if ((stored.updatedAt ?? stored.createdAt ?? '') < copy.updatedAt) {
+      result[index] = { ...copy, createdAt: stored.createdAt };
+    }
+  }
+  return result;
 }
 
 /**
@@ -745,7 +782,7 @@ if (version < 42) {
       const usable = journalEntries.filter(
         (entry: any) => entry && typeof entry.devotionalId === 'string' && typeof entry.dayNumber === 'number',
       );
-      const merged = mergeJournalEntryDuplicates(usable);
+      const merged = mergeJournalEntryDuplicates(withQueuedJournalWrites(usable));
       // Anything too malformed to key by day is kept as-is rather than dropped.
       const unusable = journalEntries.filter((entry: any) => entry && !usable.includes(entry));
       if (merged.length !== journalEntries.length || unusable.length > 0) {

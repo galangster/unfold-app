@@ -3,6 +3,8 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { CompletionCelebration } from '../CompletionCelebration';
 import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { completionCopy, completionVariation } from '@/constants/daily-copy';
+import { copySeed } from '@/lib/copy-variation';
 
 jest.mock('@/lib/theme', () => ({ useTheme: () => ({ colors: { background: '#fff', text: '#111', textMuted: '#666' } }) }));
 jest.mock('@/hooks/useAccessibility', () => ({ useAccessibleAnimation: () => ({ reducedMotion: true }) }));
@@ -52,8 +54,26 @@ it('presents explicit next steps and accepts only one navigation per celebration
 it('keeps onboarding continuation available without reader next steps', () => {
   const dismiss = jest.fn();
   const screen = render(<CompletionCelebration visible type="day" message="A beginning" onDismiss={dismiss} />);
-  fireEvent.press(screen.getByRole('button', { name: 'Day Complete. A beginning. Continue' }));
+  fireEvent.press(screen.getByRole('button', { name: /\. A beginning\. Continue$/ }));
   expect(dismiss).toHaveBeenCalledTimes(1);
+});
+
+it('draws the title and line for its completion, the same on every render, and new for the next one', () => {
+  const copyFor = (ordinal: number) => completionCopy('day', completionVariation(copySeed(), ordinal));
+  expect(copyFor(5).title).not.toBe(copyFor(4).title);
+  expect(copyFor(5).message).not.toBe(copyFor(4).message);
+
+  const screen = render(<CompletionCelebration visible type="day" ordinal={4} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(4).title)).toBeTruthy();
+  expect(screen.getByText(copyFor(4).message)).toBeTruthy();
+  // A re-render of the same completion keeps its words.
+  screen.rerender(<CompletionCelebration visible type="day" ordinal={4} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(4).title)).toBeTruthy();
+
+  // The next completion, on this day or the next, is the next draw.
+  screen.rerender(<CompletionCelebration visible type="day" ordinal={5} onDismiss={jest.fn()} />);
+  expect(screen.getByText(copyFor(5).title)).toBeTruthy();
+  expect(screen.getByText(copyFor(5).message)).toBeTruthy();
 });
 
 describe('gentle completion feedback', () => {

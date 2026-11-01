@@ -1,3 +1,4 @@
+import type { DevotionalLength } from './series-length';
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
 import { logger } from '@/lib/logger';
@@ -20,7 +21,6 @@ import {
   HOOK_LIBRARY,
   HookStyle,
   TransitionStyle,
-  ClosingStyle,
   generateDailyVariety,
   DayConfiguration,
   getTemplateById,
@@ -45,6 +45,9 @@ import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
 import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
+import { HAIKU_REQUEST_MODEL } from './ai-model';
+import { legacyDevotionalDayShape } from '@/lib/prompt-variety';
+import { buildFallbackMirrorBack, type MirrorBackContent } from '@/lib/mirror-back-fallback';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -363,7 +366,7 @@ export interface GenerationContext {
   faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
-  devotionalLength: 3 | 7 | 14 | 30;
+  devotionalLength: DevotionalLength;
   bibleTranslation: BibleTranslation;
   previouslyUsedScriptures?: string[]; // References to avoid repeating (legacy)
   usedScriptureHistory?: UsedScripture[]; // Full scripture objects for variance analysis
@@ -485,8 +488,13 @@ function selectFreshPersonaCombo(
   return { primary, secondary, templateSeed };
 }
 
-// Build per-day variety instructions for the user prompt
-function buildVarietySchedule(
+// Build per-day variety instructions for the user prompt.
+// Each day's closing style and name use come from the repeat-free bag on the
+// series' template seed (lib/prompt-variety.ts), so one batch prompt reads the
+// same on every install. The closing used to step through a fixed modulo
+// order, and the shared persona then overrode it with one closing and one
+// early name for every piece. Exported for its tests.
+export function buildVarietySchedule(
   startDay: number,
   endDay: number,
   totalDays: number,
@@ -502,7 +510,6 @@ function buildVarietySchedule(
   const templates = STRUCTURAL_TEMPLATES;
   const hooks = Object.keys(HOOK_LIBRARY) as HookStyle[];
   const transitions: TransitionStyle[] = ['gradual', 'pivot', 'mysterious', 'logical', 'narrative'];
-  const closings: ClosingStyle[] = ['question', 'blessing', 'invitation', 'warning', 'reflection', 'doxology'];
 
   // Map reading duration for story system
   const durationKey = readingDuration === 5 ? '5min' : readingDuration === 30 ? '30min' : '15min';
@@ -514,12 +521,11 @@ function buildVarietySchedule(
     const templateIdx = (idx + templateSeed) % templates.length;
     const hookIdx = (idx + templateSeed) % hooks.length;
     const transitionIdx = (idx + templateSeed) % transitions.length;
-    const closingIdx = (idx + templateSeed) % closings.length;
 
     const template = templates[templateIdx];
     const hook = hooks[hookIdx];
     const transition = transitions[transitionIdx];
-    const closing = closings[closingIdx];
+    const { closing, useName } = legacyDevotionalDayShape(String(templateSeed), day);
 
     // Voice intensity varies by day position in series
     const voiceNote = idx === 0
@@ -542,7 +548,8 @@ function buildVarietySchedule(
       `${voiceNote}. ` +
       `Open with a ${hook} hook (e.g., "${hookExamples}"). ` +
       `Use ${transition} transitions. ` +
-      `Close with ${closing} style.\n` +
+      `Close with ${closing} style. ` +
+      `${useName ? "Name: the reader's name may appear once in this day, mid-sentence." : "Name: leave the reader's name out of this day."}\n` +
       `CRAFT: ${craftDirective.directive}`;
 
     if (storyDirective) {
@@ -587,7 +594,6 @@ DEVOTIONAL-SPECIFIC CRAFT:
 - Write as if composing something worth reading twice. Each sentence should carry weight.
 - Vary openings dramatically — never start consecutive days the same way. Some days begin mid-thought, others with a question, others with an image, others with Scripture itself.
 - Trust silence. Not every sentence needs to explain. Let truth sit without commentary.
-- The reader's name should appear sparingly — roughly once every 5 days, never at the beginning of a day. Bury it mid-sentence at a moment of encouragement.
 
 THE SHOW-DON'T-TELL PRINCIPLE:
 The reader has shared context about their life. Use this to INFORM your writing, not to NARRATE it.
@@ -1076,8 +1082,7 @@ IMPORTANT: The "days" array should contain exactly ${daysToGenerate} days, numbe
     ? `NAME: ${context.name}
 PERSONALIZATION GUIDELINES:
 - Write to the reader using "you" throughout.
-- The name "${context.name}" should appear only ONCE in this batch (if at all), buried mid-sentence—NEVER at the start of any day.
-- ${startDay === 1 ? 'For day 1, do NOT use their name. Save it for later.' : 'You may include their name once if it fits naturally.'}
+- Use the name "${context.name}" only on a day the PER-DAY VARIETY list marks for it, and then only once, buried mid-sentence, never at the start of a day.
 
 --- READER CONTEXT (use to inform theme/scripture selection, do NOT narrate back) ---
 About them: ${context.aboutMe}
@@ -2025,7 +2030,7 @@ export async function continueGeneratingDays(
         faithImpact: devotional.userContext.faithImpact ?? user.faithImpact ?? '',
         spiritualSeeking: user.spiritualSeeking,
         readingDuration: user.readingDuration,
-        devotionalLength: targetDays as 3 | 7 | 14 | 30,
+        devotionalLength: targetDays as DevotionalLength,
         bibleTranslation: user.bibleTranslation,
         themeCategory: devotional.themeCategory,
         devotionalType: devotional.devotionalType,
@@ -2337,7 +2342,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: HAIKU_REQUEST_MODEL,
         max_tokens: 220,
         temperature: 0.7,
         system: adaptiveSystemPrompt,
@@ -2513,16 +2518,9 @@ export async function generateDiagnosticQuestions(data: {
   }
 }
 
-// Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
-export interface MirrorBackContent {
-  reflection: string;
-  verse: string;
-  verseRef: string;
-  anticipation: string;
-  /** Plain-language read of what seems underneath — shown for ratification. */
-  workingRead?: string;
-}
+export type { MirrorBackContent };
 
+// Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
 export async function generateMirrorBackText(
   onboardingData: {
     selectedThemes?: string[];
@@ -2638,7 +2636,7 @@ RULES:
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: HAIKU_REQUEST_MODEL,
         max_tokens: 750,
         temperature: 0.8,
         system: systemPrompt,
@@ -2708,39 +2706,6 @@ RULES:
   }
 }
 
-// Fallback mirror-back content when AI generation fails
-function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; faithImpact?: string; spiritualSeeking?: string; name?: string }): MirrorBackContent {
-  const hasEmotional = !!(data.emotionalState || data.currentSituation);
-  const hasSeeking = !!data.spiritualSeeking;
-  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-  const nameClause = data.name ? `${data.name}, ` : '';
-
-  let reflection: string;
-  if (hasEmotional && hasSeeking) {
-    reflection = pick([
-      `${nameClause}something real brought you here — a weight you've been carrying, and a hope you haven't let go of.`,
-      `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at work.`,
-    ]);
-  } else if (hasEmotional) {
-    reflection = pick([
-      `${nameClause}you named something that matters. That kind of honesty is where God meets us.`,
-      `What you shared took courage, ${nameClause.toLowerCase() || ''}and it's exactly the right place to begin.`,
-    ]);
-  } else {
-    reflection = pick([
-      `${nameClause}something drew you here today. Whatever the reason — you're in the right place.`,
-      `You showed up${data.name ? `, ${data.name}` : ''}. That's the beginning of everything.`,
-    ]);
-  }
-
-  return {
-    reflection,
-    verse: 'Be still, and know that I am God.',
-    verseRef: 'Psalm 46:10',
-    anticipation: 'Something is being written for you right now — crafted for exactly where you are.',
-  };
-}
-
 // Extract the most shareable quotes from a devotional day using AI
 export async function extractShareableQuotes(
   dayContent: string,
@@ -2793,7 +2758,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/extract-quotes',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: HAIKU_REQUEST_MODEL,
         max_tokens: 500,
         system: extractionSystemPrompt,
         messages: [
