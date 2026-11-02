@@ -214,6 +214,33 @@ describe('computeDevotionalState', () => {
     );
   });
 
+  it('tells a free reader to unlock the next study, not to prepare one', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      isJourneyComplete: true,
+      progress: 100,
+      premiumPolicy: 'denied',
+      hasReadToday: true,
+    });
+
+    expect(state.type === 'journey-complete' && state.subtitle).toBe(
+      'Faith Foundations is complete. Your streak continues across series. Unlock your next study whenever you’re ready.',
+    );
+  });
+
+  it('keeps the prepare sentence while premium is unknown', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      isJourneyComplete: true,
+      progress: 100,
+      premiumPolicy: 'unknown',
+    });
+
+    expect(state.type === 'journey-complete' && state.subtitle).toBe(
+      'Faith Foundations is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.',
+    );
+  });
+
   it('keeps a completed journey out of the preparing state when the next pointer has no day data', () => {
     const state = computeDevotionalState({
       ...baseInput,

@@ -338,6 +338,31 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('says Unlock This Study to a free reader on the empty card, and still sends the tap to the gate', async () => {
+    mockPremiumPolicy = 'denied';
+    const gateCreation = jest.fn(() => false);
+    const tree = await mount({ variant: 'empty', gateCreation });
+
+    expect(renderedTexts(tree)).toContain('Unlock This Study');
+    expect(renderedTexts(tree)).not.toContain('Start This Study');
+    const action = tree.root.findByProps({ accessibilityLabel: 'Unlock This Study: A Quiet Strength' });
+    expect(action.props.accessibilityHint).toBe('Shows Premium options for this recommended devotional series');
+
+    act(() => action.props.onPress());
+    expect(gateCreation).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it.each(['granted', 'unknown'])('keeps Start This Study on the empty card while premium is %s', async (policy) => {
+    mockPremiumPolicy = policy;
+    const tree = await mount({ variant: 'empty' });
+
+    expect(renderedTexts(tree)).toContain('Start This Study');
+    expect(renderedTexts(tree)).not.toContain('Unlock This Study');
+    expect(tree.root.findByProps({ accessibilityLabel: 'Start This Study: A Quiet Strength' }).props.accessibilityHint)
+      .toBe('Starts generation for this recommended devotional series');
+  });
+
   it.each(['granted', 'unknown'])('keeps Begin the Next Study while premium is %s', async (policy) => {
     mockPremiumPolicy = policy;
     const tree = await mount({ variant: 'completion' });
@@ -352,7 +377,8 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     mockPremiumPolicy = 'denied';
     const tree = await mount({ storedPick, gateCreation: () => false });
 
-    pressStart(tree);
+    const action = tree.root.findByProps({ accessibilityLabel: 'Unlock This Study: A Quiet Strength' });
+    act(() => action.props.onPress());
 
     expect(mockTrackPickStart).toHaveBeenCalledWith(expect.objectContaining({ gate_action: 'paywall' }));
   });

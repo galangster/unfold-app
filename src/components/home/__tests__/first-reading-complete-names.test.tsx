@@ -271,7 +271,7 @@ describe('the first devotional on Today', () => {
     // The first reading does not count toward the streak, and the rhythm card
     // says the streak starts tomorrow, so this sentence makes no streak claim.
     expect(before).toContain(
-      `${DAY_TITLE} is complete. Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+      `${DAY_TITLE} is complete. Unlock your next study whenever you’re ready.`,
     );
     expect(before.join(' ')).not.toContain('Your streak continues');
   });
@@ -313,7 +313,7 @@ describe('the first devotional on Today', () => {
     }), 'journey-complete');
 
     expect(texts).toContain(
-      'Synthetic Series is complete. Your streak continues across series. Prepare your next study now or tomorrow, then return for tomorrow’s reading.',
+      'Synthetic Series is complete. Your streak continues across series. Unlock your next study whenever you’re ready.',
     );
   });
 });
