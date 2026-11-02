@@ -22,9 +22,15 @@ import type { ExclusionZone } from '@/lib/ember-system';
 import todayCampfireSource from '../../../assets/rive/today-campfire.riv';
 import todayCanopyLightsSource from '../../../assets/rive/today-canopy-lights.riv';
 import todayDoorsSource from '../../../assets/rive/today-doors.riv';
+import todayFallingStarsSource from '../../../assets/rive/today-falling-stars.riv';
+import todayGoldenFieldSource from '../../../assets/rive/today-golden-field.riv';
+import todayLakeTreeSource from '../../../assets/rive/today-lake-tree.riv';
+import todayMoonLakeSource from '../../../assets/rive/today-moon-lake.riv';
 import todayMoonStarsSource from '../../../assets/rive/today-moon-stars.riv';
 import todayMountainRiverSource from '../../../assets/rive/today-mountain-river.riv';
+import todayReedLakeSource from '../../../assets/rive/today-reed-lake.riv';
 import todayTreeSource from '../../../assets/rive/today-tree.riv';
+import todayVineyardSource from '../../../assets/rive/today-vineyard.riv';
 import todayWaterfallSource from '../../../assets/rive/today-waterfall.riv';
 import todayWindLeavesSource from '../../../assets/rive/today-wind-leaves.riv';
 
@@ -43,9 +49,15 @@ export const RIVE_SCENE_SOURCES: Record<RiveAmbience, RiveFileInput> = {
   'campfire-rive': todayCampfireSource as RiveFileInput,
   'canopy-lights-rive': todayCanopyLightsSource as RiveFileInput,
   'doors-rive': todayDoorsSource as RiveFileInput,
+  'falling-stars-rive': todayFallingStarsSource as RiveFileInput,
+  'golden-field-rive': todayGoldenFieldSource as RiveFileInput,
+  'lake-tree-rive': todayLakeTreeSource as RiveFileInput,
+  'moon-lake-rive': todayMoonLakeSource as RiveFileInput,
   'moon-stars-rive': todayMoonStarsSource as RiveFileInput,
   'mountain-river-rive': todayMountainRiverSource as RiveFileInput,
+  'reed-lake-rive': todayReedLakeSource as RiveFileInput,
   'tree-rive': todayTreeSource as RiveFileInput,
+  'vineyard-rive': todayVineyardSource as RiveFileInput,
   'waterfall-rive': todayWaterfallSource as RiveFileInput,
   'wind-leaves-rive': todayWindLeavesSource as RiveFileInput,
 };

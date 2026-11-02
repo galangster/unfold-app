@@ -10,6 +10,9 @@ Bundled assets (every completion scene in the rotation is owner-approved; in-hou
   - Every line of the art is the SVG's own geometry (Illustrator outlined strokes converted exactly by `rive-src/lib/svg_rml.py`); the life is keyframed RML only (`rive-src/lib/life_rml.py`), no Luau, so `--once` builds ship without a Rive login.
   - Artboards `Unfold_moon_stars` / `Unfold_mountain_river` 390x844, state machine `State Machine 1`, ViewModel `ViewModel1` with `artwork_color`, `glow_color`, `background_color`, `mask_gradient_start`, `mask_gradient_end`, `accentColor`.
   - 120 s seamless loop (seam PSNR equals the adjacent-frame PSNR); verified with `--screenshot --advance=N` at several offsets plus light and magenta probes.
+- `today-falling-stars.riv`, `today-golden-field.riv`, `today-lake-tree.riv`, `today-moon-lake.riv`, `today-reed-lake.riv`, `today-vineyard.riv`
+  - Today completed-day ambience options built from John's 2026-10-30 SVGs. Source `rive-src/scenes/<name>/` (`art.svg` + `gen.py`, shared code `rive-src/lib/field_rml.py`). Wired for simulator review on Nick's go-ahead of 2026-11-01; final approval stays with him after the in-app check.
+  - Same contract as the other in-house scenes: artboard 390x844, `State Machine 1`, `ViewModel1`, keyframes only, 120 s seamless loop. Glows pair a `screen` layer with a thin normal layer so they stay soft on the light theme.
 - `today-wind-leaves.riv`
   - Today state: completed/rest ambience option (`complete-today`, `tomorrow-locked`, `journey-complete` after the person has read today).
   - Source handoff: `wind_v3_unfold.riv` from Desktop intake, SHA-256 `57aa5348b877a034845b10a567b627317233b7037087f5c56405842026ae63b8`, size `19,810` bytes.
@@ -27,7 +30,7 @@ Current production behavior:
 
 ```txt
 Completed Today ambience slot
-  options: EmberSystem | campfire | canopy-lights | doors | tree | waterfall | wind-leaves | moon-stars | mountain-river
+  options: EmberSystem | campfire | canopy-lights | doors | falling-stars | golden-field | lake-tree | moon-lake | moon-stars | mountain-river | reed-lake | tree | vineyard | waterfall | wind-leaves
   selection: deterministic hash of devotional/day/date completion key
   pre-completion: no ambient Rive/embers
   in-house (clouds, …): rive-src/ only until Nick approves clips
