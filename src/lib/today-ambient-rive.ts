@@ -23,9 +23,15 @@ export type TodayCompletionAmbience =
   | 'campfire-rive'
   | 'canopy-lights-rive'
   | 'doors-rive'
+  | 'falling-stars-rive'
+  | 'golden-field-rive'
+  | 'lake-tree-rive'
+  | 'moon-lake-rive'
   | 'moon-stars-rive'
   | 'mountain-river-rive'
+  | 'reed-lake-rive'
   | 'tree-rive'
+  | 'vineyard-rive'
   | 'waterfall-rive'
   | 'wind-leaves-rive';
 
@@ -36,9 +42,15 @@ export const TODAY_COMPLETION_AMBIENCE_OPTIONS: readonly TodayCompletionAmbience
   'campfire-rive',
   'canopy-lights-rive',
   'doors-rive',
+  'falling-stars-rive',
+  'golden-field-rive',
+  'lake-tree-rive',
+  'moon-lake-rive',
   'moon-stars-rive',
   'mountain-river-rive',
+  'reed-lake-rive',
   'tree-rive',
+  'vineyard-rive',
   'waterfall-rive',
   'wind-leaves-rive',
   'ember',

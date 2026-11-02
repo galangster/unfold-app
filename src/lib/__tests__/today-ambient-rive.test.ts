@@ -44,6 +44,12 @@ describe('today completed ambience gating', () => {
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('campfire-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('canopy-lights-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('doors-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('falling-stars-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('golden-field-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('lake-tree-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('moon-lake-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('reed-lake-rive');
+    expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('vineyard-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('moon-stars-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('mountain-river-rive');
     expect(TODAY_COMPLETION_AMBIENCE_OPTIONS).toContain('tree-rive');

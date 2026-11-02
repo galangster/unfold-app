@@ -68,6 +68,8 @@ the reference strips, not against the text contract.
 
 - 2026-09-11, Nick: "single lines at varying thicknesses look good", "make sure any new art feels right at home with the current art". Applied to clouds v3: closed silhouettes replaced by one open calligraphic line per cloud, weight varied by stacking trimmed heavier strokes on the same path.
 
+- 2026-11-01, Nick, on John's six full-bleed scenes: make everything feel consistent. Measured on real Today, every shipped scene leaves the left text column empty. Applied rule 1 to the place scenes: the composition moves right, `text_veil` dissolves the art into the surface on the left, and each light source clears the title. Art the veil hides completely is left out of the file. Audit a scene on real Today, not only on the QA screen: the QA screen has no text to collide with.
+
 - 2026-09-15, Nick: "this cloud scene should not be in the app, i never approved it." PR #95 had wired `clouds-rive` into the completion rotation; removed the same day. Rule: no in-house scene enters `TODAY_COMPLETION_AMBIENCE_OPTIONS` or `assets/rive/` before Nick approves its clips.
 
 ## Scene set for review (2026-09-11)

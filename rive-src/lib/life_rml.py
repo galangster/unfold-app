@@ -33,7 +33,7 @@ def flap_keys(L, phase, active, flap, ph, beats=4, glide=150):
 class Life:
     """Scene-level builders for the keyframed life of a scene."""
     def __init__(self, sc): self.sc = sc
-    def glint(self, name, pts, prop, L, phase, active, width=0.07, peak=0.85, thickness=0.9, halo_w=5, span=(0.0, 1.0), closed=False, path_markup=None, halo_alpha=0.22):
+    def glint(self, name, pts, prop, L, phase, active, width=0.07, peak=0.85, thickness=0.9, halo_w=5, span=(0.0, 1.0), closed=False, path_markup=None, halo_alpha=0.22, extra=()):
         """A bright window that travels along `pts` from span[0] to span[1] of the path during `active`
         frames of each cycle, fading at both ends. One keyed TrimPath in a GroupEffect drives the crisp
         stroke and its feathered halo together."""
@@ -45,7 +45,7 @@ class Life:
                   f'<Stroke thickness="{thickness}" cap="round" join="round" name="S">{flat_paint(prop, 1)}<TargetEffect targetId="{gid}" name="U"/></Stroke>')
         path = path_markup or f'<PointsPath isClosed="{str(closed).lower()}" isClockwise="true" name="P">{straight_verts(pts)}</PointsPath>'
         sid = self.sc.add(lambda i: f'{eff}<Shape name="{name}" id="{i}">{path}{paints}</Shape>',
-                          envelope(L, phase, active, peak))
+                          envelope(L, phase, active, peak), *extra)
         self.sc.keyed.append(f'<KeyedObject objectId="{tid}">{cycle_keys(TRIM_OFFSET, L, phase, stops, ease=False)}</KeyedObject>')
         return sid
     def streak(self, name, x0, y0, length, angle, L, phase, active=54, dist=150, peak=0.9):
