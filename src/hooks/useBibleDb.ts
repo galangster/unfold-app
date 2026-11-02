@@ -37,57 +37,16 @@ export interface UseBibleDbReturn {
 }
 
 export function useBibleDb(): UseBibleDbReturn {
-  const [status, setStatus] = useState<BibleDbStatus>('not_downloaded');
+  // Start from the stored status. The file check below waits in Expo's shared
+  // native queue, behind any slow notification call, and a reader with the
+  // Bible installed must not be offered a download in the meantime.
+  const [stored] = useState(getBibleDbStatus);
+  const [status, setStatus] = useState<BibleDbStatus>(stored.status);
   const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(stored.errorMessage);
   const isMountedRef = useRef<boolean>(true);
 
-  // Check status on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    const checkStatus = async () => {
-      try {
-        const verified = await verifyBibleDb();
-        if (!cancelled && isMountedRef.current) {
-          setStatus(verified);
-
-          // If status is 'error', pull the error message from meta
-          if (verified === 'error') {
-            const meta = getBibleDbStatus();
-            setError(meta.errorMessage);
-          }
-        }
-      } catch (err: unknown) {
-        if (!cancelled && isMountedRef.current) {
-          const message = err instanceof Error ? err.message : 'Status check failed';
-          logger.error('[useBibleDb] Status check failed:', message);
-          setStatus('error');
-          setError(message);
-        }
-      }
-    };
-
-    checkStatus();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const download = useCallback(async (): Promise<boolean> => {
-    if (status === 'downloading') {
-      logger.warn('[useBibleDb] Download already in progress');
-      return false;
-    }
-
+  const followDownload = useCallback(async (): Promise<boolean> => {
     setStatus('downloading');
     setProgress(0);
     setError(null);
@@ -114,7 +73,62 @@ export function useBibleDb(): UseBibleDbReturn {
     }
 
     return success;
-  }, [status]);
+  }, []);
+
+  // Check status on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkStatus = async () => {
+      try {
+        const verified = await verifyBibleDb();
+        if (!cancelled && isMountedRef.current) {
+          // A download that started elsewhere, such as on Today.
+          if (verified === 'downloading') {
+            await followDownload();
+            return;
+          }
+
+          setStatus(verified);
+
+          // If status is 'error', pull the error message from meta
+          if (verified === 'error') {
+            const meta = getBibleDbStatus();
+            setError(meta.errorMessage);
+          }
+        }
+      } catch (err: unknown) {
+        if (!cancelled && isMountedRef.current) {
+          const message = err instanceof Error ? err.message : 'Status check failed';
+          logger.error('[useBibleDb] Status check failed:', message);
+          setStatus('error');
+          setError(message);
+        }
+      }
+    };
+
+    checkStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [followDownload]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const download = useCallback(async (): Promise<boolean> => {
+    if (status === 'downloading') {
+      logger.warn('[useBibleDb] Download already in progress');
+      return false;
+    }
+
+    return followDownload();
+  }, [status, followDownload]);
 
   return {
     isReady: status === 'ready',

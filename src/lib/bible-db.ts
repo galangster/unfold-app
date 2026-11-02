@@ -91,6 +91,13 @@ const bibleMeta = new MMKV({ id: 'unfold-bible-meta' });
 
 let dbInstance: SQLiteDatabase | null = null;
 
+// ─── In-process download ─────────────────────────────────────────────────────
+
+// The stored 'downloading' status outlives the process. Only this says whether
+// a download is really running.
+let activeDownload: Promise<boolean> | null = null;
+const downloadProgressListeners = new Set<(progress: number) => void>();
+
 // ─── Status management ───────────────────────────────────────────────────────
 
 function setMeta(key: string, value: string | null): void {
@@ -109,9 +116,11 @@ function getMeta(key: string): string | null {
  * Get the current Bible database status and metadata.
  */
 export function getBibleDbStatus(): BibleDbMeta {
-  const status = (getMeta(META_KEY_STATUS) as BibleDbStatus) ?? 'not_downloaded';
+  const stored = (getMeta(META_KEY_STATUS) as BibleDbStatus) ?? 'not_downloaded';
   return {
-    status,
+    // A download that died with its process leaves 'downloading' stored, and
+    // nothing would ever start another one.
+    status: stored === 'downloading' && !activeDownload ? 'not_downloaded' : stored,
     downloadedAt: getMeta(META_KEY_DOWNLOADED_AT),
     version: getMeta(META_KEY_VERSION),
     sizeBytes: getMeta(META_KEY_SIZE) ? Number(getMeta(META_KEY_SIZE)) : null,
@@ -124,6 +133,8 @@ export function getBibleDbStatus(): BibleDbMeta {
  * If metadata says "ready" but the file is missing, resets status.
  */
 export async function verifyBibleDb(): Promise<BibleDbStatus> {
+  if (activeDownload) return 'downloading';
+
   const meta = getBibleDbStatus();
 
   if (meta.status === 'ready') {
@@ -139,6 +150,8 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
   // Auto-detect DB file if status isn't 'ready' (e.g., stuck download, manual copy)
   if (meta.status !== 'ready') {
     const fileInfo = await getInfoAsync(DB_FILE_PATH);
+    // A download that started during the check owns the file now.
+    if (activeDownload) return 'downloading';
     if (fileInfo.exists) {
       const sizeBytes = 'size' in fileInfo ? (fileInfo.size ?? 0) : 0;
       if (sizeBytes >= 5 * 1024 * 1024) {
@@ -188,18 +201,29 @@ export function computeDownloadProgress(
  * Download the Bible database file from the backend.
  * Writes to the expo-sqlite directory so it can be opened directly.
  *
+ * A caller that arrives during a running download joins it.
+ *
  * @param onProgress - Optional callback receiving download progress (0-1)
  * @returns true on success, false on failure
  */
-export async function downloadBibleDb(
+export function downloadBibleDb(
   onProgress?: (progress: number) => void,
 ): Promise<boolean> {
-  const currentStatus = getBibleDbStatus().status;
-  if (currentStatus === 'downloading') {
-    logger.warn('[BibleDB] Download already in progress');
-    return false;
-  }
+  if (onProgress) downloadProgressListeners.add(onProgress);
+  if (activeDownload) return activeDownload;
 
+  activeDownload = runBibleDbDownload().finally(() => {
+    activeDownload = null;
+    downloadProgressListeners.clear();
+  });
+  return activeDownload;
+}
+
+function reportDownloadProgress(progress: number): void {
+  downloadProgressListeners.forEach((listener) => listener(progress));
+}
+
+async function runBibleDbDownload(): Promise<boolean> {
   logger.log('[BibleDB] Starting download from', DB_DOWNLOAD_URL);
   setMeta(META_KEY_STATUS, 'downloading');
   setMeta(META_KEY_ERROR, null);
@@ -228,11 +252,10 @@ export async function downloadBibleDb(
       DB_FILE_PATH,
       { headers: downloadHeaders },
       (downloadProgress) => {
-        const progress = computeDownloadProgress(
+        reportDownloadProgress(computeDownloadProgress(
           downloadProgress.totalBytesWritten,
           downloadProgress.totalBytesExpectedToWrite,
-        );
-        onProgress?.(progress);
+        ));
       },
     );
 
@@ -269,7 +292,7 @@ export async function downloadBibleDb(
     setMeta(META_KEY_ERROR, null);
 
     logger.log('[BibleDB] Download complete', { sizeBytes });
-    onProgress?.(1);
+    reportDownloadProgress(1);
     return true;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown download error';

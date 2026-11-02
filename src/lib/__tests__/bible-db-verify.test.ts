@@ -148,6 +148,98 @@ describe('verifyBibleDb auto-detect (DAT-5)', () => {
   });
 });
 
+describe('a persisted downloading status (D4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('react-native-mmkv').__clearAll();
+    mockDeleteAsync.mockResolvedValue(undefined);
+    mockMakeDirectoryAsync.mockResolvedValue(undefined);
+    mockGetAuthHeaders.mockResolvedValue({ 'X-Device-ID': 'test' });
+    mockCreateDownloadResumable.mockReturnValue({ downloadAsync: mockDownloadAsync });
+  });
+
+  function completedDownloadFile() {
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    mockGetFirstAsync
+      .mockResolvedValueOnce({ count: 66 })
+      .mockResolvedValueOnce({ count: 50001 });
+    mockCloseAsync.mockResolvedValue(undefined);
+    mockOpenDatabaseAsync.mockResolvedValue({
+      getFirstAsync: mockGetFirstAsync,
+      closeAsync: mockCloseAsync,
+    });
+  }
+
+  it('reads as not downloaded when no download is running, so the reader can start one', async () => {
+    setDbStatus('downloading');
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getBibleDbStatus, verifyBibleDb } = require('@/lib/bible-db');
+
+    expect(getBibleDbStatus().status).toBe('not_downloaded');
+    await expect(verifyBibleDb()).resolves.toBe('not_downloaded');
+  });
+
+  it('lets a later caller join the running download instead of starting or failing', async () => {
+    let finishDownload: (value: { status: number }) => void = () => {};
+    let reportBytes: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void = () => {};
+    mockCreateDownloadResumable.mockImplementation((_url, _path, _options, onBytes) => {
+      reportBytes = onBytes;
+      return {
+        downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+      };
+    });
+    mockGetInfoAsync.mockResolvedValueOnce({ exists: true, isDirectory: true });
+    mockGetInfoAsync.mockResolvedValueOnce({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus } = require('@/lib/bible-db');
+    const joinedProgress = jest.fn();
+
+    const first = downloadBibleDb();
+    const joined = downloadBibleDb(joinedProgress);
+
+    expect(getBibleDbStatus().status).toBe('downloading');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(1);
+
+    reportBytes({ totalBytesWritten: 1, totalBytesExpectedToWrite: 2 });
+    expect(joinedProgress).toHaveBeenCalledWith(0.5);
+
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+
+    await expect(first).resolves.toBe(true);
+    await expect(joined).resolves.toBe(true);
+    expect(getBibleDbStatus().status).toBe('ready');
+  });
+
+  it('leaves the partial file alone while the download is running', async () => {
+    let finishDownload: (value: { status: number }) => void = () => {};
+    mockCreateDownloadResumable.mockReturnValue({
+      downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+    });
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, verifyBibleDb } = require('@/lib/bible-db');
+    const running = downloadBibleDb();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    mockDeleteAsync.mockClear();
+
+    await expect(verifyBibleDb()).resolves.toBe('downloading');
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+    await expect(running).resolves.toBe(true);
+  });
+});
+
 describe('computeDownloadProgress (NET-14)', () => {
   it('returns -1 when totalBytesExpectedToWrite is -1 (no Content-Length)', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
