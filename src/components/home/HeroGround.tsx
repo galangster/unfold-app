@@ -41,11 +41,12 @@ export function HeroGround({ children, active, style }: Props) {
     <View style={[{ position: 'relative', alignSelf: 'stretch' }, style]} onLayout={handleLayout}>
       <MaskedView
         pointerEvents="none"
+        testID="hero-ground-layer"
         style={{
           position: 'absolute',
           top: -HERO_GROUND.featherTop,
           bottom: -HERO_GROUND.featherBottom,
-          left: 0,
+          left: -HERO_GROUND.bleedLeft,
           right: 0,
         }}
         maskElement={

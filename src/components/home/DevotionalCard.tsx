@@ -845,7 +845,11 @@ function JourneyCompleteState({
         <RecommendedSeriesCard
           variant="completion"
           onChooseOther={onCreateNew}
-          renderFallback={() => <JourneyCompleteCreateAction onCreateNew={onCreateNew} />}
+          renderFallback={() => (
+            <HeroGround active={ambienceVisible}>
+              <JourneyCompleteCreateAction onCreateNew={onCreateNew} />
+            </HeroGround>
+          )}
           gateCreation={gateCreation}
           storedPick={storedPick}
         />
@@ -1081,7 +1085,6 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                 </View>
                 <AnimatedProgressBar progress={progress} seriesKey={seriesKey} colors={colors} active={motionActive} historyRef={progressHistoryRef} accessibilityLabel={weekProgressLabel(state.weeks, daysCompleted, totalDays)} />
               </View>
-            </HeroGround>
 
             {showInlineComposer && composer ? (
               <View style={styles.heroComposerBlock}>
@@ -1168,6 +1171,7 @@ function MainCard({ state, ambienceVisible, relaxHeroMinHeight, announceReady = 
                 </View>
               </TouchableOpacity>
             )}
+            </HeroGround>
           </View>
         </View>
       </View>

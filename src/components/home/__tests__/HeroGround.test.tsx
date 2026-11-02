@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports, import/first, @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { Text } from 'react-native';
+import { Spacing } from '@/constants/spacing';
 import { HERO_GROUND } from '@/constants/today-surfaces';
 
 const renderer = require('react-test-renderer');
@@ -39,5 +40,19 @@ describe('HeroGround', () => {
 
     const ground = tree.root.findByProps({ testID: 'hero-ground' });
     expect(ground.props.locations).toEqual([0, HERO_GROUND.midStop, HERO_GROUND.endStop]);
+  });
+
+  it('reaches past the page gutter so art cannot show beside the copy', () => {
+    let tree: any;
+    renderer.act(() => {
+      tree = renderer.create(
+        <HeroGround active>
+          <Text>Hero copy</Text>
+        </HeroGround>,
+      );
+    });
+
+    const [layer] = tree.root.findAllByProps({ testID: 'hero-ground-layer' });
+    expect(layer.props.style.left).toBe(-Spacing['6']);
   });
 });

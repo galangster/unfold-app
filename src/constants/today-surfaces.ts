@@ -1,6 +1,8 @@
 export const HERO_GROUND = {
   leftAlpha: 0.94, midAlpha: 0.72, midStop: 0.56, endStop: 0.92,
   featherTop: 20, featherBottom: 36,
+  // Matches the Today page gutter, so art cannot show beside the copy.
+  bleedLeft: 24,
   textMaxWidthPct: 86,
 } as const;
 
