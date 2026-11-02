@@ -3,8 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockSearchBible = jest.fn();
 
+let mockStatus = 'ready';
+
 jest.mock('@/lib/bible-db', () => ({
   searchBible: (...args: unknown[]) => mockSearchBible(...args),
+  getBibleDbStatus: () => ({ status: mockStatus }),
 }));
 jest.mock('@/hooks/useBibleDb', () => ({ useBibleDb: () => ({ isReady: true }) }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn() } }));
@@ -46,6 +49,43 @@ it('clears settled results as soon as the query changes', async () => {
   act(() => latest.setQuery('hope'));
   expect(latest.results).toEqual([]);
   expect(latest.isSearching).toBe(true);
+
+  act(() => tree.unmount());
+  client.clear();
+  jest.useRealTimers();
+});
+
+it('searches again after a download when the first search found no database', async () => {
+  jest.useFakeTimers();
+  mockSearchBible.mockReset();
+  mockSearchBible.mockResolvedValueOnce([]);
+  mockStatus = 'not_downloaded';
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let tree: { update: (node: React.ReactNode) => void; unmount: () => void };
+  act(() => {
+    tree = renderer.create(<QueryClientProvider client={client}><Probe ready /></QueryClientProvider>);
+  });
+  act(() => latest.setQuery('love'));
+  await act(async () => { await jest.advanceTimersByTimeAsync(50); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(50); });
+  expect(mockSearchBible).toHaveBeenCalledTimes(1);
+
+  // The screen drops out of ready, the reader downloads, and it comes back.
+  act(() => tree.update(<QueryClientProvider client={client}><Probe ready={false} /></QueryClientProvider>));
+  mockStatus = 'ready';
+  mockSearchBible.mockResolvedValueOnce([{
+    id: 1,
+    bookId: 43,
+    chapter: 3,
+    verse: 16,
+    text: 'For God so loved the world.',
+    translation: 'BSB',
+    snippet: 'For God so loved the world.',
+  }]);
+  act(() => tree.update(<QueryClientProvider client={client}><Probe ready /></QueryClientProvider>));
+  await act(async () => { await jest.advanceTimersByTimeAsync(50); });
+  await act(async () => { await jest.advanceTimersByTimeAsync(50); });
+  expect(latest.results).toHaveLength(1);
 
   act(() => tree.unmount());
   client.clear();

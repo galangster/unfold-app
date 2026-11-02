@@ -14,12 +14,12 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getBibleDbStatus,
   getChapter,
   openBibleDb,
   type BibleVerse,
   type BibleTranslation,
 } from '@/lib/bible-db';
+import { failEmptyReadWithoutDb } from '@/lib/bible-db-read';
 import { BOOK_BY_ID, getNextChapter, getPreviousChapter } from '@/lib/bible-constants';
 import { logger } from '@/lib/logger';
 import { useBibleDb } from './useBibleDb';
@@ -32,21 +32,13 @@ export const bibleChapterKeys = {
     ['bible-chapter', bookId, chapter, translation] as const,
 };
 
-/**
- * Read a chapter for the query cache. Chapters are cached as never stale, so an
- * empty read from a database that turned out to be missing must fail, or the
- * page would stay blank after the reader downloads the Bible again.
- */
+/** Read a chapter for the query cache, where chapters never go stale. */
 export async function fetchChapter(
   bookId: number,
   chapter: number,
   translation: BibleTranslation,
 ): Promise<BibleVerse[]> {
-  const verses = await getChapter(bookId, chapter, translation);
-  if (verses.length === 0 && getBibleDbStatus().status !== 'ready') {
-    throw new Error('Bible database is not ready');
-  }
-  return verses;
+  return failEmptyReadWithoutDb(await getChapter(bookId, chapter, translation));
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
