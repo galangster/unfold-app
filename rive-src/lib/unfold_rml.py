@@ -144,12 +144,14 @@ class Scene:
         inp=f'<ScriptInputColor propertyValue="{GOLD}" name="accent">{bind(VM["accent"],836)}</ScriptInputColor>' if accent else ''
         return self.add(lambda i:f'<ScriptedDrawable x="{x}" y="{y}" scriptAssetId="{aid}" name="{name}" id="{i}">{inp}</ScriptedDrawable>')
     def write(self,out="scene.rml"):
+        nodes="".join(self.nodes)
+        if self.shift: nodes=f'<Node x="{self.shift}" y="0" name="Composition" id="0:20">{nodes}</Node>'   # an unshifted scene keeps the structure of the shipped files
         doc=f'''<Rive version="1" kind="fragment">
 <Artboard defaultStateMachineId="0:7" viewModelId="0:40" viewModelInstanceId="0:41" clip="true" width="{W}" height="{H}" name="{self.artboard}" id="0:2">
 <Fill name="Background"><SolidColor colorValue="00000000" name="BG">{bind(VM["bg"])}</SolidColor></Fill>
 {GLOW}
 {self.mask}
-<Node x="{self.shift}" y="0" name="Composition" id="0:20">{"".join(self.nodes)}</Node>
+{nodes}
 <StateMachine name="State Machine 1" id="0:7"><StateMachineLayer name="Layer 1" id="0:8"><AnyState x="200" y="-120"/><ExitState x="400" y="-120"/><EntryState><StateTransition stateToId="0:12"/></EntryState><AnimationState x="200" animationId="0:6" id="0:12"/></StateMachineLayer></StateMachine>
 <LinearAnimation loopValue="loop" fps="{FPS}" duration="{DUR}" name="Loop" id="0:6">{GLOW_BREATH}{"".join(self.keyed)}</LinearAnimation>
 </Artboard>

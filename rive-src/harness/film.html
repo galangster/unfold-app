@@ -30,7 +30,7 @@ window.film=async(file,accent,surface,times,dt=1/60)=>{
     const o=document.createElement('canvas');o.width=390*RES;o.height=844*RES;o.getContext('2d').drawImage(c,0,0);o.title=target+'s';strip.appendChild(o); }
   sm.delete(); ab.delete(); f.delete(); $('#status').textContent=file+' done'; return rep;
 };
-window.save=async(name)=>{const cs=[...document.querySelectorAll('#strip canvas')];const big=document.createElement('canvas');big.width=390*cs.length+8*(cs.length-1);big.height=844;const x=big.getContext('2d');x.fillStyle='#444';x.fillRect(0,0,big.width,big.height);cs.forEach((c,i)=>x.drawImage(c,i*398,0));const res=await fetch('/save?name='+encodeURIComponent(name),{method:'POST',body:big.toDataURL('image/png')});return await res.text();};
+window.save=async(name)=>{const cs=[...document.querySelectorAll('#strip canvas')];const w=390*RES;const big=document.createElement('canvas');big.width=w*cs.length+8*(cs.length-1);big.height=844*RES;const x=big.getContext('2d');x.fillStyle='#444';x.fillRect(0,0,big.width,big.height);cs.forEach((c,i)=>x.drawImage(c,i*(w+8),0));const res=await fetch('/save?name='+encodeURIComponent(name),{method:'POST',body:big.toDataURL('image/png')});return await res.text();};
 
 // record(file, accent, surface, seconds, fps): drives the scene by hand and records the canvas to webm.
 window.record=async(file,accent,surface,seconds=30,fps=30)=>{

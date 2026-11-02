@@ -164,4 +164,20 @@ describe('Rive accent theming', () => {
       expect(ascii.includes('accentColor') || ascii.includes('accentR')).toBe(true);
     }
   });
+
+  it.each([
+    'today-falling-stars.riv',
+    'today-golden-field.riv',
+    'today-lake-tree.riv',
+    'today-moon-lake.riv',
+    'today-reed-lake.riv',
+    'today-vineyard.riv',
+  ])('%s exposes the surface colors its veils need on either theme', (file) => {
+    const riveDir = path.join(__dirname, '../../../assets/rive');
+    const ascii = fs.readFileSync(path.join(riveDir, file)).toString('latin1');
+
+    expect(ascii).toContain('background_color');
+    expect(ascii).toContain('mask_gradient_start');
+    expect(ascii).toContain('mask_gradient_end');
+  });
 });
