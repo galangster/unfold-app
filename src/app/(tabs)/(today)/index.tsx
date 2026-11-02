@@ -529,12 +529,18 @@ export default function HomeScreen() {
     publishTooltipRect('rhythm', rhythmTargetRef.current);
   }, [publishTooltipRect]);
 
+  // A target's own layout event misses a move of its column, such as the hero
+  // growing when its recommendation loads. The scroll content changes size then.
+  const publishAllTooltipRects = useCallback(() => {
+    publishTooltipRect('reading', readingTargetRef.current);
+    publishTooltipRect('context', contextTargetRef.current);
+    publishTooltipRect('rhythm', rhythmTargetRef.current);
+  }, [publishTooltipRect]);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       measureScrollFrame();
-      publishTooltipRect('reading', readingTargetRef.current);
-      publishTooltipRect('context', contextTargetRef.current);
-      publishTooltipRect('rhythm', rhythmTargetRef.current);
+      publishAllTooltipRects();
     });
     return () => cancelAnimationFrame(frame);
   }, [
@@ -545,7 +551,7 @@ export default function HomeScreen() {
     insets.right,
     insets.top,
     measureScrollFrame,
-    publishTooltipRect,
+    publishAllTooltipRects,
   ]);
 
 
@@ -2022,6 +2028,7 @@ export default function HomeScreen() {
         <Animated.ScrollView
           ref={scrollViewRef}
           onLayout={measureScrollFrame}
+          onContentSizeChange={publishAllTooltipRects}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}

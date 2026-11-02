@@ -155,7 +155,14 @@ jest.mock('@/components/home/BentoGrid', () => ({ BentoGrid: () => null }));
 jest.mock('@/components/home/SeriesCarousel', () => ({ SeriesCarousel: () => null }));
 jest.mock('@/components/home/CompactStreakRow', () => ({ CompactStreakRow: () => null }));
 jest.mock('@/components/StreakBox', () => ({ StreakBox: () => null }));
-jest.mock('@/components/HomeOnboardingTooltips', () => ({ HomeOnboardingTooltips: () => null }));
+let mockTourProps: { layoutRects?: { rhythm: { y: number } | null } } | null = null;
+jest.mock('@/components/HomeOnboardingTooltips', () => ({
+  HomeOnboardingTooltips: (props: { layoutRects?: { rhythm: { y: number } | null } }) => {
+    mockTourProps = props;
+    return null;
+  },
+  sameTargetRect: (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b),
+}));
 jest.mock('@/components/RippleLoader', () => ({ RippleLoader: () => null }));
 jest.mock('@/components/StreakCelebration', () => ({ StreakCelebration: () => null }));
 let mockCheckInSheetProps: Record<string, unknown> | null = null;
@@ -1976,5 +1983,54 @@ describe('Today widget sync', () => {
     });
     expect(syncWidgets).toHaveBeenCalledTimes(syncsOnOpen + 1);
     act(() => tree!.unmount());
+  });
+});
+
+describe('Today first-run tour targets', () => {
+  afterEach(() => {
+    mockTodayStoreState.hasSeenHomeTooltips = true;
+    mockTourProps = null;
+  });
+
+  it('measures a target again when the hero grows above its column', async () => {
+    mockTodayStoreState.hasSeenHomeTooltips = false;
+    let measuredY = 668;
+    // The preset's mocked View gives refs a component instance, so the native
+    // methods go on its prototype. The ScrollView mock here is the same View.
+    const viewPrototype = require('react-native').View.prototype;
+    Object.assign(viewPrototype, {
+      getInnerViewRef: () => ({}),
+      getNativeScrollRef: () => ({ measureInWindow: (done: (x: number, y: number) => void) => done(0, 0) }),
+      measureLayout: (_content: unknown, done: (x: number, y: number, w: number, h: number) => void) => {
+        done(0, measuredY, 402, 134);
+      },
+    });
+    // Today's mount-time measure is on a timer. Only layout events drive this test.
+    const frameSpy = jest.spyOn(global, 'requestAnimationFrame').mockImplementation(() => 0);
+    let tree: ReturnType<typeof renderer.create> | undefined;
+    await act(async () => {
+      tree = renderer.create(<HomeScreen />);
+    });
+    await act(async () => {
+      tree!.root
+        .findAll((node: { props: Record<string, unknown>; type: unknown }) => typeof node.type === 'string' && Boolean(node.props.onLayout))
+        .forEach((node: { props: { onLayout: () => void } }) => node.props.onLayout());
+    });
+    expect(mockTourProps?.layoutRects?.rhythm?.y).toBe(668);
+
+    // The rhythm card sits in its own column, so its own layout event does not
+    // fire when the hero above that column grows. The scroll content does change.
+    measuredY = 752;
+    const scrollView = tree!.root.findAll((node: { props: Record<string, unknown> }) => Boolean(node.props.onScroll))[0];
+    await act(async () => {
+      scrollView.props.onContentSizeChange?.(402, 1200);
+    });
+
+    expect(mockTourProps?.layoutRects?.rhythm?.y).toBe(752);
+    await act(async () => {
+      tree!.unmount();
+    });
+    frameSpy.mockRestore();
+    ['getInnerViewRef', 'getNativeScrollRef', 'measureLayout'].forEach((name) => delete viewPrototype[name]);
   });
 });
