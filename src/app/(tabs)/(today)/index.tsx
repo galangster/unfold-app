@@ -165,6 +165,7 @@ import { computeDevotionalState } from '@/components/home/compute-devotional-sta
 import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { GreetingRow } from '@/components/home/GreetingRow';
+import { HeroGround } from '@/components/home/HeroGround';
 import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
 import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
 import { useAmbientPlayerScrollPadding, useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
@@ -2012,6 +2013,11 @@ export default function HomeScreen() {
     );
   }
 
+  const ambienceVisible = shouldShowCompletedEmberAmbience({
+    stateType: devotionalState.type,
+    hasReadToday,
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Layer 0: Ambient art — one completed-day ambience owner. The
@@ -2036,13 +2042,15 @@ export default function HomeScreen() {
         >
           <View style={todayFrameStyle}>
           {/* Zone 1: Greeting */}
-          <GreetingRow
-            userName={user?.name}
-            now={clockNow}
-            avatarTestID="home-avatar-button"
-            onAvatarPress={() => router.push('/(tabs)/(you)')}
-            headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
-          />
+          <HeroGround active={ambienceVisible} bleedLeft={0}>
+            <GreetingRow
+              userName={user?.name}
+              now={clockNow}
+              avatarTestID="home-avatar-button"
+              onAvatarPress={() => router.push('/(tabs)/(you)')}
+              headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
+            />
+          </HeroGround>
 
           <View style={todayColumnsStyle}>
           {/* Zone 3: Hero Devotional — Today's primary act */}
@@ -2062,10 +2070,7 @@ export default function HomeScreen() {
                   ?? (pendingInitialResume === 'offer-nonblocking-resume'
                     ? { onResume: handleResumePendingInitial }
                     : null)}
-                ambienceVisible={shouldShowCompletedEmberAmbience({
-                  stateType: devotionalState.type,
-                  hasReadToday,
-                })}
+                ambienceVisible={ambienceVisible}
                 relaxHeroMinHeight={todayUsesSplit}
                 availableWidth={todayHeroWidth}
               />
