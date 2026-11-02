@@ -22,6 +22,7 @@ const mockUpdateUser = jest.fn();
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
 const mockTrackPickStart = jest.fn();
+let mockPremiumPolicy = 'granted';
 const focusEffects: Array<() => void> = [];
 const mockFetch = jest.fn();
 const mountedTrees: Array<ReturnType<typeof renderer.create>> = [];
@@ -62,6 +63,10 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/auto-trial-telemetry', () => ({
   trackAutoTrialPickStartTapped: (...args: unknown[]) => mockTrackPickStart(...args),
+}));
+
+jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
+  usePremiumAccessPolicy: () => mockPremiumPolicy,
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -133,6 +138,10 @@ import { isQaToolsEnabled } from '@/lib/qa-tools';
 
 const mockAuthenticatedFetch = authenticatedFetch as jest.Mock;
 const mockIsQaToolsEnabled = isQaToolsEnabled as jest.Mock;
+
+afterEach(() => {
+  mockPremiumPolicy = 'granted';
+});
 
 const storedPick = {
   theme: 'trust',
@@ -312,6 +321,40 @@ describe('J10 RecommendedSeriesCard start-study gate', () => {
     const link = tree.root.findByProps({ accessibilityLabel: 'Create your own series' });
     act(() => link.props.onPress());
     expect(onChooseOther).toHaveBeenCalledTimes(1);
+  });
+
+  it('says Unlock the Next Study to a free reader, and still sends the tap to the gate', async () => {
+    mockPremiumPolicy = 'denied';
+    const gateCreation = jest.fn(() => false);
+    const tree = await mount({ variant: 'completion', gateCreation });
+
+    expect(renderedTexts(tree)).toContain('Unlock the Next Study');
+    expect(renderedTexts(tree)).not.toContain('Begin the Next Study');
+    const action = tree.root.findByProps({ accessibilityLabel: 'Unlock the Next Study: A Quiet Strength' });
+    expect(action.props.accessibilityHint).toBe('Shows Premium options for this recommended devotional series');
+
+    act(() => action.props.onPress());
+    expect(gateCreation).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it.each(['granted', 'unknown'])('keeps Begin the Next Study while premium is %s', async (policy) => {
+    mockPremiumPolicy = policy;
+    const tree = await mount({ variant: 'completion' });
+
+    expect(renderedTexts(tree)).toContain('Begin the Next Study');
+    expect(renderedTexts(tree)).not.toContain('Unlock the Next Study');
+    expect(tree.root.findByProps({ accessibilityLabel: 'Begin the Next Study: A Quiet Strength' }).props.accessibilityHint)
+      .toBe('Starts generation for this recommended devotional series');
+  });
+
+  it('records the real gate action for a free reader who taps a stored pick', async () => {
+    mockPremiumPolicy = 'denied';
+    const tree = await mount({ storedPick, gateCreation: () => false });
+
+    pressStart(tree);
+
+    expect(mockTrackPickStart).toHaveBeenCalledWith(expect.objectContaining({ gate_action: 'paywall' }));
   });
 
   it('keeps the create-your-own link on the completion card while the recommendation loads', async () => {

@@ -28,7 +28,7 @@ import { getChurnedCreationGateAction } from '@/lib/creation-gate-policy';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { cleanRecommendationReason } from '@/lib/recommendation-text';
 import type { NextPick } from '@/lib/store';
-import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 /** The fields the backend serves and a stored pick carries. */
 interface RecommendationFields {
@@ -52,7 +52,6 @@ interface RecommendedSeriesCardProps {
   renderFallback?: () => ReactNode;
   gateCreation?: () => boolean;
   storedPick?: NextPick | null;
-  premiumPolicy?: PremiumAccessPolicy;
 }
 
 /** Fetched JSON is unchecked, so a theme name renders only when it is text. */
@@ -113,9 +112,9 @@ export function RecommendedSeriesCard({
   renderFallback,
   gateCreation = () => true,
   storedPick,
-  premiumPolicy = 'granted',
 }: RecommendedSeriesCardProps) {
   const { colors } = useTheme();
+  const premiumPolicy = usePremiumAccessPolicy();
   const { entering } = useAccessibleAnimation();
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
@@ -283,7 +282,12 @@ export function RecommendedSeriesCard({
   // the actual theme name is already the card headline, so the chip would render
   // the bare word 'Theme' with no value attached.
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
-  const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
+  // A free reader's tap opens the paywall or the offer, so the label says so.
+  // Only on `denied`: a paying reader must not see it while policy is `unknown`.
+  const opensPremium = isCompletion && premiumPolicy === 'denied';
+  const actionLabel = opensPremium
+    ? 'Unlock the Next Study'
+    : isCompletion ? 'Begin the Next Study' : 'Start This Study';
   const themeName = displayThemeName(recommendation!.themeName);
 
   return (
@@ -320,7 +324,9 @@ export function RecommendedSeriesCard({
             onPress={handleStartStudy}
             accessibilityRole="button"
             accessibilityLabel={`${actionLabel}: ${themeName}`}
-            accessibilityHint="Starts generation for this recommended devotional series"
+            accessibilityHint={opensPremium
+              ? 'Shows Premium options for this recommended devotional series'
+              : 'Starts generation for this recommended devotional series'}
             style={[
               styles.primaryAction,
               {
