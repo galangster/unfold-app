@@ -272,10 +272,14 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     // The first reading does not count toward the streak, so its sentence
     // makes no streak claim. The rhythm card below says when the streak starts.
     const streakLine = isFirstReading ? '' : ' Your streak continues across series.';
+    // A free reader has no next study or tomorrow's reading until they unlock one.
+    const nextStepLine = premiumPolicy === 'denied'
+      ? 'Unlock your next study whenever you’re ready.'
+      : 'Prepare your next study now or tomorrow, then return for tomorrow’s reading.';
     return {
       type: 'journey-complete',
       seriesTitle,
-      subtitle: `${devotionalTitle} is complete.${streakLine} Prepare your next study now or tomorrow, then return for tomorrow’s reading.`,
+      subtitle: `${devotionalTitle} is complete.${streakLine} ${nextStepLine}`,
       onCreateNew,
     };
   }

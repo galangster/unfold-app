@@ -284,10 +284,10 @@ export function RecommendedSeriesCard({
   const typeLabel = recommendation!.type === 'theme' ? null : formatRecommendationType(recommendation!.type);
   // A free reader's tap opens the paywall or the offer, so the label says so.
   // Only on `denied`: a paying reader must not see it while policy is `unknown`.
-  const opensPremium = isCompletion && premiumPolicy === 'denied';
-  const actionLabel = opensPremium
-    ? 'Unlock the Next Study'
-    : isCompletion ? 'Begin the Next Study' : 'Start This Study';
+  const opensPremium = premiumPolicy === 'denied';
+  const actionLabel = isCompletion
+    ? (opensPremium ? 'Unlock the Next Study' : 'Begin the Next Study')
+    : (opensPremium ? 'Unlock This Study' : 'Start This Study');
   const themeName = displayThemeName(recommendation!.themeName);
 
   return (
