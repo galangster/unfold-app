@@ -19,6 +19,7 @@ import {
   type BibleVerse,
   type BibleTranslation,
 } from '@/lib/bible-db';
+import { failEmptyReadWithoutDb } from '@/lib/bible-db-read';
 import { BOOK_BY_ID, getNextChapter, getPreviousChapter } from '@/lib/bible-constants';
 import { logger } from '@/lib/logger';
 import { useBibleDb } from './useBibleDb';
@@ -30,6 +31,15 @@ export const bibleChapterKeys = {
   chapter: (bookId: number, chapter: number, translation: BibleTranslation) =>
     ['bible-chapter', bookId, chapter, translation] as const,
 };
+
+/** Read a chapter for the query cache, where chapters never go stale. */
+export async function fetchChapter(
+  bookId: number,
+  chapter: number,
+  translation: BibleTranslation,
+): Promise<BibleVerse[]> {
+  return failEmptyReadWithoutDb(await getChapter(bookId, chapter, translation));
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +100,7 @@ export function useBibleChapter(
   const queryResult = useQuery<BibleVerse[]>({
     queryKey: bibleChapterKeys.chapter(bookId, chapter, translation),
     queryFn: async () => {
-      const verses = await getChapter(bookId, chapter, translation);
+      const verses = await fetchChapter(bookId, chapter, translation);
       if (verses.length === 0) {
         logger.warn('[useBibleChapter] No verses returned for', {
           bookId,
@@ -117,7 +127,7 @@ export function useBibleChapter(
       if (!existing) {
         queryClient.prefetchQuery({
           queryKey: key,
-          queryFn: () => getChapter(bId, ch, translation),
+          queryFn: () => fetchChapter(bId, ch, translation),
           staleTime: Infinity,
         });
       }

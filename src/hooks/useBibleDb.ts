@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getBibleDbStatus,
+  subscribeBibleDbStatus,
   verifyBibleDb,
   downloadBibleDb,
   type BibleDbStatus,
@@ -37,19 +38,78 @@ export interface UseBibleDbReturn {
 }
 
 export function useBibleDb(): UseBibleDbReturn {
-  const [status, setStatus] = useState<BibleDbStatus>('not_downloaded');
+  // Start from the stored status. The file check below waits in Expo's shared
+  // native queue, behind any slow notification call, and a reader with the
+  // Bible installed must not be offered a download in the meantime.
+  const [stored] = useState(getBibleDbStatus);
+  const [status, setStatus] = useState<BibleDbStatus>(stored.status);
   const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(stored.errorMessage);
   const isMountedRef = useRef<boolean>(true);
+  const isFollowingDownloadRef = useRef<boolean>(false);
 
-  // Check status on mount
+  const runDownload = useCallback(async (): Promise<boolean> => {
+    isFollowingDownloadRef.current = true;
+    setStatus('downloading');
+    setProgress((current) => current ?? 0);
+    setError(null);
+
+    const success = await downloadBibleDb((p: number) => {
+      if (isMountedRef.current) {
+        setProgress(p);
+      }
+    });
+    isFollowingDownloadRef.current = false;
+
+    if (!isMountedRef.current) return success;
+
+    if (success) {
+      setStatus('ready');
+      setProgress(null);
+      setError(null);
+      logger.log('[useBibleDb] Download complete');
+    } else {
+      const meta = getBibleDbStatus();
+      setStatus('error');
+      setProgress(null);
+      setError(meta.errorMessage ?? 'Download failed');
+      logger.error('[useBibleDb] Download failed:', meta.errorMessage);
+    }
+
+    return success;
+  }, []);
+
+  // Check status on mount, and follow every later change. Each screen runs its
+  // own hook, and a change from one screen must reach the others.
   useEffect(() => {
     let cancelled = false;
+
+    // A download that started elsewhere, such as on Today.
+    const followDownload = () => {
+      if (!isFollowingDownloadRef.current) {
+        void runDownload();
+      }
+    };
+
+    const unsubscribe = subscribeBibleDbStatus(() => {
+      const meta = getBibleDbStatus();
+      if (meta.status === 'downloading') {
+        followDownload();
+        return;
+      }
+      setStatus(meta.status);
+      setError(meta.errorMessage);
+    });
 
     const checkStatus = async () => {
       try {
         const verified = await verifyBibleDb();
         if (!cancelled && isMountedRef.current) {
+          if (verified === 'downloading') {
+            followDownload();
+            return;
+          }
+
           setStatus(verified);
 
           // If status is 'error', pull the error message from meta
@@ -72,8 +132,9 @@ export function useBibleDb(): UseBibleDbReturn {
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, []);
+  }, [runDownload]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -88,33 +149,8 @@ export function useBibleDb(): UseBibleDbReturn {
       return false;
     }
 
-    setStatus('downloading');
-    setProgress(0);
-    setError(null);
-
-    const success = await downloadBibleDb((p: number) => {
-      if (isMountedRef.current) {
-        setProgress(p);
-      }
-    });
-
-    if (!isMountedRef.current) return success;
-
-    if (success) {
-      setStatus('ready');
-      setProgress(null);
-      setError(null);
-      logger.log('[useBibleDb] Download complete');
-    } else {
-      const meta = getBibleDbStatus();
-      setStatus('error');
-      setProgress(null);
-      setError(meta.errorMessage ?? 'Download failed');
-      logger.error('[useBibleDb] Download failed:', meta.errorMessage);
-    }
-
-    return success;
-  }, [status]);
+    return runDownload();
+  }, [status, runDownload]);
 
   return {
     isReady: status === 'ready',

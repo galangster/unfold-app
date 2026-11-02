@@ -22,6 +22,7 @@ import {
   type BibleSearchResult as BibleSearchResultRaw,
   type BibleTranslation,
 } from '@/lib/bible-db';
+import { failEmptyReadWithoutDb } from '@/lib/bible-db-read';
 import { BOOK_BY_ID, formatScriptureReference } from '@/lib/bible-constants';
 import { logger } from '@/lib/logger';
 import { useBibleDb } from './useBibleDb';
@@ -94,7 +95,7 @@ function useBibleSearchCore(
     queryKey: bibleSearchKeys.search(debouncedQuery, translation, limit),
     queryFn: async () => {
       logger.log('[useBibleSearch] Searching:', debouncedQuery);
-      return searchBible(debouncedQuery, translation, limit);
+      return failEmptyReadWithoutDb(await searchBible(debouncedQuery, translation, limit));
     },
     enabled: isReady && isQueryValid,
     staleTime: 5 * 60 * 1000, // Cache search results for 5 minutes

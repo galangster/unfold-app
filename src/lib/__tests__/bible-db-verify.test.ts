@@ -5,6 +5,8 @@
  * 3. computeDownloadProgress clamps missing Content-Length (NET-14)
  */
 
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+
 const mockGetInfoAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
@@ -145,6 +147,260 @@ describe('verifyBibleDb auto-detect (DAT-5)', () => {
       expect.objectContaining({ idempotent: true }),
     );
     expect(getDbStatus()).toBe('not_downloaded');
+  });
+});
+
+describe('a persisted downloading status (D4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('react-native-mmkv').__clearAll();
+    mockDeleteAsync.mockResolvedValue(undefined);
+    mockMakeDirectoryAsync.mockResolvedValue(undefined);
+    mockGetAuthHeaders.mockResolvedValue({ 'X-Device-ID': 'test' });
+    mockCreateDownloadResumable.mockReturnValue({ downloadAsync: mockDownloadAsync });
+  });
+
+  function completedDownloadFile() {
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    mockGetFirstAsync
+      .mockResolvedValueOnce({ count: 66 })
+      .mockResolvedValueOnce({ count: 50001 });
+    mockCloseAsync.mockResolvedValue(undefined);
+    mockOpenDatabaseAsync.mockResolvedValue({
+      getFirstAsync: mockGetFirstAsync,
+      closeAsync: mockCloseAsync,
+    });
+  }
+
+  it('reads as not downloaded when no download is running, so the reader can start one', async () => {
+    setDbStatus('downloading');
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getBibleDbStatus, verifyBibleDb } = require('@/lib/bible-db');
+
+    expect(getBibleDbStatus().status).toBe('not_downloaded');
+    await expect(verifyBibleDb()).resolves.toBe('not_downloaded');
+  });
+
+  it('lets a later caller join the running download instead of starting or failing', async () => {
+    let finishDownload: (value: { status: number }) => void = () => {};
+    let reportBytes: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void = () => {};
+    mockCreateDownloadResumable.mockImplementation((_url, _path, _options, onBytes) => {
+      reportBytes = onBytes;
+      return {
+        downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+      };
+    });
+    mockGetInfoAsync.mockResolvedValueOnce({ exists: true, isDirectory: true });
+    mockGetInfoAsync.mockResolvedValueOnce({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus } = require('@/lib/bible-db');
+    const joinedProgress = jest.fn();
+
+    const first = downloadBibleDb();
+    const joined = downloadBibleDb(joinedProgress);
+
+    expect(getBibleDbStatus().status).toBe('downloading');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mockCreateDownloadResumable).toHaveBeenCalledTimes(1);
+
+    reportBytes({ totalBytesWritten: 1, totalBytesExpectedToWrite: 2 });
+    expect(joinedProgress).toHaveBeenCalledWith(0.5);
+
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+
+    await expect(first).resolves.toBe(true);
+    await expect(joined).resolves.toBe(true);
+    expect(getBibleDbStatus().status).toBe('ready');
+  });
+
+  it('leaves a download alone when it starts while an older file is being verified', async () => {
+    setDbStatus('not_downloaded');
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    let openOldFile: (db: unknown) => void = () => {};
+    mockOpenDatabaseAsync.mockReturnValueOnce(new Promise((resolve) => { openOldFile = resolve; }));
+    let finishDownload: (value: { status: number }) => void = () => {};
+    mockCreateDownloadResumable.mockReturnValue({
+      downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus, verifyBibleDb } = require('@/lib/bible-db');
+    const checking = verifyBibleDb();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const running = downloadBibleDb();
+    await new Promise((resolve) => setImmediate(resolve));
+    mockDeleteAsync.mockClear();
+
+    // The older file fails verification, and it is no longer the check's to delete.
+    mockGetFirstAsync.mockResolvedValueOnce({ count: 1 });
+    mockCloseAsync.mockResolvedValue(undefined);
+    openOldFile({ getFirstAsync: mockGetFirstAsync, closeAsync: mockCloseAsync });
+
+    await expect(checking).resolves.toBe('downloading');
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(getBibleDbStatus().status).toBe('downloading');
+
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+    await expect(running).resolves.toBe(true);
+    expect(getBibleDbStatus().status).toBe('ready');
+  });
+
+  it('tells listeners when the status changes, and reads as downloading from the first change', async () => {
+    let finishDownload: (value: { status: number }) => void = () => {};
+    mockCreateDownloadResumable.mockReturnValue({
+      downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+    });
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus, subscribeBibleDbStatus } = require('@/lib/bible-db');
+    const seen: string[] = [];
+    const unsubscribe = subscribeBibleDbStatus(() => seen.push(getBibleDbStatus().status));
+
+    const running = downloadBibleDb();
+    await new Promise((resolve) => setImmediate(resolve));
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+    await running;
+    unsubscribe();
+
+    expect(seen).toEqual(['downloading', 'ready']);
+  });
+
+  it('brings every screen to ready after one finds the file gone and downloads it again', async () => {
+    setDbStatus('ready');
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useBibleDb } = require('@/hooks/useBibleDb');
+    const reader = renderHook(() => useBibleDb());
+    const chapter = renderHook(() => useBibleDb());
+    await waitFor(() => expect(chapter.result.current.isReady).toBe(false));
+    expect(reader.result.current.isReady).toBe(false);
+
+    completedDownloadFile();
+    mockDownloadAsync.mockResolvedValue({ status: 200 });
+    await act(async () => {
+      await reader.result.current.download();
+    });
+
+    expect(reader.result.current.isReady).toBe(true);
+    expect(chapter.result.current.isReady).toBe(true);
+  });
+
+  it('shows every screen the error after a failed download, and a retry starts a new one', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    mockDownloadAsync.mockResolvedValueOnce({ status: 500 });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useBibleDb } = require('@/hooks/useBibleDb');
+    const reader = renderHook(() => useBibleDb());
+    const chapter = renderHook(() => useBibleDb());
+    await waitFor(() => expect(mockGetInfoAsync).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      await expect(reader.result.current.download()).resolves.toBe(false);
+    });
+    for (const screen of [reader, chapter]) {
+      expect(screen.result.current.status).toBe('error');
+      expect(screen.result.current.error).toContain('500');
+    }
+
+    completedDownloadFile();
+    mockDownloadAsync.mockResolvedValueOnce({ status: 200 });
+    await act(async () => {
+      await expect(reader.result.current.download()).resolves.toBe(true);
+    });
+    expect(mockDownloadAsync).toHaveBeenCalledTimes(2);
+    expect(chapter.result.current.isReady).toBe(true);
+  });
+
+  it('offers a retry only after the failed download has cleaned up', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    mockDownloadAsync.mockResolvedValueOnce({ status: 500 });
+    let finishCleanup: () => void = () => {};
+    mockDeleteAsync.mockImplementationOnce(() => new Promise<void>((resolve) => { finishCleanup = resolve; }));
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus } = require('@/lib/bible-db');
+    const running = downloadBibleDb();
+    await waitFor(() => expect(mockDeleteAsync).toHaveBeenCalled());
+    expect(getBibleDbStatus().status).toBe('downloading');
+
+    finishCleanup();
+    await expect(running).resolves.toBe(false);
+    expect(getBibleDbStatus().status).toBe('error');
+  });
+
+  it('keeps a download that starts while the check deletes an older file', async () => {
+    setDbStatus('downloading');
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    mockGetFirstAsync.mockResolvedValue({ count: 0 });
+    mockCloseAsync.mockResolvedValue(undefined);
+    mockOpenDatabaseAsync.mockResolvedValue({
+      getFirstAsync: mockGetFirstAsync,
+      closeAsync: mockCloseAsync,
+    });
+    let finishDelete: () => void = () => {};
+    mockDeleteAsync.mockImplementationOnce(() => new Promise<void>((resolve) => { finishDelete = resolve; }));
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus, verifyBibleDb } = require('@/lib/bible-db');
+    const checking = verifyBibleDb();
+    await waitFor(() => expect(mockDeleteAsync).toHaveBeenCalled());
+
+    mockGetFirstAsync.mockReset();
+    completedDownloadFile();
+    mockDownloadAsync.mockResolvedValue({ status: 200 });
+    const running = downloadBibleDb();
+    finishDelete();
+
+    await expect(checking).resolves.toBe('downloading');
+    expect(getBibleDbStatus().status).toBe('downloading');
+    await running;
+  });
+
+  it('reports the status at the end of the check, not the one it started with', async () => {
+    let finishFileCheck: (value: { exists: boolean }) => void = () => {};
+    mockGetInfoAsync.mockImplementationOnce(() => new Promise((resolve) => { finishFileCheck = resolve; }));
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { verifyBibleDb } = require('@/lib/bible-db');
+    const checking = verifyBibleDb();
+    setDbStatus('error');
+    finishFileCheck({ exists: false });
+
+    await expect(checking).resolves.toBe('error');
+  });
+
+  it('leaves the partial file alone while the download is running', async () => {
+    let finishDownload: (value: { status: number }) => void = () => {};
+    mockCreateDownloadResumable.mockReturnValue({
+      downloadAsync: () => new Promise((resolve) => { finishDownload = resolve; }),
+    });
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, verifyBibleDb } = require('@/lib/bible-db');
+    const running = downloadBibleDb();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });
+    mockDeleteAsync.mockClear();
+
+    await expect(verifyBibleDb()).resolves.toBe('downloading');
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+
+    completedDownloadFile();
+    finishDownload({ status: 200 });
+    await expect(running).resolves.toBe(true);
   });
 });
 
