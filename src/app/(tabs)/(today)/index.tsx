@@ -165,6 +165,7 @@ import { computeDevotionalState } from '@/components/home/compute-devotional-sta
 import { useCompletedDayReflection } from '@/components/home/use-completed-day-reflection';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { GreetingRow } from '@/components/home/GreetingRow';
+import { HeroGround } from '@/components/home/HeroGround';
 import { AmbientMusicEntry } from '@/components/ambient/AmbientMusicEntry';
 import { isAmbientAudioEnabled } from '@/lib/ambient-audio-feature';
 import { useAmbientPlayerScrollPadding, useAmbientSoundChrome } from '@/lib/ambient-sound-chrome';
@@ -529,12 +530,18 @@ export default function HomeScreen() {
     publishTooltipRect('rhythm', rhythmTargetRef.current);
   }, [publishTooltipRect]);
 
+  // A target's own layout event misses a move of its column, such as the hero
+  // growing when its recommendation loads. The scroll content changes size then.
+  const publishAllTooltipRects = useCallback(() => {
+    publishTooltipRect('reading', readingTargetRef.current);
+    publishTooltipRect('context', contextTargetRef.current);
+    publishTooltipRect('rhythm', rhythmTargetRef.current);
+  }, [publishTooltipRect]);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       measureScrollFrame();
-      publishTooltipRect('reading', readingTargetRef.current);
-      publishTooltipRect('context', contextTargetRef.current);
-      publishTooltipRect('rhythm', rhythmTargetRef.current);
+      publishAllTooltipRects();
     });
     return () => cancelAnimationFrame(frame);
   }, [
@@ -545,7 +552,7 @@ export default function HomeScreen() {
     insets.right,
     insets.top,
     measureScrollFrame,
-    publishTooltipRect,
+    publishAllTooltipRects,
   ]);
 
 
@@ -2006,6 +2013,11 @@ export default function HomeScreen() {
     );
   }
 
+  const ambienceVisible = shouldShowCompletedEmberAmbience({
+    stateType: devotionalState.type,
+    hasReadToday,
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Layer 0: Ambient art — one completed-day ambience owner. The
@@ -2022,6 +2034,7 @@ export default function HomeScreen() {
         <Animated.ScrollView
           ref={scrollViewRef}
           onLayout={measureScrollFrame}
+          onContentSizeChange={publishAllTooltipRects}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: ambientPlayerPadding }}
@@ -2029,13 +2042,15 @@ export default function HomeScreen() {
         >
           <View style={todayFrameStyle}>
           {/* Zone 1: Greeting */}
-          <GreetingRow
-            userName={user?.name}
-            now={clockNow}
-            avatarTestID="home-avatar-button"
-            onAvatarPress={() => router.push('/(tabs)/(you)')}
-            headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
-          />
+          <HeroGround active={ambienceVisible} bleedLeft={0}>
+            <GreetingRow
+              userName={user?.name}
+              now={clockNow}
+              avatarTestID="home-avatar-button"
+              onAvatarPress={() => router.push('/(tabs)/(you)')}
+              headerActions={devotionalState.type !== 'preparing' && isAmbientAudioEnabled() ? <AmbientMusicEntry /> : null}
+            />
+          </HeroGround>
 
           <View style={todayColumnsStyle}>
           {/* Zone 3: Hero Devotional — Today's primary act */}
@@ -2055,10 +2070,7 @@ export default function HomeScreen() {
                   ?? (pendingInitialResume === 'offer-nonblocking-resume'
                     ? { onResume: handleResumePendingInitial }
                     : null)}
-                ambienceVisible={shouldShowCompletedEmberAmbience({
-                  stateType: devotionalState.type,
-                  hasReadToday,
-                })}
+                ambienceVisible={ambienceVisible}
                 relaxHeroMinHeight={todayUsesSplit}
                 availableWidth={todayHeroWidth}
               />

@@ -153,6 +153,7 @@ jest.mock('@/lib/store', () => ({
 }));
 
 import { DevotionalCard, AnimatedProgressBar } from '../DevotionalCard';
+import { HeroGround } from '../HeroGround';
 import { PageMark } from '@/components/motion/PageMark';
 import { clearTodayProgressHistory, getTodayProgressHistory } from '@/lib/today-progress-session';
 import {
@@ -389,6 +390,16 @@ describe('DevotionalCard composer integration', () => {
     });
 
     expect(onReflect).toHaveBeenCalledWith(5);
+  });
+
+  it('keeps the actions on the hero ground while the art shows', () => {
+    const tree = renderInAct(<DevotionalCard state={makeTomorrowLockedState({ daysCompleted: 5 })} ambienceVisible />);
+
+    const ground = tree.root.findByType(HeroGround);
+    const onGround = (label: string) => ground.findAll((node: any) => node.props.accessibilityLabel === label).length > 0;
+
+    expect(onGround("Reflect on today's reading")).toBe(true);
+    expect(ground.findAll((node: any) => node.props.testID === 'home-devotional-cta').length).toBeGreaterThan(0);
   });
 
   it('renders the reflect link with daysCompleted=0 clamped to 1 via Math.max(1, daysCompleted)', () => {
