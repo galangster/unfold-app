@@ -41,7 +41,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>315</string>
+    <string>316</string>
     <key>ExpoWidgetsAppGroupIdentifier</key>
     <string>group.com.unfoldapp.ios</string>
     <key>ExpoWidgets_EnablePushNotifications</key>
