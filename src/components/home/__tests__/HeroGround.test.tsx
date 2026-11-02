@@ -42,6 +42,35 @@ describe('HeroGround', () => {
     expect(ground.props.locations).toEqual([0, HERO_GROUND.midStop, HERO_GROUND.endStop]);
   });
 
+  it('keeps its children mounted when the art turns on or off', () => {
+    const mounts = jest.fn();
+    function Writer() {
+      React.useEffect(() => {
+        mounts();
+      }, []);
+      return <Text>Draft</Text>;
+    }
+
+    let tree: any;
+    renderer.act(() => {
+      tree = renderer.create(<HeroGround active><Writer /></HeroGround>);
+    });
+    renderer.act(() => tree.update(<HeroGround active={false}><Writer /></HeroGround>));
+    renderer.act(() => tree.update(<HeroGround active><Writer /></HeroGround>));
+
+    expect(mounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('can stay inside an edge that already carries the page gutter', () => {
+    let tree: any;
+    renderer.act(() => {
+      tree = renderer.create(<HeroGround active bleedLeft={0}><Text>Greeting</Text></HeroGround>);
+    });
+
+    const [layer] = tree.root.findAllByProps({ testID: 'hero-ground-layer' });
+    expect(layer.props.style.left).toBeCloseTo(0);
+  });
+
   it('reaches past the page gutter so art cannot show beside the copy', () => {
     let tree: any;
     renderer.act(() => {

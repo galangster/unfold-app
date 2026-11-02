@@ -2042,7 +2042,7 @@ export default function HomeScreen() {
         >
           <View style={todayFrameStyle}>
           {/* Zone 1: Greeting */}
-          <HeroGround active={ambienceVisible}>
+          <HeroGround active={ambienceVisible} bleedLeft={0}>
             <GreetingRow
               userName={user?.name}
               now={clockNow}

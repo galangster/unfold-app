@@ -845,11 +845,7 @@ function JourneyCompleteState({
         <RecommendedSeriesCard
           variant="completion"
           onChooseOther={onCreateNew}
-          renderFallback={() => (
-            <HeroGround active={ambienceVisible}>
-              <JourneyCompleteCreateAction onCreateNew={onCreateNew} />
-            </HeroGround>
-          )}
+          renderFallback={() => <JourneyCompleteCreateAction onCreateNew={onCreateNew} />}
           gateCreation={gateCreation}
           storedPick={storedPick}
         />

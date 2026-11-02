@@ -13,9 +13,14 @@ type Props = {
   children: React.ReactNode;
   active: boolean;
   style?: StyleProp<ViewStyle>;
+  /** How far the ground reaches past its box. Pass 0 when the children already carry the page gutter. */
+  bleedLeft?: number;
 };
 
-export function HeroGround({ children, active, style }: Props) {
+const ACTIVE_STYLE: ViewStyle = { position: 'relative', alignSelf: 'stretch' };
+const PASS_THROUGH_STYLE: ViewStyle = { display: 'contents' };
+
+export function HeroGround({ children, active, style, bleedLeft = HERO_GROUND.bleedLeft }: Props) {
   const { colors } = useTheme();
   const [boxHeight, setBoxHeight] = useState(0);
   const bg = colors.background;
@@ -25,10 +30,6 @@ export function HeroGround({ children, active, style }: Props) {
     alpha(bg, 0),
   ] as const, [bg]);
 
-  if (!active) {
-    return style ? <View style={style}>{children}</View> : <>{children}</>;
-  }
-
   const totalHeight = boxHeight + HERO_GROUND.featherTop + HERO_GROUND.featherBottom;
   const topStop = totalHeight > 0 ? HERO_GROUND.featherTop / totalHeight : 0;
   const bottomStop = totalHeight > 0 ? 1 - HERO_GROUND.featherBottom / totalHeight : 1;
@@ -37,39 +38,43 @@ export function HeroGround({ children, active, style }: Props) {
     setBoxHeight(event.nativeEvent.layout.height);
   };
 
+  // One View in both states. A Fragment here would remount the children when
+  // the art turns on or off, and a reflection composer would lose newer text.
   return (
-    <View style={[{ position: 'relative', alignSelf: 'stretch' }, style]} onLayout={handleLayout}>
-      <MaskedView
-        pointerEvents="none"
-        testID="hero-ground-layer"
-        style={{
-          position: 'absolute',
-          top: -HERO_GROUND.featherTop,
-          bottom: -HERO_GROUND.featherBottom,
-          left: -HERO_GROUND.bleedLeft,
-          right: 0,
-        }}
-        maskElement={
+    <View style={active ? [ACTIVE_STYLE, style] : style ?? PASS_THROUGH_STYLE} onLayout={active ? handleLayout : undefined}>
+      {active ? (
+        <MaskedView
+          pointerEvents="none"
+          testID="hero-ground-layer"
+          style={{
+            position: 'absolute',
+            top: -HERO_GROUND.featherTop,
+            bottom: -HERO_GROUND.featherBottom,
+            left: -bleedLeft,
+            right: 0,
+          }}
+          maskElement={
+            <LinearGradient
+              pointerEvents="none"
+              colors={MASK_COLORS}
+              locations={[0, topStop, bottomStop, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          }
+        >
           <LinearGradient
             pointerEvents="none"
-            colors={MASK_COLORS}
-            locations={[0, topStop, bottomStop, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
+            testID="hero-ground"
+            colors={groundColors}
+            locations={GROUND_LOCATIONS}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
             style={StyleSheet.absoluteFill}
           />
-        }
-      >
-        <LinearGradient
-          pointerEvents="none"
-          testID="hero-ground"
-          colors={groundColors}
-          locations={GROUND_LOCATIONS}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </MaskedView>
+        </MaskedView>
+      ) : null}
       {children}
     </View>
   );
