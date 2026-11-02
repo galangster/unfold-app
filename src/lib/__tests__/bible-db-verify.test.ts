@@ -295,6 +295,50 @@ describe('a persisted downloading status (D4)', () => {
     expect(chapter.result.current.isReady).toBe(true);
   });
 
+  it('shows every screen the error after a failed download, and a retry starts a new one', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    mockDownloadAsync.mockResolvedValueOnce({ status: 500 });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useBibleDb } = require('@/hooks/useBibleDb');
+    const reader = renderHook(() => useBibleDb());
+    const chapter = renderHook(() => useBibleDb());
+    await waitFor(() => expect(mockGetInfoAsync).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      await expect(reader.result.current.download()).resolves.toBe(false);
+    });
+    for (const screen of [reader, chapter]) {
+      expect(screen.result.current.status).toBe('error');
+      expect(screen.result.current.error).toContain('500');
+    }
+
+    completedDownloadFile();
+    mockDownloadAsync.mockResolvedValueOnce({ status: 200 });
+    await act(async () => {
+      await expect(reader.result.current.download()).resolves.toBe(true);
+    });
+    expect(mockDownloadAsync).toHaveBeenCalledTimes(2);
+    expect(chapter.result.current.isReady).toBe(true);
+  });
+
+  it('offers a retry only after the failed download has cleaned up', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    mockDownloadAsync.mockResolvedValueOnce({ status: 500 });
+    let finishCleanup: () => void = () => {};
+    mockDeleteAsync.mockImplementationOnce(() => new Promise<void>((resolve) => { finishCleanup = resolve; }));
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { downloadBibleDb, getBibleDbStatus } = require('@/lib/bible-db');
+    const running = downloadBibleDb();
+    await waitFor(() => expect(mockDeleteAsync).toHaveBeenCalled());
+    expect(getBibleDbStatus().status).toBe('downloading');
+
+    finishCleanup();
+    await expect(running).resolves.toBe(false);
+    expect(getBibleDbStatus().status).toBe('error');
+  });
+
   it('keeps a download that starts while the check deletes an older file', async () => {
     setDbStatus('downloading');
     mockGetInfoAsync.mockResolvedValue({ exists: true, size: 6 * 1024 * 1024, isDirectory: false });

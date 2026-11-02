@@ -316,14 +316,15 @@ async function runBibleDbDownload(): Promise<boolean> {
     const message = error instanceof Error ? error.message : 'Unknown download error';
     logger.error('[BibleDB] Download failed:', message);
 
-    setStoredStatus('error', message);
-
     // Clean up partial download
     try {
       await deleteAsync(DB_FILE_PATH, { idempotent: true });
     } catch {
       // Ignore cleanup errors
     }
+
+    // Only now, because a retry during the cleanup would join this dead download.
+    setStoredStatus('error', message);
 
     return false;
   }
