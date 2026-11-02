@@ -1,9 +1,16 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { downloadBibleDb, getBibleDbStatus, verifyBibleDb, type BibleDbStatus } from '@/lib/bible-db';
+import {
+  downloadBibleDb,
+  getBibleDbStatus,
+  subscribeBibleDbStatus,
+  verifyBibleDb,
+  type BibleDbStatus,
+} from '@/lib/bible-db';
 
 jest.mock('@/lib/bible-db', () => ({
   getBibleDbStatus: jest.fn(),
+  subscribeBibleDbStatus: jest.fn(),
   verifyBibleDb: jest.fn(),
   downloadBibleDb: jest.fn(),
 }));
@@ -11,6 +18,7 @@ jest.mock('@/lib/bible-db', () => ({
 const mockStatus = jest.mocked(getBibleDbStatus);
 const mockVerify = jest.mocked(verifyBibleDb);
 const mockDownload = jest.mocked(downloadBibleDb);
+const mockSubscribe = jest.mocked(subscribeBibleDbStatus);
 
 function storedStatus(status: BibleDbStatus) {
   mockStatus.mockReturnValue({
@@ -23,8 +31,20 @@ function storedStatus(status: BibleDbStatus) {
 }
 
 describe('useBibleDb', () => {
+  let statusListeners: Set<() => void>;
+
+  function changeStatus(status: BibleDbStatus) {
+    storedStatus(status);
+    statusListeners.forEach((listener) => listener());
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
+    statusListeners = new Set();
+    mockSubscribe.mockImplementation((listener) => {
+      statusListeners.add(listener);
+      return () => statusListeners.delete(listener);
+    });
   });
 
   it('trusts a stored ready status while the file check waits behind other native calls', () => {
@@ -66,8 +86,71 @@ describe('useBibleDb', () => {
     act(() => report?.(0.5));
     expect(result.current.progress).toBe(0.5);
 
-    await act(async () => finish(true));
+    await act(async () => {
+      changeStatus('ready');
+      finish(true);
+    });
     expect(result.current.isReady).toBe(true);
     expect(result.current.progress).toBeNull();
+  });
+
+  it('keeps separate screens on one status, so a chapter loads after the reader downloads', async () => {
+    storedStatus('not_downloaded');
+    mockVerify.mockResolvedValue('not_downloaded');
+    mockDownload.mockResolvedValue(true);
+
+    const reader = renderHook(() => useBibleDb());
+    const chapter = renderHook(() => useBibleDb());
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      await reader.result.current.download();
+      changeStatus('ready');
+    });
+
+    expect(reader.result.current.isReady).toBe(true);
+    expect(chapter.result.current.isReady).toBe(true);
+  });
+
+  it('follows a download that another screen starts, with its progress', async () => {
+    storedStatus('not_downloaded');
+    mockVerify.mockResolvedValue('not_downloaded');
+    let report: (progress: number) => void = () => {};
+    let finish: (success: boolean) => void = () => {};
+    mockDownload.mockImplementation((onProgress) => {
+      report = onProgress ?? report;
+      return new Promise((resolve) => { finish = resolve; });
+    });
+
+    const { result } = renderHook(() => useBibleDb());
+    await waitFor(() => expect(mockVerify).toHaveBeenCalled());
+
+    act(() => changeStatus('downloading'));
+    expect(result.current.isDownloading).toBe(true);
+
+    act(() => report(0.5));
+    expect(result.current.progress).toBe(0.5);
+
+    // A second change must not join the same download again.
+    act(() => changeStatus('downloading'));
+    expect(mockDownload).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      changeStatus('ready');
+      finish(true);
+    });
+    expect(result.current.isReady).toBe(true);
+    expect(result.current.progress).toBeNull();
+  });
+
+  it('stops listening when the screen goes away', () => {
+    storedStatus('ready');
+    mockVerify.mockReturnValue(new Promise(() => {}));
+
+    const { unmount } = renderHook(() => useBibleDb());
+    expect(statusListeners.size).toBe(1);
+
+    unmount();
+    expect(statusListeners.size).toBe(0);
   });
 });

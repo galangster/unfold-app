@@ -97,6 +97,7 @@ let dbInstance: SQLiteDatabase | null = null;
 // a download is really running.
 let activeDownload: Promise<boolean> | null = null;
 const downloadProgressListeners = new Set<(progress: number) => void>();
+const statusListeners = new Set<() => void>();
 
 // ─── Status management ───────────────────────────────────────────────────────
 
@@ -110,6 +111,23 @@ function setMeta(key: string, value: string | null): void {
 
 function getMeta(key: string): string | null {
   return bibleMeta.getString(key) ?? null;
+}
+
+function setStoredStatus(status: BibleDbStatus, errorMessage: string | null = null): void {
+  setMeta(META_KEY_ERROR, errorMessage);
+  setMeta(META_KEY_STATUS, status);
+  statusListeners.forEach((listener) => listener());
+}
+
+/**
+ * Be told when the status changes, so every screen holds the same one.
+ * Returns the function that stops listening.
+ */
+export function subscribeBibleDbStatus(listener: () => void): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
 }
 
 /**
@@ -139,10 +157,10 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
 
   if (meta.status === 'ready') {
     const fileInfo = await getInfoAsync(DB_FILE_PATH);
+    if (activeDownload) return 'downloading';
     if (!fileInfo.exists) {
       logger.warn('[BibleDB] Database file missing despite ready status, resetting');
-      setMeta(META_KEY_STATUS, 'not_downloaded');
-      setMeta(META_KEY_ERROR, null);
+      setStoredStatus('not_downloaded');
       return 'not_downloaded';
     }
   }
@@ -150,7 +168,7 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
   // Auto-detect DB file if status isn't 'ready' (e.g., stuck download, manual copy)
   if (meta.status !== 'ready') {
     const fileInfo = await getInfoAsync(DB_FILE_PATH);
-    // A download that starts during either wait below owns the file from then on.
+    // A download that starts during any wait below owns the file from then on.
     if (activeDownload) return 'downloading';
     if (fileInfo.exists) {
       const sizeBytes = 'size' in fileInfo ? (fileInfo.size ?? 0) : 0;
@@ -163,22 +181,22 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
         if (!verified) {
           logger.warn('[BibleDB] Existing DB file failed verification — deleting partial file');
           try { await deleteAsync(DB_FILE_PATH, { idempotent: true }); } catch {}
-          setMeta(META_KEY_STATUS, 'not_downloaded');
-          setMeta(META_KEY_ERROR, null);
+          if (activeDownload) return 'downloading';
+          setStoredStatus('not_downloaded');
           return 'not_downloaded';
         }
         logger.log('[BibleDB] Found existing DB file, marking as ready');
-        setMeta(META_KEY_STATUS, 'ready');
         setMeta(META_KEY_VERSION, DB_VERSION);
         setMeta(META_KEY_SIZE, String(sizeBytes));
         setMeta(META_KEY_DOWNLOADED_AT, new Date().toISOString());
-        setMeta(META_KEY_ERROR, null);
+        setStoredStatus('ready');
         return 'ready';
       }
     }
   }
 
-  return meta.status;
+  // Read again: a download may have finished or failed during the waits above.
+  return getBibleDbStatus().status;
 }
 
 // ─── Download ────────────────────────────────────────────────────────────────
@@ -217,6 +235,8 @@ export function downloadBibleDb(
     activeDownload = null;
     downloadProgressListeners.clear();
   });
+  // After activeDownload is set, so that a listener reads 'downloading'.
+  setStoredStatus('downloading');
   return activeDownload;
 }
 
@@ -226,8 +246,6 @@ function reportDownloadProgress(progress: number): void {
 
 async function runBibleDbDownload(): Promise<boolean> {
   logger.log('[BibleDB] Starting download from', DB_DOWNLOAD_URL);
-  setMeta(META_KEY_STATUS, 'downloading');
-  setMeta(META_KEY_ERROR, null);
 
   try {
     // Ensure the SQLite directory exists
@@ -286,11 +304,10 @@ async function runBibleDbDownload(): Promise<boolean> {
       throw new Error('Database verification failed — tables or data missing');
     }
 
-    setMeta(META_KEY_STATUS, 'ready');
     setMeta(META_KEY_DOWNLOADED_AT, new Date().toISOString());
     setMeta(META_KEY_VERSION, DB_VERSION);
     setMeta(META_KEY_SIZE, String(sizeBytes));
-    setMeta(META_KEY_ERROR, null);
+    setStoredStatus('ready');
 
     logger.log('[BibleDB] Download complete', { sizeBytes });
     reportDownloadProgress(1);
@@ -299,8 +316,7 @@ async function runBibleDbDownload(): Promise<boolean> {
     const message = error instanceof Error ? error.message : 'Unknown download error';
     logger.error('[BibleDB] Download failed:', message);
 
-    setMeta(META_KEY_STATUS, 'error');
-    setMeta(META_KEY_ERROR, message);
+    setStoredStatus('error', message);
 
     // Clean up partial download
     try {
@@ -370,11 +386,10 @@ export async function deleteBibleDb(): Promise<void> {
     // Ignore if file doesn't exist
   }
 
-  setMeta(META_KEY_STATUS, 'not_downloaded');
   setMeta(META_KEY_DOWNLOADED_AT, null);
   setMeta(META_KEY_VERSION, null);
   setMeta(META_KEY_SIZE, null);
-  setMeta(META_KEY_ERROR, null);
+  setStoredStatus('not_downloaded');
 
   logger.log('[BibleDB] Database deleted and status reset');
 }

@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getBibleDbStatus,
+  subscribeBibleDbStatus,
   verifyBibleDb,
   downloadBibleDb,
   type BibleDbStatus,
@@ -45,8 +46,10 @@ export function useBibleDb(): UseBibleDbReturn {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(stored.errorMessage);
   const isMountedRef = useRef<boolean>(true);
+  const isFollowingDownloadRef = useRef<boolean>(false);
 
   const runDownload = useCallback(async (): Promise<boolean> => {
+    isFollowingDownloadRef.current = true;
     setStatus('downloading');
     setProgress((current) => current ?? 0);
     setError(null);
@@ -56,6 +59,7 @@ export function useBibleDb(): UseBibleDbReturn {
         setProgress(p);
       }
     });
+    isFollowingDownloadRef.current = false;
 
     if (!isMountedRef.current) return success;
 
@@ -75,17 +79,34 @@ export function useBibleDb(): UseBibleDbReturn {
     return success;
   }, []);
 
-  // Check status on mount
+  // Check status on mount, and follow every later change. Each screen runs its
+  // own hook, and a change from one screen must reach the others.
   useEffect(() => {
     let cancelled = false;
+
+    // A download that started elsewhere, such as on Today.
+    const followDownload = () => {
+      if (!isFollowingDownloadRef.current) {
+        void runDownload();
+      }
+    };
+
+    const unsubscribe = subscribeBibleDbStatus(() => {
+      const meta = getBibleDbStatus();
+      if (meta.status === 'downloading') {
+        followDownload();
+        return;
+      }
+      setStatus(meta.status);
+      setError(meta.errorMessage);
+    });
 
     const checkStatus = async () => {
       try {
         const verified = await verifyBibleDb();
         if (!cancelled && isMountedRef.current) {
-          // A download that started elsewhere, such as on Today.
           if (verified === 'downloading') {
-            await runDownload();
+            followDownload();
             return;
           }
 
@@ -111,6 +132,7 @@ export function useBibleDb(): UseBibleDbReturn {
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [runDownload]);
 
