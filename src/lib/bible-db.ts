@@ -150,7 +150,7 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
   // Auto-detect DB file if status isn't 'ready' (e.g., stuck download, manual copy)
   if (meta.status !== 'ready') {
     const fileInfo = await getInfoAsync(DB_FILE_PATH);
-    // A download that started during the check owns the file now.
+    // A download that starts during either wait below owns the file from then on.
     if (activeDownload) return 'downloading';
     if (fileInfo.exists) {
       const sizeBytes = 'size' in fileInfo ? (fileInfo.size ?? 0) : 0;
@@ -159,6 +159,7 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
         // an app-kill after >5 MB leaves a truncated SQLite file. Always verify
         // before promoting to 'ready' — verifyDownloadedDb() is hoisted below.
         const verified = await verifyDownloadedDb();
+        if (activeDownload) return 'downloading';
         if (!verified) {
           logger.warn('[BibleDB] Existing DB file failed verification — deleting partial file');
           try { await deleteAsync(DB_FILE_PATH, { idempotent: true }); } catch {}

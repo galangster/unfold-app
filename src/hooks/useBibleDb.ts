@@ -46,9 +46,9 @@ export function useBibleDb(): UseBibleDbReturn {
   const [error, setError] = useState<string | null>(stored.errorMessage);
   const isMountedRef = useRef<boolean>(true);
 
-  const followDownload = useCallback(async (): Promise<boolean> => {
+  const runDownload = useCallback(async (): Promise<boolean> => {
     setStatus('downloading');
-    setProgress(0);
+    setProgress((current) => current ?? 0);
     setError(null);
 
     const success = await downloadBibleDb((p: number) => {
@@ -85,7 +85,7 @@ export function useBibleDb(): UseBibleDbReturn {
         if (!cancelled && isMountedRef.current) {
           // A download that started elsewhere, such as on Today.
           if (verified === 'downloading') {
-            await followDownload();
+            await runDownload();
             return;
           }
 
@@ -112,7 +112,7 @@ export function useBibleDb(): UseBibleDbReturn {
     return () => {
       cancelled = true;
     };
-  }, [followDownload]);
+  }, [runDownload]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -127,8 +127,8 @@ export function useBibleDb(): UseBibleDbReturn {
       return false;
     }
 
-    return followDownload();
-  }, [status, followDownload]);
+    return runDownload();
+  }, [status, runDownload]);
 
   return {
     isReady: status === 'ready',
