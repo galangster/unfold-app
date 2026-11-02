@@ -50,6 +50,7 @@ import { resolveLaterEntryExit, type VerifiedEntitlementExit, type VerifiedExitD
 import { requestLaterEntryNotifyAsk } from '@/lib/notification-ask';
 import { refreshRemoteConfig } from '@/lib/remote-config';
 import { paywallSeriesLengthRow } from '@/lib/series-length-copy';
+import { FREE_COMPANION_DAILY_LIMIT } from '@/lib/premium-gating';
 import { useChapteredSeriesEnabled } from '@/hooks/useChapteredSeriesEnabled';
 import { getTrialPaywallTimeline, trialLabelToDays } from '@/lib/trial-reminder-copy';
 import { MIDDAY_FALLBACK } from '@/lib/notifications';
@@ -79,6 +80,9 @@ type PlanChoice = 'yearly' | 'monthly';
 // ThreeStepPaywall.tsx hardcodes the same value; keep them in lockstep so the
 // SAVE badge behaves identically across both paywall surfaces.
 const SAVE_BADGE_DIMMED_OPACITY = 0.45;
+
+// Wide enough to keep the Companion limit on two lines.
+const FREE_COLUMN_WIDTH = 72;
 
 // Hard exclusion over the pricing cards, CTA, and renewal disclosure — falling
 // embers must never collide with payment copy (normalized screen rect).
@@ -757,7 +761,7 @@ export default function PaywallScreen() {
   const comparison = [
     { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
     { label: 'Series length', free: 'A one-day sample', premium: paywallSeriesLengthRow(chapteredSeriesEnabled) },
-    { label: 'AI Companion', free: false, premium: 'Daily check-ins + chat' },
+    { label: 'AI Companion', free: `${FREE_COMPANION_DAILY_LIMIT} messages a day`, premium: 'Unlimited, plus daily check-ins' },
     { label: 'Study methods', free: 'Basic', premium: `${ALL_METHOD_IDS.length} methods` },
     { label: 'Journal prompts', free: false, premium: true },
     { label: 'Themes & fonts', free: '1 theme', premium: '7 themes + fonts' },
@@ -936,7 +940,7 @@ export default function PaywallScreen() {
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
               <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
               </Text>
-              <Text style={{ width: 60, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center' }}>
+              <Text style={{ width: FREE_COLUMN_WIDTH, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center' }}>
                 Free
               </Text>
               <Text style={{ width: 100, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center' }}>
@@ -962,7 +966,7 @@ export default function PaywallScreen() {
                   {row.label}
                 </Text>
                 <View
-                  style={{ width: 60, alignItems: 'center' }}
+                  style={{ width: FREE_COLUMN_WIDTH, alignItems: 'center' }}
                   accessible={typeof row.free === 'boolean'}
                   accessibilityLabel={typeof row.free === 'boolean' ? (row.free ? 'Included in Free' : 'Not included in Free') : undefined}
                 >

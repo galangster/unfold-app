@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ColorTheme } from '@/constants/colors';
 import { getTrialPaywallTimeline } from '@/lib/trial-reminder-copy';
+import { FREE_COMPANION_DAILY_LIMIT } from '@/lib/premium-gating';
 
 const MIDDAY_FALLBACK = { hour: 12, minute: 30 };
 
@@ -322,6 +323,17 @@ async function renderPaywall(intro: { periodNumberOfUnits: number; periodUnit: s
     },
   };
 }
+
+describe('paywall Companion comparison row', () => {
+  it('shows the free daily limit and what Premium adds', async () => {
+    const paywall = await renderPaywall(null);
+
+    expect(findText(paywall.tree, `${FREE_COMPANION_DAILY_LIMIT} messages a day`)).not.toHaveLength(0);
+    expect(findText(paywall.tree, 'Unlimited, plus daily check-ins')).not.toHaveLength(0);
+    expect(findText(paywall.tree, 'Daily check-ins + chat')).toHaveLength(0);
+    await paywall.unmount();
+  });
+});
 
 describe('I7 paywall timeline copy', () => {
   afterEach(() => {
